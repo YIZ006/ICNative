@@ -94,4 +94,25 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   1. Hướng dẫn người dùng kết nối điện thoại Meizu 21 Note qua USB Debugging.
   2. Hướng dẫn thiết lập Flutter SDK trong Android Studio để bấm Run chạy app.
 
+---
+
+### [2026-09-19 16:45:00] - Cài đặt tự động Flutter SDK vào D:\flutter & nhận diện Meizu 21 Note qua ADB
+* **Thời gian (Timestamp):** 2026-09-19 16:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Nhận diện máy chưa có Flutter SDK. Đã tự động clone bản Flutter SDK stable chuẩn vào ổ `D:\flutter` (tận dụng ổ D còn trống 748 GB), thêm vĩnh viễn `D:\flutter\bin` vào biến môi trường User PATH của Windows, đồng thời tải Dart SDK và build flutter tool. Kiểm tra ADB phát hiện điện thoại Meizu 21 Note đã kết nối thành công (`model:MEIZU_21_Note`).
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW SDK] `D:\flutter` - Cài đặt Flutter SDK Stable.
+  - [SYSTEM CONFIG] Bổ sung `D:\flutter\bin` vào `HKCU:\Environment\Path`.
+  - [INIT] Tự động tải Dart SDK và build Flutter Tool engine.
+  - [ADB DETECTED] Thiết bị `adb-468QBGFJ223WP-6jU3lh._adb-tls-connect._tcp` (Meizu 21 Note) đã kết nối thành công ở chế độ `device`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Flutter SDK đang hoàn tất bước khởi tạo snapshot lần đầu tiên.
+  - Cần cài đặt plugin Flutter & Dart trong Android Studio (nếu chưa cài) và trỏ Flutter SDK Path về `D:\flutter`.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng cài plugin Flutter trong Android Studio và trỏ SDK Path `D:\flutter`.
+  2. Mở dự án trong Android Studio và bấm Run ▶️ test trực tiếp trên Meizu 21 Note.
+
+
 
