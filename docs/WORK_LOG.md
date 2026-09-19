@@ -27,3 +27,29 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   1. Hỗ trợ người dùng hoàn tất đẩy mã nguồn lên GitHub `origin main`.
   2. Dọn dẹp đưa code từ `Lockit/` ra thư mục gốc `IConNative/`.
   3. Bắt đầu cài đặt `google_mlkit_object_detection` và xây dựng module `StickerAnchoringEngine`.
+
+---
+
+### [2026-09-19 16:21:00] - Tái cấu trúc đưa source code từ Lockit ra thư mục gốc & đổi tên package
+* **Thời gian (Timestamp):** 2026-09-19 16:21:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Di chuyển toàn bộ mã nguồn Flutter từ thư mục con `Lockit/` ra thư mục gốc dự án `IConNative/`, xóa bỏ `.git` con để loại trừ xung đột nested repository, chuẩn hóa `.gitignore` chống rác IDE, đổi tên package thành `icnative` trong `pubspec.yaml` và cập nhật toàn bộ import trong `lib/` và `test/`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [DELETE] `Lockit/` - Xóa thư mục con và repo git cũ sau khi di chuyển toàn bộ file.
+  - [MODIFY] `.gitignore` - Bổ sung quy tắc bỏ qua `.idea/`, `*.iml`, `.vscode/`, `.DS_Store`, `Thumbs.db`.
+  - [MODIFY] `pubspec.yaml` - Đổi tên package từ `Lockit` sang `icnative`.
+  - [MODIFY] `lib/screens/history.dart` - Cập nhật import sang `package:icnative/`.
+  - [MODIFY] `lib/screens/home.dart` - Cập nhật import sang `package:icnative/`.
+  - [MODIFY] `lib/screens/preview.dart` - Cập nhật import sang `package:icnative/`.
+  - [MODIFY] `test/widget_test.dart` - Cập nhật import sang `package:icnative/main.dart`.
+  - [MODIFY] `README.md` - Nâng cấp tài liệu giới thiệu tổng quan dự án ICNative.
+  - [COMMIT] Git commit `3a2338d` đã lưu toàn bộ 85 files của codebase.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Codebase đã nằm ngay ngắn ở thư mục gốc, sẵn sàng cho việc phát triển feature mà không bị lỗi cấu trúc IDE.
+  - Cần push 3 commit (`c6c70a6`, `dc1a7c1`, `3a2338d`) lên remote GitHub `origin main`.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn/Hỗ trợ người dùng push lên GitHub remote repository.
+  2. Bắt đầu cài đặt thư viện On-Device AI `google_mlkit_object_detection` và xây dựng module `StickerAnchoringEngine`.
+
