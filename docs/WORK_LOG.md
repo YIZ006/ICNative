@@ -30,6 +30,30 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-09-19 16:28:00] - Tạo thư mục tham chiếu home_widget bên ngoài & chắt lọc tài nguyên icon/font/mẫu
+* **Thời gian (Timestamp):** 2026-09-19 16:28:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Clone repo `home_widget` ra thư mục độc lập bên ngoài dự án (`d:\project\home_widget_reference`) để tránh làm nặng và bẩn Git của `ICNative`. Chắt lọc các tài nguyên thiết yếu gồm icon font dùng cho native widget, ảnh mẫu và các template file widget chuẩn (iOS SwiftUI Provider và Android Jetpack Glance) vào `IConNative`. Đồng thời xác nhận toàn bộ 4 commit trước đó đã được push thành công lên GitHub `origin main`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW DIRECTORY] `d:\project\home_widget_reference` - Kho tham chiếu mã nguồn gốc của thư viện `home_widget` (nằm ngoài git tree).
+  - [NEW] `assets/fonts/widget_material_icons.otf` - Font icon Material dùng hiển thị icon trên native widget.
+  - [NEW] `assets/fonts/widget_cupertino_icons.ttf` - Font icon Cupertino dùng hiển thị icon trên native widget.
+  - [NEW] `images/sample_widget.png` - Ảnh mẫu widget.
+  - [NEW] `templates/widget/ios/ImageWidget.swift` - Template Swift WidgetKit với App Group container.
+  - [NEW] `templates/widget/android/ImageWidgetHomeWidget.kt` - Template Kotlin Jetpack Glance widget nạp ảnh bitmap.
+  - [NEW] `templates/widget/android/image_widget_home_widget.xml` - XML cấu hình kích thước và thuộc tính Android widget.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Git remote `origin main` đã đồng bộ hoàn hảo đến commit `d82f4c0`.
+  - Tài nguyên icon font và template widget đã sẵn sàng trong project.
+* **Bước tiếp theo (Next Steps):**
+  1. Commit các file tài nguyên và template mới vào Git.
+  2. Cập nhật `pubspec.yaml` tích hợp `google_mlkit_object_detection`, `image`, `home_widget`.
+  3. Bắt đầu code module `StickerAnchoringEngine`.
+
+---
+
 ### [2026-09-19 16:21:00] - Tái cấu trúc đưa source code từ Lockit ra thư mục gốc & đổi tên package
 * **Thời gian (Timestamp):** 2026-09-19 16:21:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
