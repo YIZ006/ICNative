@@ -77,3 +77,21 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   1. Hướng dẫn/Hỗ trợ người dùng push lên GitHub remote repository.
   2. Bắt đầu cài đặt thư viện On-Device AI `google_mlkit_object_detection` và xây dựng module `StickerAnchoringEngine`.
 
+---
+
+### [2026-09-19 16:32:00] - Kiểm tra điều kiện chạy thử trên Meizu 21 Note & bổ sung quyền AndroidManifest
+* **Thời gian (Timestamp):** 2026-09-19 16:32:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Kiểm tra toàn diện môi trường Android Studio, kết nối ADB và thiết bị thực tế Meizu 21 Note. Phát hiện và bổ sung các quyền bắt buộc trong `AndroidManifest.xml` (Camera, Internet, Hardware Feature) để tránh văng app (crash) khi khởi chạy trên điện thoại thật. Hướng dẫn chi tiết checklist 3 bước để chạy app trên máy thật Meizu 21 Note.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `android/app/src/main/AndroidManifest.xml` - Thêm quyền `android.permission.CAMERA`, `android.permission.INTERNET`, khai báo phần cứng camera và đổi tên app hiển thị thành `ICNative`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Điện thoại Meizu 21 Note chưa kết nối hoặc chưa bật gỡ lỗi USB (lệnh ADB chưa nhận diện thiết bị).
+  - Máy tính chưa có Flutter SDK trong biến môi trường PATH (cần thiết lập Flutter SDK Path trong Android Studio).
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng kết nối điện thoại Meizu 21 Note qua USB Debugging.
+  2. Hướng dẫn thiết lập Flutter SDK trong Android Studio để bấm Run chạy app.
+
+
