@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:icnative/settings/global.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:icnative/services/sticker_anchoring_engine.dart';
 
 class ImagePreview extends StatefulWidget {
   const ImagePreview({super.key, required this.imagePath, required this.onSend});
@@ -12,6 +15,34 @@ final void Function() onSend;
 }
 
 class _ImagePreviewState extends State<ImagePreview> {
+  late String currentImagePath;
+  bool isProcessing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    currentImagePath = widget.imagePath;
+    _runAiEngine();
+  }
+
+  Future<void> _runAiEngine() async {
+    try {
+      // 2. Run Engine (Base Model + Saliency)
+      final newPath = await StickerAnchoringEngine.processAndMerge(widget.imagePath);
+      if (newPath != null) {
+        setState(() {
+          currentImagePath = newPath;
+        });
+      }
+    } catch (e) {
+      print('AI Engine Error: $e');
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -33,11 +64,11 @@ class _ImagePreviewState extends State<ImagePreview> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30),
                     image: DecorationImage(
-                      image: FileImage(File(widget.imagePath)),
+                      image: FileImage(File(currentImagePath)),
                       fit: BoxFit.cover
                     )
                   ),
-
+                  child: isProcessing ? Center(child: CircularProgressIndicator()) : null,
                 ),
                 Container(
                   height: MediaQuery.of(context).size.height*0.1,
@@ -46,14 +77,25 @@ class _ImagePreviewState extends State<ImagePreview> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
 
+                      IconButton(onPressed: () async {
+                        // 1. Save image to persistent storage
+                        final directory = await getApplicationDocumentsDirectory();
+                        final fileName = 'widget_image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                        final savedImage = await File(currentImagePath).copy('${directory.path}/$fileName');
+                        
+                        // 2. Add to history
+                        images.add(savedImage.path);
+                        
+                        // 3. Update Home Widget
+                        await HomeWidget.saveWidgetData<String>('widget_image_path', savedImage.path);
+                        await HomeWidget.updateWidget(
+                          name: 'ICNativeWidgetProvider',
+                        );
 
-                      IconButton(onPressed: (){
-                        images.add(widget.imagePath);
                         widget.onSend();
-                        Navigator.pop(context);
-                        setState(() {
-
-                        });
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                       }, icon: const Icon(Icons.send,size: 50,),),
 
                     ],

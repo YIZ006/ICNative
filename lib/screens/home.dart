@@ -36,12 +36,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    controller = CameraController(cameras[0], ResolutionPreset.low,enableAudio: false,);
-    controller.initialize().then((_) {
-      // controller.setZoomLevel(1.5);
+    controller = CameraController(
+      cameras[0],
+      ResolutionPreset.medium, // 720p ensures instant shutter speed (< 50ms) without motion blur
+      enableAudio: false,
+    );
+    controller.initialize().then((_) async {
       if (!mounted) {
         return;
       }
+      try {
+        await controller.setFocusMode(FocusMode.auto);
+        await controller.setExposureMode(ExposureMode.auto);
+      } catch (_) {}
       setState(() {});
     }).catchError((Object e) {
       if (e is CameraException) {
@@ -155,7 +162,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(50),
 
-                                child: CameraPreview(controller,child: Stack(
+                                child: SizedBox(
+                                  width: Sizes.width(context),
+                                  height: Sizes.width(context),
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    clipBehavior: Clip.hardEdge,
+                                    child: SizedBox(
+                                      width: controller.value.isInitialized ? controller.value.previewSize!.height : Sizes.width(context),
+                                      height: controller.value.isInitialized ? controller.value.previewSize!.width : Sizes.width(context),
+                                      child: CameraPreview(controller, child: Stack(
                                   alignment: Alignment.center,
                                   children: [
                                     Positioned(
@@ -196,7 +212,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                 ),
                               ),
+                              ),
+                              ),
                             ),
+                          ),
                           ),
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 10),
@@ -204,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 IconButton(onPressed: () async {
-                                  await  controller.setFlashMode(flash==false?FlashMode.always:FlashMode.off);
+                                  await controller.setFlashMode(flash == false ? FlashMode.torch : FlashMode.off);
 
                                   setState(() {
                                     flash=!flash;
@@ -328,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 
   changeCamera(){
-    controller=CameraController(cameras[frontCamera?0:1], ResolutionPreset.ultraHigh,enableAudio: false,);
+    controller=CameraController(cameras[frontCamera?0:1], ResolutionPreset.high,enableAudio: false,);
 
      controller.initialize().then((_) {
 

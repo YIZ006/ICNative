@@ -9,3 +9,7 @@ Mọi Agent khi thực hiện công việc trong workspace này **BẮT BUỘC**
 3. Bị gián đoạn hoặc đứt đoạn do hết token (Token Limit).
 
 Xem chi tiết hướng dẫn và cấu trúc báo cáo tại [agent.md](agent.md).
+
+## PROJECT PRINCIPLE: 0 VNĐ & 100% OFFLINE
+1. **Tuyệt đối KHÔNG sử dụng Cloud API trả phí:** (OpenAI, Gemini Vision, Claude, v.v.). Mọi xử lý hình ảnh, AI, nhận diện đều phải là 0 VNĐ.
+2. **Xử lý 100% On-Device:** Tất cả logic AI (Object Detection, Image Labeling) phải chạy trên Google ML Kit, Apple Vision hoặc mô hình cục bộ ngay trên thiết bị người dùng (Offline).

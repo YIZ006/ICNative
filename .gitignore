@@ -34,3 +34,7 @@ doc/api/
 # OS
 .DS_Store
 Thumbs.db
+
+# Kotlin
+android/.kotlin/
+**/android/.kotlin/
