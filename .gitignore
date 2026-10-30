@@ -38,3 +38,8 @@ Thumbs.db
 # Kotlin
 android/.kotlin/
 **/android/.kotlin/
+
+# Private Work Logs & Agent Directives
+docs/WORK_LOG.md
+agent.md
+AGENTS.md
