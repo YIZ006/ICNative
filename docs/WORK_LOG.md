@@ -711,3 +711,31 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - **Phat hanh ban cap nhat Release v1.1.0**:
     - Tai tep `ICNative-v1.1.0-arm64.apk` truc tiep len muc Assets cua GitHub Release v1.1.0 giup nguoi dung tai nhanh hon gap doi va khong bi loi chung chi hay rot mang.
 * **Hien trang (Current State):** San sang de nguoi dung tai ban ARM64 moi va huong dan ky truc tiep qua MT Manager neu can.
+
+
+---
+
+### [2026-10-30 18:15:00] - Hoàn Thiện Tương Tác Quán Tính, Fix Xung Đột Cử Chỉ & Thiết Kế 10 Kiểu Kết Nối Bạn Chung
+* **Thời gian (Timestamp):** 2026-10-30 18:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  - **Sửa xung đột cử chỉ Pinch-to-Zoom và Thu nhỏ về quỹ đạo**:
+    - Chuẩn hóa điều kiện chuyển đổi: Khi đang ở ô camera vuông phóng to, cử chỉ chụm 2 ngón tay chỉ dùng để zoom out bình thường từ các mức 3x, 2x về 1x.
+    - **Chỉ khi camera đã ở mức 1.0x** (`_currentScale <= 1.05`) và người dùng tiếp tục chụm 2 ngón tay thì camera mới thu nhỏ trở về ống kính quỹ đạo tròn.
+    - Bổ sung nút thu nhỏ tròn góc trên và pill chuyển đổi nhanh 1x/2x mượt mà.
+  - **Khắc phục triệt để lỗi vô tình vuốt ảnh ở dưới lên khi chụm ngón tay & hết khựng**:
+    - Khi đang mở rộng camera (`isLensExpanded == true`), **vô hiệu hóa 100% cử chỉ kéo vuốt trang ảnh lên**, loại bỏ hoàn toàn tình trạng bị nhảy sang trang lịch sử khi đang thao tác zoom.
+    - Cải tiến cử chỉ vuốt dọc trang thành tương tác thời gian thực 1:1 (`onVerticalDragStart`, `onVerticalDragUpdate`, `onVerticalDragEnd`), trang di chuyển trơn tru theo đầu ngón tay với đường cong giảm tốc mượt mà `Curves.easeOutCubic`, loại bỏ hoàn toàn cảm giác khựng.
+  - **Tối ưu hóa quán tính xoay mượt mà (Luxury Damping Physics)**:
+    - Áp dụng bộ lọc vận tốc chuyển động Exponential Moving Average (EMA) `_velocity = _velocity * 0.3 + instantV * 0.7` giúp giữ nguyên trớn xoay tự nhiên khi vuốt ngón tay.
+    - Điều chỉnh hệ số ma sát giảm tốc sang trọng `math.exp(-1.15 * dt)` giúp bánh xe quỹ đạo lướt êm ái như đồng hồ cơ khí trước khi trôi êm đềm.
+    - Tách biệt `ValueNotifier<double> _orbitNotifier` để chỉ render lại các vòng quỹ đạo và vệ tinh, không rebuild toàn bộ màn hình camera tại 120Hz.
+  - **Tối giản giao diện theo yêu cầu ("Bỏ chữ đi")**:
+    - Xóa bỏ nhãn chữ tên bạn bè dưới mỗi avatar vệ tinh, chỉ giữ lại vòng tròn avatar tinh gọn với viền phát sáng khi chọn.
+    - Xóa các dòng chữ hướng dẫn rườm rà trên ống kính và ô camera vuông (`"Quỹ đạo tròn"`, `"Chạm để phóng to"`, `"Chụm ngón tay để thu nhỏ"`).
+    - Tối giản hàng phím nhanh dưới đáy thành các biểu tượng đồ họa (Icon-only), thay dòng chữ `"Vuốt lên xem ảnh kỷ niệm"` bằng biểu tượng mũi tên chevron nhẹ nhàng.
+  - **Thiết kế 10 Mô hình Hiệu ứng Vòng tròn Kết nối Bạn bè Chung**:
+    - Xây dựng bản mô phỏng tương tác HTML5 Canvas 60 FPS độc lập tại `mutual_friend_orbit_connections.html` với đầy đủ 10 phong cách thị giác (Thiên hà, Từ trường nhịp thở, Sợi thần kinh, Sóng trọng lực, Hình học thiêng, Cực quang, Đom đóm lượng tử, Dây bện duyên số, Hào quang chất lỏng, Khối pha lê đa diện).
+    - Lập hồ sơ đặc tả kỹ thuật chi tiết tại `mutual_friend_orbit_specs.md`.
+* **Hiện trạng (Current State):** Mã nguồn đã kiểm tra đạt 0 lỗi với `flutter analyze lib`, APK đã được biên dịch và ký số hoàn chỉnh.

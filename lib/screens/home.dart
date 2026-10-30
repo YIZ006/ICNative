@@ -62,6 +62,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   double _lastTouchAngle = 0.0;
   DateTime _lastTouchTime = DateTime.now();
 
+  // Cached zoom range and smooth orbit notifier
+  double _maxZoomLevel = 5.0;
+  double _dragStartY = 0.0;
+  double _startScrollOffset = 0.0;
+  final ValueNotifier<double> _orbitNotifier = ValueNotifier<double>(0.0);
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       try {
         await controller.setFocusMode(FocusMode.auto);
         await controller.setExposureMode(ExposureMode.auto);
+        _maxZoomLevel = await controller.getMaxZoomLevel();
       } catch (_) {}
       setState(() {});
     }).catchError((Object e) {
@@ -101,9 +108,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (dt <= 0 || dt > 0.1) return; // Bo qua frame bat thuong
 
     if (!_isDragging) {
-      // Giam toc theo quan tinh (Friction damping) cho vong trong
+      // Giam toc theo quan tinh sang trong (Luxurious damping factor 1.15)
       if (_velocityInner.abs() > _baseSpeedInner.abs()) {
-        _velocityInner *= math.exp(-2.2 * dt);
+        _velocityInner *= math.exp(-1.15 * dt);
         if (_velocityInner.abs() < _baseSpeedInner.abs()) {
           _velocityInner = _baseSpeedInner;
         }
@@ -113,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       // Giam toc theo quan tinh cho vong ngoai
       if (_velocityOuter.abs() > _baseSpeedOuter.abs()) {
-        _velocityOuter *= math.exp(-2.2 * dt);
+        _velocityOuter *= math.exp(-1.15 * dt);
         if (_velocityOuter.abs() < _baseSpeedOuter.abs()) {
           _velocityOuter = _baseSpeedOuter;
         }
@@ -124,13 +131,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _angleInner += _velocityInner * dt;
       _angleOuter += _velocityOuter * dt;
 
-      setState(() {});
+      // Chi cap nhat notifier cho orbit stack, khong rebuild ca HomeScreen tai 120Hz
+      _orbitNotifier.value = _angleInner;
     }
   }
 
   @override
   void dispose() {
     _orbitTicker.dispose();
+    _orbitNotifier.dispose();
     controller.dispose();
     scrollController.dispose();
     super.dispose();
@@ -140,17 +149,31 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _baseScale = _currentScale;
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails details) async {
-    // Neu dang o che do mo rong va nguoi dung pinch-in (thu nho < 0.82) -> thu ve ong kinh tron
-    if (isLensExpanded && details.scale < 0.82) {
-      setState(() => isLensExpanded = false);
-      return;
-    }
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    if (!controller.value.isInitialized) return;
 
-    _currentScale = (_baseScale * details.scale).clamp(1.0, await controller.getMaxZoomLevel());
-    setState(() {
-      controller.setZoomLevel(_currentScale);
-    });
+    if (details.pointerCount >= 2) {
+      final double targetScale = (_baseScale * details.scale).clamp(1.0, _maxZoomLevel);
+
+      // Chế độ thu nhỏ về quỹ đạo tròn:
+      // CHỈ KHI camera ĐÃ Ở MỨC 1.0X (ngưỡng <= 1.05) và người dùng tiếp tục chụm 2 ngón tay (details.scale < 0.86)
+      // thì mới chuyển về quỹ đạo tròn! Nếu đang zoom 2x, 3x thì chụm ngón tay chỉ để zoom out về 1x.
+      if (isLensExpanded && _currentScale <= 1.05 && details.scale < 0.86) {
+        setState(() {
+          isLensExpanded = false;
+          _currentScale = 1.0;
+          controller.setZoomLevel(1.0);
+        });
+        return;
+      }
+
+      // Zoom camera thong thuong
+      if ((targetScale - _currentScale).abs() > 0.01) {
+        _currentScale = targetScale;
+        controller.setZoomLevel(_currentScale);
+        setState(() {});
+      }
+    }
   }
 
   Future<void> _capturePhoto() async {
@@ -252,14 +275,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 physics: const NeverScrollableScrollPhysics(),
                 child: Column(
                   children: [
-                    // SCREEN 1: Camera Page with strict viewport constraint
+                    // SCREEN 1: Camera Page with strict viewport constraint & smooth interactive pull-up
                     GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragStart: (details) {
+                        if (isLensExpanded) return;
+                        _dragStartY = details.globalPosition.dy;
+                        _startScrollOffset = scrollController.hasClients ? scrollController.offset : 0.0;
+                      },
+                      onVerticalDragUpdate: (details) {
+                        // KHI DANG MO RONG LENS: TUYET DOI KHONG VUOT TRANG ANH
+                        if (isLensExpanded || !scrollController.hasClients) return;
+                        final delta = _dragStartY - details.globalPosition.dy;
+                        if (delta > 0) {
+                          final maxScroll = scrollController.position.maxScrollExtent;
+                          final target = (_startScrollOffset + delta).clamp(0.0, maxScroll);
+                          scrollController.jumpTo(target);
+                        }
+                      },
                       onVerticalDragEnd: (details) {
-                        if (details.primaryVelocity != null && details.primaryVelocity! < -250) {
+                        if (isLensExpanded || !scrollController.hasClients) return;
+                        final velocity = details.primaryVelocity ?? 0.0;
+                        final maxScroll = scrollController.position.maxScrollExtent;
+                        if (velocity < -250 || scrollController.offset > maxScroll * 0.28) {
                           scrollController.animateTo(
-                            scrollController.position.maxScrollExtent,
-                            duration: const Duration(milliseconds: 350),
-                            curve: Curves.easeOut,
+                            maxScroll,
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                          );
+                        } else {
+                          scrollController.animateTo(
+                            0.0,
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOutCubic,
                           );
                         }
                       },
@@ -291,14 +339,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ),
 
-                    // SCREEN 2: History Screen (Pull up from bottom)
+                    // SCREEN 2: History Screen (Pull down to return to camera)
                     GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragStart: (details) {
+                        _dragStartY = details.globalPosition.dy;
+                        _startScrollOffset = scrollController.hasClients ? scrollController.offset : 0.0;
+                      },
+                      onVerticalDragUpdate: (details) {
+                        if (!scrollController.hasClients) return;
+                        final delta = _dragStartY - details.globalPosition.dy;
+                        final maxScroll = scrollController.position.maxScrollExtent;
+                        final target = (_startScrollOffset + delta).clamp(0.0, maxScroll);
+                        scrollController.jumpTo(target);
+                      },
                       onVerticalDragEnd: (details) {
-                        if (details.primaryVelocity != null && details.primaryVelocity! > 250) {
+                        if (!scrollController.hasClients) return;
+                        final velocity = details.primaryVelocity ?? 0.0;
+                        final maxScroll = scrollController.position.maxScrollExtent;
+                        if (velocity > 250 || scrollController.offset < maxScroll * 0.72) {
                           scrollController.animateTo(
-                            scrollController.position.minScrollExtent,
-                            duration: const Duration(milliseconds: 350),
-                            curve: Curves.easeOut,
+                            0.0,
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                          );
+                        } else {
+                          scrollController.animateTo(
+                            maxScroll,
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOutCubic,
                           );
                         }
                       },
@@ -590,19 +659,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 if (_activeDragRing == 1) {
                   _angleInner += delta;
-                  if (dt > 0.005) {
-                    _velocityInner = (delta / dt).clamp(-12.0, 12.0);
+                  if (dt > 0.003) {
+                    final instantV = (delta / dt).clamp(-16.0, 16.0);
+                    _velocityInner = _velocityInner * 0.3 + instantV * 0.7;
                   }
                 } else {
                   _angleOuter += delta;
-                  if (dt > 0.005) {
-                    _velocityOuter = (delta / dt).clamp(-12.0, 12.0);
+                  if (dt > 0.003) {
+                    final instantV = (delta / dt).clamp(-16.0, 16.0);
+                    _velocityOuter = _velocityOuter * 0.3 + instantV * 0.7;
                   }
                 }
 
                 _lastTouchAngle = currentAngle;
                 _lastTouchTime = now;
-                setState(() {});
+                _orbitNotifier.value = _angleInner;
               },
               onPanEnd: (details) {
                 _isDragging = false;
@@ -610,175 +681,181 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               child: SizedBox(
                 width: math.min(availW, totalContainerSize),
                 height: math.min(availH, totalContainerSize),
-                child: Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Outer Orbit Ring (Neu co > 4 ban be)
-                    if (hasOuterOrbit) ...[
-                      CustomPaint(
-                        size: Size(rOuter * 2, rOuter * 2),
-                        painter: _DashedOrbitPainter(
-                          color: OrbitColors.buttonPrimary.withValues(alpha: 0.28),
-                          strokeWidth: 1.5,
-                          dashCount: 40,
-                        ),
-                      ),
-                      ..._buildSatellitesOnRing(
-                        satellites: outerSatellites,
-                        radius: rOuter,
-                        baseAngle: _angleOuter,
-                        centerSize: math.min(availW, totalContainerSize),
-                      ),
-                    ],
-
-                    // Inner Orbit Ring
-                    CustomPaint(
-                      size: Size(rInner * 2, rInner * 2),
-                      painter: _DashedOrbitPainter(
-                        color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                        strokeWidth: 2.0,
-                        dashCount: 32,
-                      ),
-                    ),
-                    ..._buildSatellitesOnRing(
-                      satellites: innerSatellites,
-                      radius: rInner,
-                      baseAngle: _angleInner,
-                      centerSize: math.min(availW, totalContainerSize),
-                    ),
-
-                    // THE CIRCULAR CAMERA LENS AT CENTER
-                    GestureDetector(
-                      onTap: () {
-                        // Bấm vào cam ở chính giữa thì mở rộng ra ô cam vuông to
-                        setState(() => isLensExpanded = true);
-                      },
-                      onDoubleTap: () => changeCamera(),
-                      onScaleUpdate: _onScaleUpdate,
-                      onScaleStart: _onScaleStart,
-                      child: Container(
-                        width: lensDiameter,
-                        height: lensDiameter,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: OrbitColors.buttonPrimary,
-                            width: 3.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: OrbitColors.deepOlive.withValues(alpha: 0.25),
-                              blurRadius: 22,
-                              offset: const Offset(0, 8),
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _orbitNotifier,
+                  builder: (context, _, __) {
+                    return Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Outer Orbit Ring (Neu co > 4 ban be)
+                        if (hasOuterOrbit) ...[
+                          CustomPaint(
+                            size: Size(rOuter * 2, rOuter * 2),
+                            painter: _DashedOrbitPainter(
+                              color: OrbitColors.buttonPrimary.withValues(alpha: 0.28),
+                              strokeWidth: 1.5,
+                              dashCount: 40,
                             ),
-                          ],
+                          ),
+                          ..._buildSatellitesOnRing(
+                            satellites: outerSatellites,
+                            radius: rOuter,
+                            baseAngle: _angleOuter,
+                            centerSize: math.min(availW, totalContainerSize),
+                          ),
+                        ],
+
+                        // Inner Orbit Ring
+                        CustomPaint(
+                          size: Size(rInner * 2, rInner * 2),
+                          painter: _DashedOrbitPainter(
+                            color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                            strokeWidth: 2.0,
+                            dashCount: 32,
+                          ),
                         ),
-                        child: ClipOval(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              _buildCameraStreamView(),
+                        ..._buildSatellitesOnRing(
+                          satellites: innerSatellites,
+                          radius: rInner,
+                          baseAngle: _angleInner,
+                          centerSize: math.min(availW, totalContainerSize),
+                        ),
 
-                              // 3x3 Grid Overlay
-                              if (showGrid)
-                                CustomPaint(painter: _GridPainter()),
+                        // THE CIRCULAR CAMERA LENS AT CENTER
+                        GestureDetector(
+                          onTap: () {
+                            // Bấm vào cam ở chính giữa thì mở rộng ra ô cam vuông to
+                            setState(() => isLensExpanded = true);
+                          },
+                          onDoubleTap: () => changeCamera(),
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleStart: _onScaleStart,
+                          child: Container(
+                            width: lensDiameter,
+                            height: lensDiameter,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: OrbitColors.buttonPrimary,
+                                width: 3.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.25),
+                                  blurRadius: 22,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  _buildCameraStreamView(),
 
-                              // Countdown Overlay
-                              if (countdownValue > 0)
-                                _buildCountdownOverlay(),
+                                  // 3x3 Grid Overlay
+                                  if (showGrid)
+                                    CustomPaint(painter: _GridPainter()),
 
-                              // Zoom pill
-                              Positioned(
-                                bottom: 8,
-                                left: 0,
-                                right: 0,
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: OrbitColors.deepOlive.withValues(alpha: 0.75),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: OrbitColors.buttonPrimary, width: 0.8),
-                                    ),
-                                    child: Text(
-                                      '${_currentScale.toStringAsFixed(1)}x • Chạm để phóng to',
-                                      style: const TextStyle(
-                                        color: OrbitColors.textLight,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
+                                  // Countdown Overlay
+                                  if (countdownValue > 0)
+                                    _buildCountdownOverlay(),
+
+                                  // Zoom pill tối giản (chỉ hiển thị khi zoom > 1x, bỏ chữ thừa)
+                                  if (_currentScale > 1.05)
+                                    Positioned(
+                                      bottom: 8,
+                                      left: 0,
+                                      right: 0,
+                                      child: Center(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: OrbitColors.deepOlive.withValues(alpha: 0.8),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: OrbitColors.buttonPrimary, width: 0.8),
+                                          ),
+                                          child: Text(
+                                            '${_currentScale.toStringAsFixed(1)}x',
+                                            style: const TextStyle(
+                                              color: OrbitColors.textLight,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Target Recipient Badge (Dưới ống kính)
-                    Positioned(
-                      bottom: (math.min(availH, totalContainerSize) - lensDiameter) / 4 - 10,
-                      child: GestureDetector(
-                        onTap: () {
-                          if (friends.isEmpty) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
-                            );
-                          } else {
-                            setState(() => selectedRecipientName = null);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: OrbitColors.buttonPrimary,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: OrbitColors.deepOlive.withValues(alpha: 0.3),
-                              width: 1.2,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: OrbitColors.deepOlive.withValues(alpha: 0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: OrbitColors.textLight,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                friends.isEmpty
-                                    ? 'Nhấn "+" trên quỹ đạo để thêm bạn bè'
-                                    : (selectedRecipientName != null
-                                        ? 'Gửi riêng: $selectedRecipientName ✕'
-                                        : 'Gửi tới: Tất cả bạn bè (${friends.length}) ▾'),
-                                style: const TextStyle(
-                                  color: OrbitColors.textLight,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
                           ),
                         ),
-                      ),
-                    ),
-                  ],
+
+                        // Target Recipient Badge (Dưới ống kính)
+                        Positioned(
+                          bottom: (math.min(availH, totalContainerSize) - lensDiameter) / 4 - 10,
+                          child: GestureDetector(
+                            onTap: () {
+                              if (friends.isEmpty) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+                                );
+                              } else {
+                                setState(() => selectedRecipientName = null);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: OrbitColors.buttonPrimary,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.3),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: OrbitColors.deepOlive.withValues(alpha: 0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: OrbitColors.textLight,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    friends.isEmpty
+                                        ? 'Nhấn "+" trên quỹ đạo để thêm bạn bè'
+                                        : (selectedRecipientName != null
+                                            ? '$selectedRecipientName ✕'
+                                            : 'Tất cả bạn bè (${friends.length})'),
+                                    style: const TextStyle(
+                                      color: OrbitColors.textLight,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -823,51 +900,75 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 if (countdownValue > 0)
                   _buildCountdownOverlay(),
 
-                // Nut thu nho ve kieu quy dao tron
+                // Nut thu nho ve kieu quy dao tron (Tối giản, không chữ)
                 Positioned(
                   top: 12,
                   right: 12,
                   child: GestureDetector(
                     onTap: () {
-                      setState(() => isLensExpanded = false);
+                      setState(() {
+                        isLensExpanded = false;
+                        _currentScale = 1.0;
+                        controller.setZoomLevel(1.0);
+                      });
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: OrbitColors.deepOlive.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: OrbitColors.buttonPrimary, width: 1),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.compress_rounded, color: OrbitColors.textLight, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Quỹ đạo tròn',
-                            style: TextStyle(color: OrbitColors.textLight, fontSize: 10, fontWeight: FontWeight.bold),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: OrbitColors.buttonPrimary, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
                         ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.fullscreen_exit_rounded, color: OrbitColors.textLight, size: 20),
                       ),
                     ),
                   ),
                 ),
 
-                // Hint
+                // Floating Zoom Pill tối giản (Chạm để chuyển 1x -> 2x, không chữ thừa)
                 Positioned(
-                  bottom: 10,
+                  bottom: 12,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: OrbitColors.deepOlive.withValues(alpha: 0.75),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '${_currentScale.toStringAsFixed(1)}x • Chụm ngón tay để thu nhỏ',
-                        style: const TextStyle(color: OrbitColors.textLight, fontSize: 10, fontWeight: FontWeight.bold),
+                    child: GestureDetector(
+                      onTap: () {
+                        final next = _currentScale >= 1.8 ? 1.0 : 2.0;
+                        _currentScale = next;
+                        controller.setZoomLevel(_currentScale);
+                        setState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: OrbitColors.deepOlive.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: OrbitColors.buttonPrimary, width: 1.0),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '${_currentScale.toStringAsFixed(1)}x',
+                          style: const TextStyle(
+                            color: OrbitColors.textLight,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -972,66 +1073,38 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           });
         }
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: item.isAddButton ? OrbitColors.surfaceCard : OrbitColors.buttonPrimary,
-              border: Border.all(
-                color: isSelected
-                    ? OrbitColors.terracotta
-                    : (item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.background),
-                width: isSelected ? 3.0 : 2.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: OrbitColors.deepOlive.withValues(alpha: 0.2),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: item.isAddButton ? OrbitColors.surfaceCard : OrbitColors.buttonPrimary,
+          border: Border.all(
+            color: isSelected
+                ? OrbitColors.terracotta
+                : (item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.background),
+            width: isSelected ? 3.2 : 2.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? OrbitColors.terracotta.withValues(alpha: 0.45)
+                  : OrbitColors.deepOlive.withValues(alpha: 0.2),
+              blurRadius: isSelected ? 12 : 6,
+              offset: const Offset(0, 2),
             ),
-            child: Center(
-              child: Text(
-                item.initial,
-                style: TextStyle(
-                  color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
-                  fontWeight: FontWeight.bold,
-                  fontSize: item.isAddButton ? 20 : 13,
-                ),
-              ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            item.initial,
+            style: TextStyle(
+              color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
+              fontWeight: FontWeight.bold,
+              fontSize: item.isAddButton ? 22 : 14,
             ),
           ),
-          const SizedBox(height: 2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-            decoration: BoxDecoration(
-              color: isSelected ? OrbitColors.terracotta : OrbitColors.buttonPrimary,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: OrbitColors.deepOlive.withValues(alpha: 0.15),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Text(
-              item.name,
-              style: const TextStyle(
-                color: OrbitColors.textLight,
-                fontSize: 8.5,
-                fontWeight: FontWeight.bold,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1065,89 +1138,83 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Flash Button
+                // Flash Button (Icon only)
                 GestureDetector(
                   onTap: () async {
                     await controller.setFlashMode(flash ? FlashMode.off : FlashMode.torch);
                     setState(() => flash = !flash);
                   },
-                  child: Row(
-                    children: [
-                      Icon(
-                        flash ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                        size: 15,
-                        color: flash ? OrbitColors.khakiGold : OrbitColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        flash ? "Bật" : "Tắt",
-                        style: const TextStyle(color: OrbitColors.textLight, fontSize: 10.5, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: Icon(
+                      flash ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                      size: 18,
+                      color: flash ? OrbitColors.khakiGold : OrbitColors.textLight,
+                    ),
                   ),
                 ),
 
                 _buildDivider(),
 
-                // Timer Button
+                // Timer Button (Icon with active dot)
                 GestureDetector(
                   onTap: _toggleTimer,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.timer_rounded,
-                        size: 15,
-                        color: timerSeconds > 0 ? OrbitColors.khakiGold : OrbitColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        timerSeconds == 0 ? "Hẹn giờ" : "${timerSeconds}s",
-                        style: TextStyle(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          Icons.timer_rounded,
+                          size: 18,
                           color: timerSeconds > 0 ? OrbitColors.khakiGold : OrbitColors.textLight,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ],
+                        if (timerSeconds > 0)
+                          Positioned(
+                            top: -2,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: OrbitColors.terracotta,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
 
                 _buildDivider(),
 
-                // Grid Button
+                // Grid Button (Icon only)
                 GestureDetector(
                   onTap: () => setState(() => showGrid = !showGrid),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.grid_on_rounded,
-                        size: 15,
-                        color: showGrid ? OrbitColors.khakiGold : OrbitColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        showGrid ? "Lưới" : "Lưới",
-                        style: TextStyle(
-                          color: showGrid ? OrbitColors.khakiGold : OrbitColors.textLight,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: Icon(
+                      Icons.grid_on_rounded,
+                      size: 18,
+                      color: showGrid ? OrbitColors.khakiGold : OrbitColors.textLight,
+                    ),
                   ),
                 ),
 
                 _buildDivider(),
 
-                // Flip Camera Button
+                // Flip Camera Button (Icon only)
                 GestureDetector(
                   onTap: changeCamera,
-                  child: const Row(
-                    children: [
-                      Icon(Icons.flip_camera_ios_rounded, size: 15, color: OrbitColors.textLight),
-                      SizedBox(width: 4),
-                      Text("Đổi", style: TextStyle(color: OrbitColors.textLight, fontSize: 10.5, fontWeight: FontWeight.w600)),
-                    ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: const Icon(
+                      Icons.flip_camera_ios_rounded,
+                      size: 18,
+                      color: OrbitColors.textLight,
+                    ),
                   ),
                 ),
               ],
@@ -1200,32 +1267,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 8),
 
-          // Pull-up History Hint
+          // Pull-up History Indicator (Tối giản, icon chevron mềm mại, không chữ thừa)
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
               scrollController.animateTo(
                 scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOut,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
               );
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.keyboard_arrow_up_rounded, color: OrbitColors.deepOlive, size: 18),
-                  SizedBox(width: 4),
-                  Text(
-                    "Vuốt lên xem ảnh kỷ niệm",
-                    style: TextStyle(
-                      color: OrbitColors.deepOlive,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 24),
+              child: const Icon(
+                Icons.keyboard_arrow_up_rounded,
+                color: OrbitColors.deepOlive,
+                size: 22,
               ),
             ),
           ),
