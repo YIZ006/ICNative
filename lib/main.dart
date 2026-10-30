@@ -102,7 +102,7 @@ class MyApp extends StatelessWidget {
       valueListenable: LocaleService.instance.currentLanguage,
       builder: (context, lang, _) {
         return MaterialApp(
-          title: 'OrbitLens',
+          title: 'Orbit',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             brightness: Brightness.light,

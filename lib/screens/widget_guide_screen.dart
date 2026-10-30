@@ -131,7 +131,7 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'OrbitLens Widgets',
+                          'Orbit Widgets',
                           style: TextStyle(
                             color: OrbitColors.deepOlive,
                             fontWeight: FontWeight.bold,

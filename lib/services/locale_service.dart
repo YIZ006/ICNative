@@ -72,8 +72,8 @@ class LocaleService {
 
   static final Map<String, String> _viMap = {
     // App Branding
-    'app_name': 'OrbitLens',
-    'app_tagline': 'Ống Kính Quan Hệ & Không Gian Gắn Kết',
+    'app_name': 'Orbit',
+    'app_tagline': 'Vòng Tròn Quan Hệ & Gắn Kết Yêu Thương',
 
     // Top Bar
     'widget_installed': 'Widget Hoạt Động',
@@ -123,7 +123,7 @@ class LocaleService {
     'wg_manual_guide_title': 'Cách Cài Đặt Thủ Công',
     'wg_step_1': '1. Quay về màn hình chính, nhấn giữ vào khoảng trống bất kỳ.',
     'wg_step_2': '2. Chọn mục "Tiện ích" hoặc "Widgets".',
-    'wg_step_3': '3. Tìm kiếm "OrbitLens", chọn kích thước mong muốn (2x2 hoặc 4x2) rồi kéo ra màn hình.',
+    'wg_step_3': '3. Tìm kiếm "Orbit", chọn kích thước mong muốn (2x2 hoặc 4x2) rồi kéo ra màn hình.',
     'wg_step_4': '4. Chạm vào widget để chụp và cập nhật ảnh mới bất kỳ lúc nào!',
 
     // Settings & Profile
@@ -145,8 +145,8 @@ class LocaleService {
 
   static final Map<String, String> _enMap = {
     // App Branding
-    'app_name': 'OrbitLens',
-    'app_tagline': 'Relationship Orbits & Social Presence Lens',
+    'app_name': 'Orbit',
+    'app_tagline': 'Relationship Orbits & Social Connection',
 
     // Top Bar
     'widget_installed': 'Widget Active',
@@ -196,7 +196,7 @@ class LocaleService {
     'wg_manual_guide_title': 'Manual Setup Guide',
     'wg_step_1': '1. Return to home screen and long-press on any empty space.',
     'wg_step_2': '2. Select "Widgets" from the launcher menu.',
-    'wg_step_3': '3. Find "OrbitLens", choose desired size (2x2 or 4x2), and drag it to your screen.',
+    'wg_step_3': '3. Find "Orbit", choose desired size (2x2 or 4x2), and drag it to your screen.',
     'wg_step_4': '4. Tap the widget anytime to capture and update fresh moments!',
 
     // Settings & Profile

@@ -1,5 +1,5 @@
+// ignore_for_file: avoid_print, prefer_const_declarations
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 
 void main() {
