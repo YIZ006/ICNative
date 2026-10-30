@@ -8,9 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum StickerEditMode {
-  original, // 1. Anh goc / badge giu nguyen ti le
-  outline,  // 2. Vien sticker trang quanh chu the kieu Messenger
-  full,     // 3. Tach nen trong suot giu chu the day du
+  outline,  // 1. Vien sticker trang day die-cut kieu Messenger/iMessage
+  full,     // 2. Tach nen trong suot sac net 100% On-Device
+  badge,    // 3. Khung huy hieu tron cute phong cach badge
+  original, // 4. Anh goc giu nguyen ti le
 }
 
 class CustomStickerItem {
@@ -19,13 +20,15 @@ class CustomStickerItem {
   final bool isAsset;
   final StickerEditMode mode;
   final String title;
+  final String? caption;
 
   CustomStickerItem({
     required this.id,
     required this.path,
     this.isAsset = false,
-    this.mode = StickerEditMode.original,
+    this.mode = StickerEditMode.outline,
     required this.title,
+    this.caption,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,14 +37,16 @@ class CustomStickerItem {
     'isAsset': isAsset,
     'mode': mode.index,
     'title': title,
+    'caption': caption,
   };
 
   factory CustomStickerItem.fromJson(Map<String, dynamic> json) => CustomStickerItem(
     id: json['id'] as String,
     path: json['path'] as String,
     isAsset: json['isAsset'] as bool? ?? false,
-    mode: StickerEditMode.values[(json['mode'] as int? ?? 0).clamp(0, 2)],
+    mode: StickerEditMode.values[(json['mode'] as int? ?? 0).clamp(0, StickerEditMode.values.length - 1)],
     title: json['title'] as String? ?? 'Sticker',
+    caption: json['caption'] as String?,
   );
 }
 
@@ -81,44 +86,7 @@ class CustomStickerService {
   Future<void> initialize() async {
     _stickers.clear();
 
-    // 1. Tải toàn bộ 115 meme đã phân loại và đánh số có sẵn trong app
-    // A. 22 Meme Capybara Chill & Dễ Thương
-    for (int i = 1; i <= 22; i++) {
-      final num = i.toString().padLeft(2, '0');
-      _stickers.add(CustomStickerItem(
-        id: 'capybara_$num',
-        path: 'assets/memes/meme_capybara_$num.png',
-        isAsset: true,
-        mode: StickerEditMode.outline,
-        title: 'Capybara #$i',
-      ));
-    }
-
-    // B. 29 Meme Mèo Hài Hước & Đáng Yêu
-    for (int i = 1; i <= 29; i++) {
-      final num = i.toString().padLeft(2, '0');
-      _stickers.add(CustomStickerItem(
-        id: 'cat_$num',
-        path: 'assets/memes/meme_cat_$num.png',
-        isAsset: true,
-        mode: StickerEditMode.full,
-        title: 'Mèo Meme #$i',
-      ));
-    }
-
-    // C. 64 Meme Biểu Cảm Cực Hài & Đa Dạng
-    for (int i = 1; i <= 64; i++) {
-      final num = i.toString().padLeft(2, '0');
-      _stickers.add(CustomStickerItem(
-        id: 'react_$num',
-        path: 'assets/memes/meme_react_$num.png',
-        isAsset: true,
-        mode: StickerEditMode.outline,
-        title: 'Biểu Cảm #$i',
-      ));
-    }
-
-    // 2. Load cac sticker nguoi dung da tu tao tu SharedPreferences
+    // 1. Uu tien nap cac sticker tu tao cua nguoi dung tu SharedPreferences len dau
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedIds = prefs.getStringList('custom_sticker_ids') ?? [];
@@ -126,14 +94,16 @@ class CustomStickerService {
         final rawPath = prefs.getString('custom_sticker_path_$id');
         final rawTitle = prefs.getString('custom_sticker_title_$id') ?? 'Custom Sticker';
         final rawMode = prefs.getInt('custom_sticker_mode_$id') ?? 0;
+        final rawCaption = prefs.getString('custom_sticker_caption_$id');
         if (rawPath != null && File(rawPath).existsSync()) {
           _stickers.add(
             CustomStickerItem(
               id: id,
               path: rawPath,
               isAsset: false,
-              mode: StickerEditMode.values[rawMode.clamp(0, 2)],
+              mode: StickerEditMode.values[rawMode.clamp(0, StickerEditMode.values.length - 1)],
               title: rawTitle,
+              caption: rawCaption,
             ),
           );
         }
@@ -141,6 +111,53 @@ class CustomStickerService {
     } catch (e) {
       debugPrint('Error loading saved stickers: $e');
     }
+
+    // 2. Tinh gon: Chi giu lai 6 sticker mac dinh sac net nhat (High-Res Crisp Presets)
+    // Thay vi tai 115 anh lam roi va mo man hinh, chi hien thi bo suu tap tinh hoa
+    _stickers.addAll([
+      CustomStickerItem(
+        id: 'capybara_chill',
+        path: 'assets/memes/meme_capybara_12.png',
+        isAsset: true,
+        mode: StickerEditMode.outline,
+        title: 'Capybara Chill',
+      ),
+      CustomStickerItem(
+        id: 'capybara_cute',
+        path: 'assets/memes/meme_capybara_11.png',
+        isAsset: true,
+        mode: StickerEditMode.outline,
+        title: 'Capybara Cute',
+      ),
+      CustomStickerItem(
+        id: 'cat_smug',
+        path: 'assets/memes/meme_cat_29.png',
+        isAsset: true,
+        mode: StickerEditMode.full,
+        title: 'Mèo Cười Khẩy',
+      ),
+      CustomStickerItem(
+        id: 'cat_derp',
+        path: 'assets/memes/meme_cat_28.png',
+        isAsset: true,
+        mode: StickerEditMode.full,
+        title: 'Mèo Ngơ Ngác',
+      ),
+      CustomStickerItem(
+        id: 'react_heart',
+        path: 'assets/memes/meme_react_22.png',
+        isAsset: true,
+        mode: StickerEditMode.outline,
+        title: 'Bắn Tim',
+      ),
+      CustomStickerItem(
+        id: 'react_laugh',
+        path: 'assets/memes/meme_react_10.png',
+        isAsset: true,
+        mode: StickerEditMode.outline,
+        title: 'Haha Bựa',
+      ),
+    ]);
   }
 
   Future<void> saveCustomSticker(CustomStickerItem item) async {
@@ -155,6 +172,9 @@ class CustomStickerService {
       await prefs.setString('custom_sticker_path_${item.id}', item.path);
       await prefs.setString('custom_sticker_title_${item.id}', item.title);
       await prefs.setInt('custom_sticker_mode_${item.id}', item.mode.index);
+      if (item.caption != null) {
+        await prefs.setString('custom_sticker_caption_${item.id}', item.caption!);
+      }
     } catch (e) {
       debugPrint('Error saving custom sticker: $e');
     }
@@ -296,11 +316,12 @@ class CustomStickerService {
     return badge;
   }
 
-  /// Tao Sticker theo 3 che do: Original, Outline, Full
+  /// Tao Sticker theo 4 che do: Outline, Full, Badge, Original voi do phan giai cao (600px, Cubic)
   Future<String> generateStickerVariation({
     required String sourcePath,
     required bool isAsset,
     required StickerEditMode mode,
+    String? caption,
   }) async {
     final localPath = await _ensureLocalFile(sourcePath, isAsset);
     final bytes = await File(localPath).readAsBytes();
@@ -310,15 +331,15 @@ class CustomStickerService {
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    // 1. CHE DO ORIGINAL: Giu nguyen anh, thu nho vua phai (max 420px)
+    // 1. CHE DO ORIGINAL: Giu nguyen anh goc, thu nho sac net (max 600px, Bicubic)
     if (mode == StickerEditMode.original) {
       img.Image processed = baseImage;
-      if (processed.width > 420 || processed.height > 420) {
+      if (processed.width > 600 || processed.height > 600) {
         processed = img.copyResize(
           processed,
-          width: processed.width >= processed.height ? 420 : null,
-          height: processed.height > processed.width ? 420 : null,
-          interpolation: img.Interpolation.linear,
+          width: processed.width >= processed.height ? 600 : null,
+          height: processed.height > processed.width ? 600 : null,
+          interpolation: img.Interpolation.cubic,
         );
       }
       final outPath = '${tempDir.path}/sticker_orig_$timestamp.png';
@@ -326,29 +347,85 @@ class CustomStickerService {
       return outPath;
     }
 
-    // Lay chu the da duoc tach nen
+    // Lay chu the da duoc tach nen thong minh On-Device
     img.Image cutoutImage = await _extractForeground(localPath, baseImage);
 
-    // Resize cho vua tam sticker (max 380x380)
-    if (cutoutImage.width > 380 || cutoutImage.height > 380) {
+    // Resize cho vua tam sticker do net cao (max 560x560, Bicubic khong vo pixel)
+    if (cutoutImage.width > 560 || cutoutImage.height > 560) {
       cutoutImage = img.copyResize(
         cutoutImage,
-        width: cutoutImage.width >= cutoutImage.height ? 380 : null,
-        height: cutoutImage.height > cutoutImage.width ? 380 : null,
-        interpolation: img.Interpolation.linear,
+        width: cutoutImage.width >= cutoutImage.height ? 560 : null,
+        height: cutoutImage.height > cutoutImage.width ? 560 : null,
+        interpolation: img.Interpolation.cubic,
       );
     }
 
-    // 2. CHE DO FULL: Tach nen trong suot sach se
+    // 2. CHE DO FULL: Tach nen trong suot sac net 100% On-Device
     if (mode == StickerEditMode.full) {
       final outPath = '${tempDir.path}/sticker_full_$timestamp.png';
       await File(outPath).writeAsBytes(img.encodePng(cutoutImage));
       return outPath;
     }
 
-    // 3. CHE DO OUTLINE: Tao vien sticker trang day bao quanh chu the (Kieu Messenger)
-    const int outlineRadius = 8; // Vien trang day 8px ro net
-    const int padding = outlineRadius + 4;
+    // 3. CHE DO BADGE: Huy hieu tron phong cach Warm Earth (#FEFAE0 & #283618)
+    if (mode == StickerEditMode.badge) {
+      final int badgeSize = (cutoutImage.width > cutoutImage.height ? cutoutImage.width : cutoutImage.height) + 32;
+      final badge = img.Image(width: badgeSize, height: badgeSize, numChannels: 4);
+      img.fill(badge, color: img.ColorRgba8(0, 0, 0, 0));
+
+      final center = badgeSize / 2.0;
+      final radius = (badgeSize / 2.0) - 4;
+      final bgColor = img.ColorRgba8(254, 250, 224, 255); // #FEFAE0 Warm Cream
+      final borderColor = img.ColorRgba8(40, 54, 24, 255); // #283618 Deep Olive
+      final shadowColor = img.ColorRgba8(40, 54, 24, 60);
+
+      // Bong do nhe
+      for (int y = 0; y < badgeSize; y++) {
+        for (int x = 0; x < badgeSize; x++) {
+          final dx = x - center;
+          final dy = y - (center + 3);
+          if (dx * dx + dy * dy <= radius * radius) {
+            badge.setPixel(x, y, shadowColor);
+          }
+        }
+      }
+
+      // Nen tron & vien dam
+      for (int y = 0; y < badgeSize; y++) {
+        for (int x = 0; x < badgeSize; x++) {
+          final dx = x - center;
+          final dy = y - center;
+          final distSq = dx * dx + dy * dy;
+          if (distSq <= radius * radius) {
+            if (distSq >= (radius - 5) * (radius - 5)) {
+              badge.setPixel(x, y, borderColor);
+            } else {
+              badge.setPixel(x, y, bgColor);
+            }
+          }
+        }
+      }
+
+      // Ve chu the vao tam huy hieu
+      final offX = (badgeSize - cutoutImage.width) ~/ 2;
+      final offY = (badgeSize - cutoutImage.height) ~/ 2;
+      for (int y = 0; y < cutoutImage.height; y++) {
+        for (int x = 0; x < cutoutImage.width; x++) {
+          final p = cutoutImage.getPixel(x, y);
+          if (p.a > 20) {
+            badge.setPixel(offX + x, offY + y, p);
+          }
+        }
+      }
+
+      final outPath = '${tempDir.path}/sticker_badge_$timestamp.png';
+      await File(outPath).writeAsBytes(img.encodePng(badge));
+      return outPath;
+    }
+
+    // 4. CHE DO OUTLINE: Vien sticker trang day 12px min mang kieu iMessage/Messenger
+    const int outlineRadius = 12; // Vien trang day 12px cuc ro va noi bat
+    const int padding = outlineRadius + 6;
 
     final int targetW = cutoutImage.width + padding * 2;
     final int targetH = cutoutImage.height + padding * 2;
@@ -357,17 +434,17 @@ class CustomStickerService {
     img.fill(outlined, color: img.ColorRgba8(0, 0, 0, 0));
 
     final whiteColor = img.ColorRgba8(255, 255, 255, 255);
-    final shadowColor = img.ColorRgba8(40, 54, 24, 75); // Subtle deep olive shadow behind sticker
+    final shadowColor = img.ColorRgba8(40, 54, 24, 85); // Drop shadow dam hon chong chim
 
-    // Buoc 1: Ve bong do nhe (Drop shadow) lech xuong duoi 3px
+    // Buoc 1: Ve bong do lech xuong duoi 4px
     for (int y = 0; y < cutoutImage.height; y++) {
       for (int x = 0; x < cutoutImage.width; x++) {
         if (cutoutImage.getPixel(x, y).a > 40) {
           for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
             for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
-              if (dx * dx + dy * dy <= (outlineRadius + 2) * (outlineRadius + 2)) {
+              if (dx * dx + dy * dy <= (outlineRadius + 3) * (outlineRadius + 3)) {
                 final nx = x + padding + dx;
-                final ny = y + padding + dy + 3;
+                final ny = y + padding + dy + 4;
                 if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
                   outlined.setPixel(nx, ny, shadowColor);
                 }
@@ -378,7 +455,7 @@ class CustomStickerService {
       }
     }
 
-    // Buoc 2: Ve vien trang day (Die-cut white contour)
+    // Buoc 2: Ve vien trang day bao quanh chu the (Die-cut white contour)
     for (int y = 0; y < cutoutImage.height; y++) {
       for (int x = 0; x < cutoutImage.width; x++) {
         if (cutoutImage.getPixel(x, y).a > 30) {
@@ -397,11 +474,11 @@ class CustomStickerService {
       }
     }
 
-    // Buoc 3: Ve chu the goc de len tren lop vien trang
+    // Buoc 3: Ve chu the goc de len tren lop vien trang voi do net goc
     for (int y = 0; y < cutoutImage.height; y++) {
       for (int x = 0; x < cutoutImage.width; x++) {
         final pixel = cutoutImage.getPixel(x, y);
-        if (pixel.a > 20) {
+        if (pixel.a > 15) {
           outlined.setPixel(x + padding, y + padding, pixel);
         }
       }

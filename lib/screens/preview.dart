@@ -38,9 +38,11 @@ class _ImagePreviewState extends State<ImagePreview> {
 
   // Custom Sticker them vao (neu nguoi dung muon gan them hoac tu tao)
   CustomStickerItem? activeCustomSticker;
-  Offset stickerPosition = const Offset(0.60, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
+  Offset stickerPosition = const Offset(0.55, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
   double stickerScale = 1.0;
   double stickerRotation = 0.05;
+  double _baseScale = 1.0;
+  double _baseRotation = 0.0;
 
   // Location & Time Badges
   String? locationBadgeText;
@@ -115,6 +117,23 @@ class _ImagePreviewState extends State<ImagePreview> {
     super.dispose();
   }
 
+  /// Cắt trực tiếp Meme từ bức ảnh vừa chụp (0 cần chọn lại ảnh!)
+  void _cutFromCurrentPhoto() async {
+    final newSticker = await StickerGeneratorSheet.show(
+      context,
+      initialPath: widget.imagePath,
+    );
+    if (newSticker != null && mounted) {
+      setState(() {
+        activeCustomSticker = newSticker;
+        stickerPosition = const Offset(0.50, 0.20);
+        stickerScale = 1.0;
+        stickerRotation = 0.0;
+      });
+    }
+  }
+
+  /// Mở Sticker Generator cho phép chọn ảnh khác từ Thư viện hoặc chụp mới
   void _openStickerGenerator() async {
     final newSticker = await StickerGeneratorSheet.show(context);
     if (newSticker != null && mounted) {
@@ -122,6 +141,7 @@ class _ImagePreviewState extends State<ImagePreview> {
         activeCustomSticker = newSticker;
         stickerPosition = const Offset(0.50, 0.20);
         stickerScale = 1.0;
+        stickerRotation = 0.0;
       });
     }
   }
@@ -161,7 +181,7 @@ class _ImagePreviewState extends State<ImagePreview> {
         final stickerFrame = await stickerCodec.getNextFrame();
         final ui.Image stickerImg = stickerFrame.image;
 
-        final double targetStickerW = (imgW * 0.28) * stickerScale;
+        final double targetStickerW = (imgW * 0.32) * stickerScale;
         final double targetStickerH = (targetStickerW / stickerImg.width) * stickerImg.height;
 
         final double posX = stickerPosition.dx * (imgW - targetStickerW);
@@ -175,6 +195,44 @@ class _ImagePreviewState extends State<ImagePreview> {
         final srcRect = Rect.fromLTWH(0, 0, stickerImg.width.toDouble(), stickerImg.height.toDouble());
         final dstRect = Rect.fromLTWH(0, 0, targetStickerW, targetStickerH);
         canvas.drawImageRect(stickerImg, srcRect, dstRect, ui.Paint()..filterQuality = ui.FilterQuality.high);
+
+        // Khắc kèm nhãn Meme Caption nếu sticker có caption
+        if (sticker.caption != null && sticker.caption!.trim().isNotEmpty) {
+          final captionText = sticker.caption!.trim();
+          final double captionFontSize = (targetStickerW * 0.16).clamp(18.0, 36.0);
+          final textSpan = TextSpan(
+            text: captionText,
+            style: TextStyle(
+              color: OrbitColors.textLight,
+              fontSize: captionFontSize,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          );
+          final textPainter = TextPainter(
+            text: textSpan,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.ltr,
+          )..layout(maxWidth: targetStickerW * 1.3);
+
+          final padH = captionFontSize * 0.75;
+          final padV = captionFontSize * 0.35;
+          final pillW = textPainter.width + padH * 2;
+          final pillH = textPainter.height + padV * 2;
+          final pillLeft = (targetStickerW - pillW) / 2;
+          final pillTop = targetStickerH + 4;
+
+          final pillRRect = RRect.fromRectAndRadius(
+            Rect.fromLTWH(pillLeft, pillTop, pillW, pillH),
+            Radius.circular(pillH / 2),
+          );
+
+          canvas.drawRRect(pillRRect.shift(const Offset(0, 3)), ui.Paint()..color = Colors.black.withValues(alpha: 0.35));
+          canvas.drawRRect(pillRRect, ui.Paint()..color = OrbitColors.deepOlive.withValues(alpha: 0.95));
+          canvas.drawRRect(pillRRect, ui.Paint()..color = OrbitColors.khakiGold..style = ui.PaintingStyle.stroke..strokeWidth = 2);
+          textPainter.paint(canvas, Offset(pillLeft + padH, pillTop + padV));
+        }
+
         canvas.restore();
 
         stickerImg.dispose();
@@ -400,14 +458,22 @@ class _ImagePreviewState extends State<ImagePreview> {
                         letterSpacing: 0.8,
                       ),
                     ),
-                    IconButton(
-                      onPressed: _openStickerGenerator,
-                      icon: const Icon(
-                        Icons.auto_awesome,
-                        color: OrbitColors.buttonPrimary,
-                        size: 24,
+                    TextButton.icon(
+                      onPressed: _cutFromCurrentPhoto,
+                      style: TextButton.styleFrom(
+                        backgroundColor: OrbitColors.buttonPrimary.withValues(alpha: 0.12),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      tooltip: "Tự tạo Sticker",
+                      icon: const Icon(Icons.auto_awesome, color: OrbitColors.buttonPrimary, size: 16),
+                      label: const Text(
+                        'Cắt Meme',
+                        style: TextStyle(
+                          color: OrbitColors.buttonPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -475,25 +541,37 @@ class _ImagePreviewState extends State<ImagePreview> {
                         if (activeCustomSticker != null)
                           LayoutBuilder(
                             builder: (ctx, constraints) {
-                              final double stickerPixelSize = 90.0 * stickerScale;
+                              final double stickerPixelSize = 135.0 * stickerScale;
                               final double maxLeft = constraints.maxWidth - stickerPixelSize;
                               final double maxTop = constraints.maxHeight - stickerPixelSize;
 
-                              final left = (stickerPosition.dx * maxLeft).clamp(0.0, maxLeft);
-                              final top = (stickerPosition.dy * maxTop).clamp(0.0, maxTop);
+                              final left = (stickerPosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
+                              final top = (stickerPosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
 
                               return Positioned(
                                 left: left,
                                 top: top,
                                 child: GestureDetector(
-                                  onPanUpdate: (details) {
+                                  onScaleStart: (details) {
+                                    _baseScale = stickerScale;
+                                    _baseRotation = stickerRotation;
+                                  },
+                                  onScaleUpdate: (ScaleUpdateDetails details) {
                                     setState(() {
-                                      final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
-                                      final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
-                                      stickerPosition = Offset(
-                                        newX.clamp(0.0, 1.0),
-                                        newY.clamp(0.0, 1.0),
-                                      );
+                                      if (maxLeft > 0) {
+                                        final newX = (left + details.focalPointDelta.dx) / maxLeft;
+                                        final newY = (top + details.focalPointDelta.dy) / (maxTop > 0 ? maxTop : 1);
+                                        stickerPosition = Offset(
+                                          newX.clamp(0.0, 1.0),
+                                          newY.clamp(0.0, 1.0),
+                                        );
+                                      }
+                                      if (details.scale != 1.0) {
+                                        stickerScale = (_baseScale * details.scale).clamp(0.5, 2.5);
+                                      }
+                                      if (details.rotation != 0.0) {
+                                        stickerRotation = _baseRotation + details.rotation;
+                                      }
                                     });
                                   },
                                   child: Transform.rotate(
@@ -501,19 +579,49 @@ class _ImagePreviewState extends State<ImagePreview> {
                                     child: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
-                                        Container(
-                                          width: stickerPixelSize,
-                                          height: stickerPixelSize,
-                                          padding: const EdgeInsets.all(4),
-                                          child: activeCustomSticker!.isAsset
-                                              ? Image.asset(
-                                                  activeCustomSticker!.path,
-                                                  fit: BoxFit.contain,
-                                                )
-                                              : Image.file(
-                                                  File(activeCustomSticker!.path),
-                                                  fit: BoxFit.contain,
+                                        Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: stickerPixelSize,
+                                              height: stickerPixelSize,
+                                              padding: const EdgeInsets.all(4),
+                                              child: activeCustomSticker!.isAsset
+                                                  ? Image.asset(
+                                                      activeCustomSticker!.path,
+                                                      fit: BoxFit.contain,
+                                                      filterQuality: FilterQuality.high,
+                                                    )
+                                                  : Image.file(
+                                                      File(activeCustomSticker!.path),
+                                                      fit: BoxFit.contain,
+                                                      filterQuality: FilterQuality.high,
+                                                    ),
+                                            ),
+                                            if (activeCustomSticker!.caption != null &&
+                                                activeCustomSticker!.caption!.trim().isNotEmpty)
+                                              Container(
+                                                margin: const EdgeInsets.only(top: 2),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: OrbitColors.deepOlive.withValues(alpha: 0.95),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(color: OrbitColors.khakiGold, width: 1.4),
+                                                  boxShadow: const [
+                                                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                                  ],
                                                 ),
+                                                child: Text(
+                                                  activeCustomSticker!.caption!,
+                                                  style: const TextStyle(
+                                                    color: OrbitColors.textLight,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: 0.4,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                         Positioned(
                                           top: -6,
@@ -523,16 +631,19 @@ class _ImagePreviewState extends State<ImagePreview> {
                                               setState(() => activeCustomSticker = null);
                                             },
                                             child: Container(
-                                              width: 22,
-                                              height: 22,
+                                              width: 24,
+                                              height: 24,
                                               decoration: const BoxDecoration(
                                                 color: OrbitColors.deepOlive,
                                                 shape: BoxShape.circle,
+                                                boxShadow: [
+                                                  BoxShadow(color: Colors.black26, blurRadius: 3),
+                                                ],
                                               ),
                                               child: const Icon(
                                                 Icons.close,
                                                 color: OrbitColors.textLight,
-                                                size: 14,
+                                                size: 15,
                                               ),
                                             ),
                                           ),
@@ -736,7 +847,32 @@ class _ImagePreviewState extends State<ImagePreview> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Nút nhanh: Cắt Meme AI từ chính bức ảnh vừa chụp
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _cutFromCurrentPhoto,
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: OrbitColors.surfaceCream,
+                      side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.auto_awesome, color: OrbitColors.buttonPrimary, size: 17),
+                    label: const Text(
+                      '✨ Cắt Meme AI từ ảnh vừa chụp (Tách nền / Viền)',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
 
                 // Quick Location & Time Badges Bar
                 Row(
@@ -853,7 +989,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Thêm Sticker / Meme khác:',
+                          'Bộ Sticker Meme tinh gọn:',
                           style: TextStyle(
                             color: OrbitColors.deepOlive,
                             fontSize: 12,
@@ -863,7 +999,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                         GestureDetector(
                           onTap: _openStickerGenerator,
                           child: const Text(
-                            '+ Tự tạo custom sticker',
+                            '+ Đổi ảnh khác tạo',
                             style: TextStyle(
                               color: OrbitColors.buttonPrimary,
                               fontSize: 12,
@@ -876,43 +1012,54 @@ class _ImagePreviewState extends State<ImagePreview> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Horizontal List of Stickers
+                    // Horizontal List of Stickers (Cắt từ ảnh này, Đổi ảnh khác, Custom Stickers, Top Presets)
                     SizedBox(
-                      height: 54,
+                      height: 56,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: stickerList.length + 1,
+                        itemCount: stickerList.length + 2,
                         separatorBuilder: (_, __) => const SizedBox(width: 8),
                         itemBuilder: (context, index) {
+                          // Nút 1: Cắt trực tiếp từ ảnh này
                           if (index == 0) {
                             return GestureDetector(
-                              onTap: _openStickerGenerator,
+                              onTap: _cutFromCurrentPhoto,
                               child: Container(
-                                width: 52,
-                                height: 52,
+                                width: 72,
+                                height: 56,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: OrbitColors.surfaceCream,
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: OrbitColors.buttonPrimary,
-                                    width: 1.5,
+                                    width: 1.8,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: OrbitColors.buttonPrimary.withValues(alpha: 0.2),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
                                 child: const Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      Icons.add_photo_alternate_rounded,
+                                      Icons.auto_awesome,
                                       color: OrbitColors.buttonPrimary,
-                                      size: 18,
+                                      size: 19,
                                     ),
+                                    SizedBox(height: 2),
                                     Text(
-                                      'Tạo mới',
+                                      'Cắt ảnh này',
                                       style: TextStyle(
-                                        color: OrbitColors.buttonPrimary,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
+                                        color: OrbitColors.deepOlive,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w900,
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
                                   ],
                                 ),
@@ -920,40 +1067,118 @@ class _ImagePreviewState extends State<ImagePreview> {
                             );
                           }
 
-                          final item = stickerList[index - 1];
+                          // Nút 2: Chọn ảnh khác từ Thư viện hoặc Camera
+                          if (index == 1) {
+                            return GestureDetector(
+                              onTap: _openStickerGenerator,
+                              child: Container(
+                                width: 62,
+                                height: 56,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: OrbitColors.surfaceCard,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: OrbitColors.borderSubtle,
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.photo_library_outlined,
+                                      color: OrbitColors.deepOlive,
+                                      size: 18,
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Ảnh khác',
+                                      style: TextStyle(
+                                        color: OrbitColors.deepOlive,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          final item = stickerList[index - 2];
                           final isSelected = activeCustomSticker?.id == item.id;
+                          final isCustom = !item.isAsset;
 
                           return GestureDetector(
                             onTap: () {
                               setState(() {
-                                activeCustomSticker = item;
+                                if (isSelected) {
+                                  activeCustomSticker = null;
+                                } else {
+                                  activeCustomSticker = item;
+                                  stickerPosition = const Offset(0.50, 0.20);
+                                  stickerScale = 1.0;
+                                  stickerRotation = 0.0;
+                                }
                               });
                             },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 52,
-                              height: 52,
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: OrbitColors.surfaceCard,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.borderSubtle,
-                                  width: isSelected ? 2.5 : 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 56,
+                                  height: 56,
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: OrbitColors.surfaceCard,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.borderSubtle,
+                                      width: isSelected ? 2.5 : 1,
+                                    ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: item.isAsset
+                                      ? Image.asset(
+                                          item.path,
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.high,
+                                        )
+                                      : Image.file(
+                                          File(item.path),
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.high,
                                         ),
-                                      ]
-                                    : null,
-                              ),
-                              child: item.isAsset
-                                  ? Image.asset(item.path, fit: BoxFit.contain)
-                                  : Image.file(File(item.path), fit: BoxFit.contain),
+                                ),
+                                if (isCustom)
+                                  Positioned(
+                                    top: 2,
+                                    right: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2.5),
+                                      decoration: const BoxDecoration(
+                                        color: OrbitColors.buttonPrimary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.star,
+                                        color: OrbitColors.textLight,
+                                        size: 8,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           );
                         },

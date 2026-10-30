@@ -14,6 +14,9 @@ class StickerGeneratorSheet extends StatefulWidget {
     this.isAsset = false,
   });
 
+  /// Mở Sticker Generator Sheet.
+  /// Nếu [initialPath] có sẵn (ví dụ ảnh người dùng vừa chụp), dùng luôn không cần chọn lại!
+  /// Nếu [initialPath] trống, hiển thị popup cho chọn "Chụp ảnh mới" hoặc "Chọn từ Thư viện".
   static Future<CustomStickerItem?> show(
     BuildContext context, {
     String? initialPath,
@@ -22,14 +25,79 @@ class StickerGeneratorSheet extends StatefulWidget {
     String path = initialPath ?? '';
     bool assetMode = isAsset;
 
-    // Neu chua co anh, cho nguoi dung chon tu thu vien hoac anh mau
+    // Nếu chưa có ảnh, cho người dùng chọn: Chụp ảnh mới hoặc Chọn từ thư viện
     if (path.isEmpty) {
       final picker = ImagePicker();
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: OrbitColors.surfaceCard,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: OrbitColors.deepOlive.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Text(
+                  'CHỌN ẢNH ĐỂ CẮT STICKER MEME',
+                  style: TextStyle(
+                    color: OrbitColors.deepOlive,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: OrbitColors.buttonPrimary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, color: OrbitColors.buttonPrimary),
+                  ),
+                  title: const Text('Chụp ảnh mới', style: TextStyle(fontWeight: FontWeight.bold, color: OrbitColors.deepOlive)),
+                  subtitle: const Text('Chụp biểu cảm, thú cưng, đồ ăn để làm meme', style: TextStyle(fontSize: 11, color: OrbitColors.textMuted)),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: OrbitColors.buttonPrimary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: OrbitColors.buttonPrimary),
+                  ),
+                  title: const Text('Chọn từ Thư viện ảnh', style: TextStyle(fontWeight: FontWeight.bold, color: OrbitColors.deepOlive)),
+                  subtitle: const Text('Lấy ảnh meme có sẵn trong máy', style: TextStyle(fontSize: 11, color: OrbitColors.textMuted)),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (source == null) return null;
+
       final picked = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 1024,
         maxHeight: 1024,
-        imageQuality: 90,
+        imageQuality: 92,
       );
       if (picked == null) return null;
       path = picked.path;
@@ -62,7 +130,18 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
   bool isGenerating = true;
   String? errorMessage;
 
-  final TextEditingController _titleController = TextEditingController(text: 'Sticker Meme');
+  final TextEditingController _captionController = TextEditingController();
+  final List<String> _quickMemeTags = [
+    '10 ĐIỂM',
+    'ALOOO?',
+    'CHILL',
+    'ỦA GÌ DỢ?',
+    'CỰC CĂNG',
+    'DỖI RỒI',
+    'BÓ TAY',
+    'HẾT CỨU',
+    'QUẨY LÊN',
+  ];
 
   @override
   void initState() {
@@ -74,7 +153,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
 
   @override
   void dispose() {
-    _titleController.dispose();
+    _captionController.dispose();
     super.dispose();
   }
 
@@ -94,6 +173,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
         sourcePath: currentSourcePath,
         isAsset: isAssetSource,
         mode: activeMode,
+        caption: _captionController.text.trim().isEmpty ? null : _captionController.text.trim(),
       );
       _cachedVariations[activeMode] = resultPath;
     } catch (e) {
@@ -113,30 +193,59 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
 
   Future<void> _pickAnotherImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 90,
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: OrbitColors.surfaceCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: OrbitColors.buttonPrimary),
+              title: const Text('Chụp ảnh mới', style: TextStyle(fontWeight: FontWeight.bold)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: OrbitColors.buttonPrimary),
+              title: const Text('Chọn từ Thư viện', style: TextStyle(fontWeight: FontWeight.bold)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        currentSourcePath = picked.path;
-        isAssetSource = false;
-        _cachedVariations.clear();
-      });
-      _generateCurrentMode();
+
+    if (source != null) {
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 92,
+      );
+      if (picked != null) {
+        setState(() {
+          currentSourcePath = picked.path;
+          isAssetSource = false;
+          _cachedVariations.clear();
+        });
+        _generateCurrentMode();
+      }
     }
   }
 
   void _saveAndUse() async {
     final path = _cachedVariations[activeMode] ?? currentSourcePath;
+    final captionText = _captionController.text.trim();
     final item = CustomStickerItem(
       id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
       path: path,
       isAsset: false,
       mode: activeMode,
-      title: _titleController.text.trim().isEmpty ? 'Sticker' : _titleController.text.trim(),
+      title: captionText.isNotEmpty ? captionText : 'Sticker Meme',
+      caption: captionText.isNotEmpty ? captionText : null,
     );
 
     await CustomStickerService.instance.saveCustomSticker(item);
@@ -164,7 +273,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
         ],
       ),
       child: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
@@ -187,7 +296,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
               ),
               const SizedBox(height: 12),
 
-              // Tieu de
+              // Tiêu đề & Nút đổi ảnh
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -207,7 +316,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'Tạo Sticker Tùy Chỉnh',
+                        'AI Gene Sticker Meme',
                         style: TextStyle(
                           color: OrbitColors.deepOlive,
                           fontSize: 16,
@@ -218,9 +327,9 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                   ),
                   TextButton.icon(
                     onPressed: _pickAnotherImage,
-                    icon: const Icon(Icons.photo_library_outlined, size: 16, color: OrbitColors.buttonPrimary),
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 18, color: OrbitColors.buttonPrimary),
                     label: const Text(
-                      'Đổi ảnh',
+                      'Đổi ảnh khác',
                       style: TextStyle(
                         color: OrbitColors.buttonPrimary,
                         fontSize: 12,
@@ -230,9 +339,9 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
-              // Khung Preview Sticker
+              // Khung Preview Sticker độ nét cao (220x220)
               Container(
                 width: 220,
                 height: 220,
@@ -240,13 +349,13 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                   color: OrbitColors.surfaceCard,
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                    width: 2,
+                    color: OrbitColors.buttonPrimary.withValues(alpha: 0.4),
+                    width: 2.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: OrbitColors.deepOlive.withValues(alpha: 0.08),
-                      blurRadius: 16,
+                      color: OrbitColors.deepOlive.withValues(alpha: 0.12),
+                      blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -254,12 +363,12 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Luoi caro mien phi mieu ta nen trong suot
+                    // Nền caro nhận biết vùng trong suốt
                     CustomPaint(
                       painter: _CheckerboardPainter(),
                     ),
 
-                    // Anh Sticker Preview
+                    // Ảnh Sticker Preview
                     if (isGenerating)
                       const Center(
                         child: Column(
@@ -269,9 +378,9 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                               color: OrbitColors.buttonPrimary,
                               strokeWidth: 3,
                             ),
-                            SizedBox(height: 10),
+                            SizedBox(height: 12),
                             Text(
-                              'Đang tách & vẽ viền AI...',
+                              'Đang bóc tách & dựng nét AI...',
                               style: TextStyle(
                                 color: OrbitColors.textMuted,
                                 fontSize: 11,
@@ -285,9 +394,45 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                       Center(
                         child: Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Image.file(
-                            File(currentImagePath),
-                            fit: BoxFit.contain,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Expanded(
+                                child: Image.file(
+                                  File(currentImagePath),
+                                  fit: BoxFit.contain,
+                                  filterQuality: FilterQuality.high,
+                                ),
+                              ),
+                              // Live Meme Caption Badge Preview
+                              ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _captionController,
+                                builder: (ctx, val, _) {
+                                  if (val.text.trim().isEmpty) return const SizedBox.shrink();
+                                  return Container(
+                                    margin: const EdgeInsets.only(top: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: OrbitColors.deepOlive.withValues(alpha: 0.95),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: OrbitColors.khakiGold, width: 1.5),
+                                      boxShadow: const [
+                                        BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      val.text.trim(),
+                                      style: const TextStyle(
+                                        color: OrbitColors.textLight,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -298,9 +443,9 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // 3 Che do Generator (Original, Outline, Full)
+              // 4 Chế độ Sticker Generator (Outline, Full, Badge, Original)
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -313,32 +458,39 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                 child: Row(
                   children: [
                     _buildModeTab(
-                      mode: StickerEditMode.original,
-                      icon: Icons.image_outlined,
-                      label: 'Gốc (Original)',
-                    ),
-                    _buildModeTab(
                       mode: StickerEditMode.outline,
                       icon: Icons.crop_free_rounded,
-                      label: 'Viền Trắng (Outline)',
+                      label: 'Viền Trắng',
                     ),
                     _buildModeTab(
                       mode: StickerEditMode.full,
                       icon: Icons.lens_blur_rounded,
-                      label: 'Tách Nền (Full)',
+                      label: 'Tách Nền',
+                    ),
+                    _buildModeTab(
+                      mode: StickerEditMode.badge,
+                      icon: Icons.stars_rounded,
+                      label: 'Huy Hiệu',
+                    ),
+                    _buildModeTab(
+                      mode: StickerEditMode.original,
+                      icon: Icons.image_outlined,
+                      label: 'Ảnh Gốc',
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
 
-              // Mo ta che do dang chon
+              // Mô tả ngắn chế độ đang chọn
               Text(
                 activeMode == StickerEditMode.outline
                     ? '✨ Viền trắng dày bao quanh như sticker cắt dán chuẩn Messenger/iMessage.'
                     : activeMode == StickerEditMode.full
-                        ? '✂️ Bóc tách nền 100% On-Device, chỉ giữ lại chủ thể trong suốt.'
-                        : '📷 Giữ nguyên tỷ lệ ảnh meme gốc bo viền mềm mại.',
+                        ? '✂️ Bóc tách nền 100% On-Device, chỉ giữ lại chủ thể sắc nét.'
+                        : activeMode == StickerEditMode.badge
+                            ? '🏅 Khung huy hiệu tròn phong cách Warm Earth cổ điển.'
+                            : '📷 Giữ nguyên ảnh gốc đã tối ưu độ phân giải cao.',
                 style: const TextStyle(
                   color: OrbitColors.deepOlive,
                   fontSize: 11,
@@ -346,9 +498,118 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 14),
+
+              // Meme Caption & Quick Presets Tags
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Gán nhãn Meme hài hước:',
+                    style: TextStyle(
+                      color: OrbitColors.deepOlive,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Quick Meme Tags Chips
+                  SizedBox(
+                    height: 32,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _quickMemeTags.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 6),
+                      itemBuilder: (context, index) {
+                        final tag = _quickMemeTags[index];
+                        final isSelected = _captionController.text == tag;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              if (isSelected) {
+                                _captionController.clear();
+                              } else {
+                                _captionController.text = tag;
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.surfaceCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.borderSubtle,
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? OrbitColors.textLight : OrbitColors.deepOlive,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Custom Caption Input Field
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: OrbitColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.subtitles_rounded, size: 18, color: OrbitColors.buttonPrimary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _captionController,
+                            maxLength: 25,
+                            style: const TextStyle(
+                              color: OrbitColors.deepOlive,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Hoặc tự gõ chữ meme (VD: 10 ĐIỂM, CHILL PHẾT)...',
+                              hintStyle: TextStyle(
+                                color: OrbitColors.textMuted,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.normal,
+                              ),
+                              border: InputBorder.none,
+                              counterText: '',
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        if (_captionController.text.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => setState(() => _captionController.clear()),
+                            child: const Icon(Icons.cancel, size: 16, color: OrbitColors.textMuted),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
 
-              // Nut Xac nhan su dung
+              // Nút Xác nhận sử dụng Sticker này
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -431,7 +692,7 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
   }
 }
 
-/// Ve nen caro de nhan biet vung anh trong suot
+/// Vẽ nền caro để nhận biết vùng ảnh trong suốt
 class _CheckerboardPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
