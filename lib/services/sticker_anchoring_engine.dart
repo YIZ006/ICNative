@@ -28,128 +28,27 @@ class StickerMetadata {
 }
 
 class StickerAnchoringEngine {
-  // Pools of memes from downloaded sticker collection
-  // Pools of transparent PNG memes from da_tach_nen
-  static const List<String> catMemes = [
-    'assets/memes/sticker-cat-meme.png',
-    'assets/memes/sticker-meo-101.png',
-    'assets/memes/sticker-meo-12.png',
-    'assets/memes/sticker-meo-14.png',
-    'assets/memes/sticker-meo-17.png',
-    'assets/memes/sticker-meo-18.png',
-    'assets/memes/sticker-meo-20.png',
-    'assets/memes/sticker-meo-24.png',
-    'assets/memes/sticker-meo-26.png',
-    'assets/memes/sticker-meo-29.png',
-    'assets/memes/sticker-meo-32.png',
-    'assets/memes/sticker-meo-34.png',
-    'assets/memes/sticker-meo-37.png',
-    'assets/memes/sticker-meo-38.png',
-    'assets/memes/sticker-meo-4.png',
-    'assets/memes/sticker-meo-48.png',
-    'assets/memes/sticker-meo-5.png',
-    'assets/memes/sticker-meo-51.png',
-    'assets/memes/sticker-meo-60.png',
-    'assets/memes/sticker-meo-65.png',
-    'assets/memes/sticker-meo-68.png',
-    'assets/memes/sticker-meo-69.png',
-    'assets/memes/sticker-meo-72.png',
-    'assets/memes/sticker-meo-76.png',
-    'assets/memes/sticker-meo-77.png',
-    'assets/memes/sticker-meo-79.png',
-    'assets/memes/sticker-meo-8.png',
-    'assets/memes/sticker-meo-96.png',
-  ];
+  // Toàn bộ 115 meme đã được đánh số và phân loại ngữ cảnh chính xác:
+  // 1. Mèo meme (29 ảnh): Dành cho vật nuôi, động vật, biểu cảm dễ thương
+  static final List<String> catMemes = List.generate(
+    29,
+    (i) => 'assets/memes/meme_cat_${(i + 1).toString().padLeft(2, '0')}.png',
+  );
 
-  static const List<String> capybaraMemes = [
-    'assets/memes/anh-sticker-capybara.png',
-    'assets/memes/capybara-cute-sticker.png',
-    'assets/memes/capybara-sticker-capybara.png',
-    'assets/memes/capybara-sticker-cute.png',
-    'assets/memes/capybara-sticker-png.png',
-    'assets/memes/capybara-sticker-zalo.png',
-    'assets/memes/capybara-sticker.png',
-    'assets/memes/hinh-anh-sticker-capybara-cute.png',
-    'assets/memes/hinh-sticker-capybara.png',
-    'assets/memes/sticker-anh-sticker-capybara.png',
-    'assets/memes/sticker-capybara-cute.png',
-    'assets/memes/sticker-capybara-png.png',
-    'assets/memes/sticker-capybara.png',
-    'assets/memes/sticker-cute-capybara.png',
-    'assets/memes/sticker-hinh-sticker-capybara.png',
-    'assets/memes/sticker-to-mau-capybara-cute-2.png',
-    'assets/memes/to-mau-sticker-capybara-1.png',
-    'assets/memes/to-mau-sticker-capybara-2.png',
-    'assets/memes/to-mau-sticker-capybara-cute.png',
-    'assets/memes/tranh-to-mau-sticker-capybara-cute-2.png',
-    'assets/memes/tranh-to-mau-sticker-capybara.png',
-    'assets/memes/ve-sticker-capybara.png',
-  ];
+  // 2. Capybara meme (22 ảnh): Dành cho phong cảnh, ăn uống chill, thư giãn ngoài trời
+  static final List<String> capybaraMemes = List.generate(
+    22,
+    (i) => 'assets/memes/meme_capybara_${(i + 1).toString().padLeft(2, '0')}.png',
+  );
 
-  static const List<String> funnyMemes = [
-    'assets/memes/176844574138848748859.png',
-    'assets/memes/176845232168145756688.png',
-    'assets/memes/176845232238620964301.png',
-    'assets/memes/176845232238816831919.png',
-    'assets/memes/176845232239055337970.png',
-    'assets/memes/176845232241743762413.png',
-    'assets/memes/17684523224197998123.png',
-    'assets/memes/176845232245744331042.png',
-    'assets/memes/176845232251141785200.png',
-    'assets/memes/637264055_938431378535170_4536451328018855731_n.png',
-    'assets/memes/637725061_938431288535179_2689703473069674815_n.png',
-    'assets/memes/637762351_938431251868516_9088252038017115365_n.png',
-    'assets/memes/637908049_938430908535217_1815412409055453474_n.png',
-    'assets/memes/638146622_938430858535222_1701208525525894546_n.png',
-    'assets/memes/638735202_938431118535196_750766424355275497_n.png',
-    'assets/memes/638780643_3389976877819418_6251463293766095780_n.png',
-    'assets/memes/638794690_938431901868451_5052067975244301837_n.png',
-    'assets/memes/639147622_938431941868447_8847260847931544873_n.png',
-    'assets/memes/639714779_938431441868497_9040895143778900086_n.png',
-    'assets/memes/639912346_938431701868471_1781332784918015969_n.png',
-    'assets/memes/640391742_938430958535212_3477934440771872610_n.png',
-    'assets/memes/641224767_938430791868562_6179569820859098619_n_1_.png',
-    'assets/memes/641224767_938430791868562_6179569820859098619_n.png',
-    'assets/memes/641385813_938432021868439_480831293887217528_n.png',
-    'assets/memes/add-sticker-zalo.png',
-    'assets/memes/anh-lam-sticker-meme.png',
-    'assets/memes/anh-meme-khoc.png',
-    'assets/memes/anh-meme-lam-sticker.png',
-    'assets/memes/anh-meme-sticker-cute.png',
-    'assets/memes/anh-meme-sticker-hai-huoc.png',
-    'assets/memes/anh-sticker-meme-hai.png',
-    'assets/memes/anh-sticker-meme.png',
-    'assets/memes/bo-sticker-meme.png',
-    'assets/memes/cach-tao-sticker-tren-zalo-bang-anh.png',
-    'assets/memes/cach-tao-sticker-tren-zalo.png',
-    'assets/memes/cach-tu-tao-sticker-tren-zalo.png',
-    'assets/memes/cute-meme-sticker.png',
-    'assets/memes/hinh-anh-sticker-meme-hai.png',
-    'assets/memes/hinh-mem-sticker-hai-huoc.png',
-    'assets/memes/lam-sticker-tren-zalo.png',
-    'assets/memes/lam-sticker-zalo.png',
-    'assets/memes/meme-che-mat.png',
-    'assets/memes/meme-lam-sticker.png',
-    'assets/memes/meme-sticker-cute.png',
-    'assets/memes/meme-sticker-dang-yeu.png',
-    'assets/memes/meme-sticker-messenger.png',
-    'assets/memes/meme-sticker-telegram.png',
-    'assets/memes/meme-sticker.png',
-    'assets/memes/sticker-hello-kitty-meme.png',
-    'assets/memes/sticker-meme-cute.png',
-    'assets/memes/sticker-meme-hai.png',
-    'assets/memes/sticker-zalo-bua.png',
-    'assets/memes/sticker-zalo.png',
-    'assets/memes/tai-sticker-zalo.png',
-    'assets/memes/tao-sticker-cho-zalo.png',
-    'assets/memes/tao-sticker-tu-anh-tren-zalo.png',
-    'assets/memes/tao-sticker-tu-anh-zalo.png',
-    'assets/memes/tao-sticker-zalo-bang-anh.png',
-    'assets/memes/tao-sticker-zalo-tu-anh.png',
-    'assets/memes/tao-sticker-zalo.png',
-    'assets/memes/them-sticker-vao-zalo.png',
-    'assets/memes/meme_bear.png',
-  ];
+  // 3. Biểu cảm & hài hước (64 ảnh): Dành cho con người, cảm xúc, đồ uống, công nghệ
+  static final List<String> funnyMemes = List.generate(
+    64,
+    (i) => 'assets/memes/meme_react_${(i + 1).toString().padLeft(2, '0')}.png',
+  );
+
+  // Danh mục hợp nhất toàn bộ 115 meme
+  static final List<String> allMemes = [...catMemes, ...capybaraMemes, ...funnyMemes];
 
   static StickerMetadata pickStickerForCategory(StickerCategory category) {
     final rand = math.Random();

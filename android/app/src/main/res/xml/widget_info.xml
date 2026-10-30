@@ -5,4 +5,5 @@
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_layout"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_galaxy_desc" />

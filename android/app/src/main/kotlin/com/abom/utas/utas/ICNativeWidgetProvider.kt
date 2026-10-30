@@ -21,9 +21,9 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
     ) {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
-                // 1. Click on widget to launch app directly
+                // 1. Chạm vào bất kỳ vị trí nào trên widget để mở app ngay lập tức (SingleTop không reload lại từ đầu)
                 val intent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
                 val pendingIntent = PendingIntent.getActivity(
                     context,
@@ -34,7 +34,7 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.widget_container, pendingIntent)
                 setOnClickPendingIntent(R.id.widget_image, pendingIntent)
 
-                // 2. Load Image & Sender Name
+                // 2. Load ảnh & tên người gửi
                 val imagePath = widgetData.getString("widget_image_path", null)
                 val senderName = widgetData.getString("widget_sender_name", null)
 
@@ -42,7 +42,7 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
                     var bitmap = BitmapFactory.decodeFile(imagePath)
 
                     if (bitmap != null) {
-                        // Fix EXIF Rotation
+                        // Fix góc xoay EXIF
                         try {
                             val exif = ExifInterface(imagePath)
                             val orientation = exif.getAttributeInt(
@@ -64,10 +64,11 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
                             e.printStackTrace()
                         }
 
-                        setImageViewBitmap(R.id.widget_image, bitmap)
+                        // 3. Render Kiểu 10: Thiên Hà Vệ Tinh Nổi
+                        val composed = WidgetComposer.composeGalaxyWidget(bitmap)
+                        setImageViewBitmap(R.id.widget_image, composed)
                         setViewVisibility(R.id.widget_empty_text, View.GONE)
 
-                        // 3. Display sender name if provided
                         if (!senderName.isNullOrBlank()) {
                             setTextViewText(R.id.widget_sender_name, senderName)
                             setViewVisibility(R.id.widget_sender_name, View.VISIBLE)
@@ -78,7 +79,6 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
                         showEmptyState(this)
                     }
                 } else {
-                    // Image was deleted or not set!
                     showEmptyState(this)
                 }
             }

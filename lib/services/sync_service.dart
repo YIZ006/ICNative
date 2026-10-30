@@ -150,15 +150,24 @@ class SyncService {
         // 2. Save sender metadata
         await savePhotoMetadata(localFile.path, senderName);
 
-        // 3. Immediately update Android / iOS Home Widget with photo & sender name!
+        // 3. Immediately update Android / iOS Home Widgets (Kiểu 10 Galaxy & Kiểu 3 Pebble)
         await HomeWidget.saveWidgetData<String>('widget_image_path', localFile.path);
         await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName);
-        await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+        await updateAllHomeWidgets();
 
-        debugPrint('✨ Updated Home Widget with friend photo from $senderName: ${localFile.path}');
+        debugPrint('✨ Updated Home Widgets with friend photo from $senderName: ${localFile.path}');
       }
     } catch (e) {
       debugPrint('Error downloading friend photo: $e');
+    }
+  }
+
+  static Future<void> updateAllHomeWidgets() async {
+    try {
+      await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+      await HomeWidget.updateWidget(name: 'ICNativePebbleWidgetProvider');
+    } catch (e) {
+      debugPrint('Error updating home widgets: $e');
     }
   }
 

@@ -81,37 +81,42 @@ class CustomStickerService {
   Future<void> initialize() async {
     _stickers.clear();
 
-    // 1. Cac sticker meme mau mac dinh san co trong app
-    _stickers.addAll([
-      CustomStickerItem(
-        id: 'sample_capybara',
-        path: 'assets/memes/capybara-cute-sticker.png',
+    // 1. Tải toàn bộ 115 meme đã phân loại và đánh số có sẵn trong app
+    // A. 22 Meme Capybara Chill & Dễ Thương
+    for (int i = 1; i <= 22; i++) {
+      final num = i.toString().padLeft(2, '0');
+      _stickers.add(CustomStickerItem(
+        id: 'capybara_$num',
+        path: 'assets/memes/meme_capybara_$num.png',
         isAsset: true,
         mode: StickerEditMode.outline,
-        title: 'Capybara Chill',
-      ),
-      CustomStickerItem(
-        id: 'sample_cat',
-        path: 'assets/memes/sticker-cat-meme.png',
+        title: 'Capybara #$i',
+      ));
+    }
+
+    // B. 29 Meme Mèo Hài Hước & Đáng Yêu
+    for (int i = 1; i <= 29; i++) {
+      final num = i.toString().padLeft(2, '0');
+      _stickers.add(CustomStickerItem(
+        id: 'cat_$num',
+        path: 'assets/memes/meme_cat_$num.png',
         isAsset: true,
         mode: StickerEditMode.full,
-        title: 'Mèo Bất Lực',
-      ),
-      CustomStickerItem(
-        id: 'sample_bear',
-        path: 'assets/memes/meme_bear.png',
-        isAsset: true,
-        mode: StickerEditMode.original,
-        title: 'Gấu Nằm Ngủ',
-      ),
-      CustomStickerItem(
-        id: 'sample_meme_cute',
-        path: 'assets/memes/cute-meme-sticker.png',
+        title: 'Mèo Meme #$i',
+      ));
+    }
+
+    // C. 64 Meme Biểu Cảm Cực Hài & Đa Dạng
+    for (int i = 1; i <= 64; i++) {
+      final num = i.toString().padLeft(2, '0');
+      _stickers.add(CustomStickerItem(
+        id: 'react_$num',
+        path: 'assets/memes/meme_react_$num.png',
         isAsset: true,
         mode: StickerEditMode.outline,
-        title: 'Meme Dễ Thương',
-      ),
-    ]);
+        title: 'Biểu Cảm #$i',
+      ));
+    }
 
     // 2. Load cac sticker nguoi dung da tu tao tu SharedPreferences
     try {

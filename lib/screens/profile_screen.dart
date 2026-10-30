@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
+import '../services/locale_service.dart';
+import '../services/update_service.dart';
 import 'qr_scanner_screen.dart';
+import 'update_dialog.dart';
+import 'widget_guide_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -249,6 +254,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // GitHub Auto-Update Card
+                _buildActionCard(
+                  icon: Icons.system_update_alt_rounded,
+                  iconColor: OrbitColors.terracotta,
+                  title: 'Cập Nhật Ứng Dụng (GitHub)',
+                  subtitle: 'Phiên bản hiện tại: v${UpdateService.currentVersion}. Tự động tải bản mới từ GitHub Releases cực nhanh.',
+                  buttonText: 'Kiểm Tra Bản Mới ⚡',
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Đang kiểm tra bản cập nhật từ GitHub...'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    final update = await UpdateService.instance.checkForUpdate();
+                    if (!context.mounted) return;
+                    if (update != null) {
+                      UpdateDialog.show(context, update);
+                    } else {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('🎉 Bạn đang sử dụng phiên bản mới nhất!'),
+                          backgroundColor: OrbitColors.deepOlive,
+                        ),
+                      );
+                    }
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Card: Hướng Dẫn & Ghim Nhanh Widget Màn Hình
+                _buildActionCard(
+                  icon: Icons.widgets_rounded,
+                  iconColor: OrbitColors.buttonPrimary,
+                  title: tr('wg_title'),
+                  subtitle: tr('wg_subtitle'),
+                  buttonText: 'Xem & Ghim Nhanh 1-Chạm 📌',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (ctx) => const WidgetGuideScreen()),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Card: Đổi Ngôn Ngữ Nhanh 1-Chạm (Bilingual VI / EN)
+                ValueListenableBuilder<AppLanguage>(
+                  valueListenable: LocaleService.instance.currentLanguage,
+                  builder: (context, lang, _) {
+                    final isVi = lang == AppLanguage.vi;
+                    return _buildActionCard(
+                      icon: Icons.translate_rounded,
+                      iconColor: OrbitColors.deepOlive,
+                      title: tr('language_setting'),
+                      subtitle: isVi
+                          ? 'Ngôn ngữ hiện tại: Tiếng Việt 🇻🇳. Tự động nhận diện theo máy.'
+                          : 'Current Language: English 🇬🇧. Auto-detected from system.',
+                      buttonText: isVi ? 'Chuyển sang English 🇬🇧' : 'Đổi sang Tiếng Việt 🇻🇳',
+                      onTap: () async {
+                        await LocaleService.instance.toggleLanguage();
+                        if (mounted) setState(() {});
+                      },
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Card: Chế độ Trải Nghiệm Mẫu (30 Bạn Bè)
+                ValueListenableBuilder<bool>(
+                  valueListenable: isDemoModeNotifier,
+                  builder: (context, isDemo, _) {
+                    return _buildActionCard(
+                      icon: isDemo ? Icons.groups_rounded : Icons.person_outline_rounded,
+                      iconColor: isDemo ? OrbitColors.terracotta : OrbitColors.deepOlive,
+                      title: tr('demo_mode_title'),
+                      subtitle: tr('demo_mode_subtitle'),
+                      buttonText: isDemo ? 'Đang Bật (Chạm để Tắt Demo)' : 'Đang Tắt (Chạm để Bật Demo 30 Bạn)',
+                      onTap: () {
+                        isDemoModeNotifier.value = !isDemo;
+                      },
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 22),

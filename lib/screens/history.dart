@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:icnative/services/locale_service.dart';
 import 'package:icnative/services/sync_service.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
@@ -22,9 +23,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            // Top Bar of History with Back to Camera Action
+            // 1. Tactile Quick-Pull & Drag Handle Bar (Độ nhạy cực cao để vuốt về Camera dễ dàng)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onBackToCamera,
+              onVerticalDragUpdate: (details) {
+                // Chỉ cần vuốt xuống nhẹ 4px là lập tức trở về vòng tròn
+                if (details.delta.dy > 4) {
+                  widget.onBackToCamera?.call();
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                color: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: OrbitColors.deepOlive.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 2. Top Bar of History with Back to Camera Action
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -35,26 +63,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       onTap: widget.onBackToCamera,
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                         decoration: BoxDecoration(
                           color: OrbitColors.buttonPrimary,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: OrbitColors.deepOlive.withValues(alpha: 0.15),
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.18),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.arrow_upward_rounded, color: OrbitColors.textLight, size: 16),
-                            SizedBox(width: 6),
+                            const Icon(Icons.arrow_upward_rounded, color: OrbitColors.textLight, size: 16),
+                            const SizedBox(width: 6),
                             Text(
-                              'Camera',
-                              style: TextStyle(
+                              tr('history_back_to_camera'),
+                              style: const TextStyle(
                                 color: OrbitColors.textLight,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
@@ -67,9 +95,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
 
                   // Title
-                  const Text(
-                    'Kho Ảnh Kỷ Niệm',
-                    style: TextStyle(
+                  Text(
+                    tr('history_title'),
+                    style: const TextStyle(
                       color: OrbitColors.deepOlive,
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -85,7 +113,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
                     ),
                     child: Text(
-                      '${images.length} ảnh',
+                      '${images.length} ${tr('history_photos_count')}',
                       style: const TextStyle(
                         color: OrbitColors.buttonPrimary,
                         fontWeight: FontWeight.bold,
@@ -97,24 +125,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
 
-            // Pull down hint
+            // Pull down hint banner (Nhấn hoặc vuốt nhẹ)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onBackToCamera,
+              onVerticalDragUpdate: (details) {
+                if (details.delta.dy > 4) {
+                  widget.onBackToCamera?.call();
+                }
+              },
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.keyboard_arrow_up_rounded,
-                        size: 16, color: OrbitColors.deepOlive.withValues(alpha: 0.6)),
+                        size: 16, color: OrbitColors.deepOlive.withValues(alpha: 0.7)),
                     const SizedBox(width: 4),
                     Text(
-                      'Vuốt hoặc bấm để quay lại chụp ảnh',
+                      tr('history_swipe_hint'),
                       style: TextStyle(
-                        color: OrbitColors.deepOlive.withValues(alpha: 0.6),
+                        color: OrbitColors.deepOlive.withValues(alpha: 0.7),
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -135,9 +168,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
                           ),
                           const SizedBox(height: 14),
-                          const Text(
-                            'Chưa Có Ảnh Nào',
-                            style: TextStyle(
+                          Text(
+                            tr('history_empty_title'),
+                            style: const TextStyle(
                               color: OrbitColors.deepOlive,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
@@ -145,7 +178,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Hãy chụp ảnh và gửi widget để lưu lại khoảnh khắc nhé!',
+                            tr('history_empty_subtitle'),
                             style: TextStyle(
                               color: OrbitColors.deepOlive.withValues(alpha: 0.6),
                               fontSize: 12,
@@ -162,17 +195,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             onPressed: widget.onBackToCamera,
                             icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                            label: const Text('Mở Camera Ngay',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            label: Text(tr('history_back_to_camera'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           ),
                         ],
                       ),
                     )
                   : NotificationListener<ScrollNotification>(
                       onNotification: (notification) {
-                        if (notification is OverscrollNotification && notification.overscroll < -15) {
+                        // Nhận diện kéo xuống khi danh sách đang ở đỉnh: Lập tức quay về camera
+                        if (notification is OverscrollNotification && notification.overscroll < -6) {
                           widget.onBackToCamera?.call();
                           return true;
+                        }
+                        if (notification is ScrollUpdateNotification) {
+                          if (notification.metrics.pixels <= 0 &&
+                              notification.scrollDelta != null &&
+                              notification.scrollDelta! < -4) {
+                            widget.onBackToCamera?.call();
+                            return true;
+                          }
                         }
                         return false;
                       },
@@ -354,7 +396,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 final senderName = await SyncService.getPhotoSender(filePath);
                 await HomeWidget.saveWidgetData<String>('widget_image_path', filePath);
                 await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName);
-                await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+                await SyncService.updateAllHomeWidgets();
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -424,7 +466,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
                   await HomeWidget.saveWidgetData<String>('widget_image_path', nextImagePath);
                   await HomeWidget.saveWidgetData<String>('widget_sender_name', nextSenderName);
-                  await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+                  await SyncService.updateAllHomeWidgets();
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

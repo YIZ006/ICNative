@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:icnative/screens/sticker_generator_sheet.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
+import 'package:icnative/services/location_service.dart';
 import 'package:icnative/services/sticker_anchoring_engine.dart';
 import 'package:icnative/services/sync_service.dart';
 import 'package:icnative/settings/global.dart';
@@ -40,6 +41,47 @@ class _ImagePreviewState extends State<ImagePreview> {
   Offset stickerPosition = const Offset(0.60, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
   double stickerScale = 1.0;
   double stickerRotation = 0.05;
+
+  // Location & Time Badges
+  String? locationBadgeText;
+  bool isDetectingLocation = false;
+  Offset locationBadgePosition = const Offset(0.06, 0.06);
+
+  String? timeBadgeText;
+  Offset timeBadgePosition = const Offset(0.66, 0.06);
+
+  Future<void> _toggleLocationBadge() async {
+    if (locationBadgeText != null) {
+      setState(() => locationBadgeText = null);
+      return;
+    }
+
+    setState(() => isDetectingLocation = true);
+    final result = await LocationService.instance.getCurrentLocationWithSmartName();
+    if (mounted) {
+      setState(() {
+        isDetectingLocation = false;
+        if (result != null) {
+          locationBadgeText = '📍 ${result.displayName}';
+        } else {
+          locationBadgeText = '📍 Vị trí hiện tại';
+        }
+      });
+    }
+  }
+
+  void _toggleTimeBadge() {
+    setState(() {
+      if (timeBadgeText != null) {
+        timeBadgeText = null;
+      } else {
+        final now = DateTime.now();
+        final hh = now.hour.toString().padLeft(2, '0');
+        final mm = now.minute.toString().padLeft(2, '0');
+        timeBadgeText = '🕒 $hh:$mm';
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -202,6 +244,74 @@ class _ImagePreviewState extends State<ImagePreview> {
           pillTop + (pillHeight - textPainter.height) / 2,
         );
         textPainter.paint(canvas, textOffset);
+      }
+
+      // 4. Ve Location Badge (neu nguoi dung bat)
+      if (locationBadgeText != null && locationBadgeText!.isNotEmpty) {
+        final double badgeFontSize = (imgW * 0.034).clamp(20.0, 42.0);
+        final locSpan = TextSpan(
+          text: locationBadgeText!,
+          style: TextStyle(
+            color: OrbitColors.textLight,
+            fontSize: badgeFontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        );
+        final locPainter = TextPainter(
+          text: locSpan,
+          textAlign: TextAlign.left,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: imgW * 0.85);
+
+        final padH = badgeFontSize * 0.7;
+        final padV = badgeFontSize * 0.4;
+        final bW = locPainter.width + padH * 2;
+        final bH = locPainter.height + padV * 2;
+        final bX = locationBadgePosition.dx * (imgW - bW);
+        final bY = locationBadgePosition.dy * (imgH - bH);
+
+        final rrect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(bX, bY, bW, bH),
+          Radius.circular(bH / 2),
+        );
+        canvas.drawRRect(rrect.shift(const Offset(0, 3)), ui.Paint()..color = Colors.black.withValues(alpha: 0.3));
+        canvas.drawRRect(rrect, ui.Paint()..color = OrbitColors.deepOlive.withValues(alpha: 0.92));
+        canvas.drawRRect(rrect, ui.Paint()..color = OrbitColors.terracotta..style = ui.PaintingStyle.stroke..strokeWidth = 2);
+        locPainter.paint(canvas, Offset(bX + padH, bY + padV));
+      }
+
+      // 5. Ve Time Badge (neu nguoi dung bat)
+      if (timeBadgeText != null && timeBadgeText!.isNotEmpty) {
+        final double badgeFontSize = (imgW * 0.034).clamp(20.0, 42.0);
+        final timeSpan = TextSpan(
+          text: timeBadgeText!,
+          style: TextStyle(
+            color: OrbitColors.textLight,
+            fontSize: badgeFontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        );
+        final timePainter = TextPainter(
+          text: timeSpan,
+          textAlign: TextAlign.left,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: imgW * 0.85);
+
+        final padH = badgeFontSize * 0.7;
+        final padV = badgeFontSize * 0.4;
+        final bW = timePainter.width + padH * 2;
+        final bH = timePainter.height + padV * 2;
+        final bX = timeBadgePosition.dx * (imgW - bW);
+        final bY = timeBadgePosition.dy * (imgH - bH);
+
+        final rrect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(bX, bY, bW, bH),
+          Radius.circular(bH / 2),
+        );
+        canvas.drawRRect(rrect.shift(const Offset(0, 3)), ui.Paint()..color = Colors.black.withValues(alpha: 0.3));
+        canvas.drawRRect(rrect, ui.Paint()..color = OrbitColors.deepOlive.withValues(alpha: 0.92));
+        canvas.drawRRect(rrect, ui.Paint()..color = OrbitColors.khakiGold..style = ui.PaintingStyle.stroke..strokeWidth = 2);
+        timePainter.paint(canvas, Offset(bX + padH, bY + padV));
       }
 
       final picture = recorder.endRecording();
@@ -435,6 +545,122 @@ class _ImagePreviewState extends State<ImagePreview> {
                             },
                           ),
 
+                        // Draggable Location Badge (Gán tên địa danh / đường)
+                        if (locationBadgeText != null)
+                          LayoutBuilder(
+                            builder: (ctx, constraints) {
+                              final double maxLeft = constraints.maxWidth - 160;
+                              final double maxTop = constraints.maxHeight - 45;
+                              final left = (locationBadgePosition.dx * maxLeft).clamp(0.0, maxLeft);
+                              final top = (locationBadgePosition.dy * maxTop).clamp(0.0, maxTop);
+
+                              return Positioned(
+                                left: left,
+                                top: top,
+                                child: GestureDetector(
+                                  onPanUpdate: (details) {
+                                    setState(() {
+                                      final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
+                                      final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
+                                      locationBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: OrbitColors.deepOlive.withValues(alpha: 0.90),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(color: OrbitColors.terracotta, width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.25),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          locationBadgeText!,
+                                          style: const TextStyle(
+                                            color: OrbitColors.textLight,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () => setState(() => locationBadgeText = null),
+                                          child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                        // Draggable Time Badge (Gán giờ và phút)
+                        if (timeBadgeText != null)
+                          LayoutBuilder(
+                            builder: (ctx, constraints) {
+                              final double maxLeft = constraints.maxWidth - 100;
+                              final double maxTop = constraints.maxHeight - 45;
+                              final left = (timeBadgePosition.dx * maxLeft).clamp(0.0, maxLeft);
+                              final top = (timeBadgePosition.dy * maxTop).clamp(0.0, maxTop);
+
+                              return Positioned(
+                                left: left,
+                                top: top,
+                                child: GestureDetector(
+                                  onPanUpdate: (details) {
+                                    setState(() {
+                                      final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
+                                      final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
+                                      timeBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: OrbitColors.deepOlive.withValues(alpha: 0.90),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(color: OrbitColors.khakiGold, width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.25),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          timeBadgeText!,
+                                          style: const TextStyle(
+                                            color: OrbitColors.textLight,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () => setState(() => timeBadgeText = null),
+                                          child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
                         // 4. Caption Input Pill at bottom of photo
                         Positioned(
                           bottom: 14,
@@ -509,6 +735,113 @@ class _ImagePreviewState extends State<ImagePreview> {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+
+                // Quick Location & Time Badges Bar
+                Row(
+                  children: [
+                    // Nút Địa Điểm
+                    GestureDetector(
+                      onTap: isDetectingLocation ? null : _toggleLocationBadge,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: locationBadgeText != null
+                              ? OrbitColors.terracotta
+                              : OrbitColors.surfaceCard,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: locationBadgeText != null
+                                ? OrbitColors.terracotta
+                                : OrbitColors.buttonPrimary.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isDetectingLocation)
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: OrbitColors.buttonPrimary,
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.location_on_rounded,
+                                size: 15,
+                                color: locationBadgeText != null
+                                    ? OrbitColors.textLight
+                                    : OrbitColors.buttonPrimary,
+                              ),
+                            const SizedBox(width: 5),
+                            Text(
+                              locationBadgeText != null
+                                  ? (locationBadgeText!.length > 18
+                                      ? '${locationBadgeText!.substring(0, 16)}...'
+                                      : locationBadgeText!)
+                                  : 'Gán địa điểm',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: locationBadgeText != null
+                                    ? OrbitColors.textLight
+                                    : OrbitColors.deepOlive,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Nút Thời Gian (Giờ & Phút)
+                    GestureDetector(
+                      onTap: _toggleTimeBadge,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: timeBadgeText != null
+                              ? OrbitColors.buttonPrimary
+                              : OrbitColors.surfaceCard,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: timeBadgeText != null
+                                ? OrbitColors.buttonPrimary
+                                : OrbitColors.buttonPrimary.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.access_time_filled_rounded,
+                              size: 15,
+                              color: timeBadgeText != null
+                                  ? OrbitColors.textLight
+                                  : OrbitColors.buttonPrimary,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              timeBadgeText ?? 'Gán giờ & phút',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: timeBadgeText != null
+                                    ? OrbitColors.textLight
+                                    : OrbitColors.deepOlive,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
 
@@ -665,7 +998,7 @@ class _ImagePreviewState extends State<ImagePreview> {
 
                               await HomeWidget.saveWidgetData<String>('widget_image_path', savedImage.path);
                               await HomeWidget.saveWidgetData<String>('widget_sender_name', myName);
-                              await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+                              await SyncService.updateAllHomeWidgets();
 
                               SyncService.instance.broadcastPhotoToFriends(
                                 localImagePath: savedImage.path,

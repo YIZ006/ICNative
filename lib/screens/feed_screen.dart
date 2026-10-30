@@ -6,6 +6,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
+import '../services/sync_service.dart';
 
 class FriendsFeedScreen extends StatefulWidget {
   const FriendsFeedScreen({super.key});
@@ -82,7 +83,7 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
     if (localPath != null && File(localPath).existsSync()) {
       await HomeWidget.saveWidgetData<String>('widget_image_path', localPath);
       await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName ?? 'Bạn bè');
-      await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+      await SyncService.updateAllHomeWidgets();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

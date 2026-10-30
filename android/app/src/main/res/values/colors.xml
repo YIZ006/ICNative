@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="warm_earth_bg">#FEFAE0</color>
+    <color name="warm_earth_primary">#606C38</color>
+    <color name="warm_earth_deep">#283618</color>
+    <color name="warm_earth_gold">#DDA15E</color>
+    <color name="warm_earth_terra">#BC6C25</color>
+</resources>
