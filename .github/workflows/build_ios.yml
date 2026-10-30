@@ -38,6 +38,9 @@ jobs:
           flutter --version
           xcodebuild -version
 
+      - name: Disable Experimental Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
       - name: Pre-create Build Directories
         run: |
           mkdir -p build/ios/SourcePackages
