@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GitHubReleaseInfo {
   final String tagName;
@@ -39,8 +40,33 @@ class UpdateService {
   static const String repoName = 'ICNative';
   static const MethodChannel _channel = MethodChannel('com.abom.utas.utas/app_updater');
 
+  bool _hasCheckedThisSession = false;
+
+  /// Lưu trạng thái người dùng bấm "Để sau" để không làm phiền trong 24 giờ
+  Future<void> dismissUpdate(String tagName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('dismissed_update_tag', tagName);
+      await prefs.setInt('dismissed_update_time', DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
+  /// Đánh dấu phiên bản đã được người dùng tải/cập nhật
+  Future<void> markUpdateInstalled(String tagName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('installed_update_tag', tagName);
+    } catch (_) {}
+  }
+
   /// Kiểm tra phiên bản mới nhất từ GitHub Releases (0 VNĐ & Cực nhanh)
-  Future<GitHubReleaseInfo?> checkForUpdate() async {
+  Future<GitHubReleaseInfo?> checkForUpdate({bool isManual = false}) async {
+    // Không tự động kiểm tra lặp lại nhiều lần trong cùng một phiên mở app
+    if (!isManual && _hasCheckedThisSession) {
+      return null;
+    }
+    _hasCheckedThisSession = true;
+
     try {
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
       final response = await http.get(url, headers: {
@@ -54,6 +80,25 @@ class UpdateService {
         final title = (data['name'] as String? ?? tagName).trim();
         final notes = (data['body'] as String? ?? '').trim();
         final publishedAt = (data['published_at'] as String? ?? '').trim();
+
+        // Kiểm tra xem phiên bản này đã cài đặt hoặc đã bị người dùng tạm hoãn chưa
+        if (!isManual) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final installedTag = prefs.getString('installed_update_tag');
+            if (installedTag == tagName) {
+              return null; // Đã cài phiên bản này rồi
+            }
+
+            final dismissedTag = prefs.getString('dismissed_update_tag');
+            final dismissedTime = prefs.getInt('dismissed_update_time') ?? 0;
+            final now = DateTime.now().millisecondsSinceEpoch;
+            // Nếu người dùng bấm "Để sau", không nhắc lại trong 24 giờ
+            if (dismissedTag == tagName && (now - dismissedTime) < 86400000) {
+              return null;
+            }
+          } catch (_) {}
+        }
 
         final assets = (data['assets'] as List<dynamic>? ?? []);
         String? apkUrl;

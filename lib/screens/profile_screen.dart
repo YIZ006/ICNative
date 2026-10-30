@@ -273,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         duration: Duration(seconds: 2),
                       ),
                     );
-                    final update = await UpdateService.instance.checkForUpdate();
+                    final update = await UpdateService.instance.checkForUpdate(isManual: true);
                     if (!context.mounted) return;
                     if (update != null) {
                       UpdateDialog.show(context, update);

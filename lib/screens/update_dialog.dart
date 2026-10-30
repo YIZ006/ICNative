@@ -46,7 +46,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
       },
     );
 
-    if (!success && mounted) {
+    if (success) {
+      await UpdateService.instance.markUpdateInstalled(widget.releaseInfo.tagName);
+    } else if (mounted) {
       setState(() {
         isDownloading = false;
         errorMessage = 'Không thể tải xuống hoặc mở cài đặt. Vui lòng thử lại sau.';
@@ -212,7 +214,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  UpdateService.instance.dismissUpdate(widget.releaseInfo.tagName);
+                  Navigator.pop(context);
+                },
                 child: Text(
                   'Để sau',
                   style: TextStyle(
