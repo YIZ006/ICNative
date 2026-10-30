@@ -38,8 +38,15 @@ jobs:
           flutter --version
           xcodebuild -version
 
+      - name: Pre-create Build Directories
+        run: |
+          mkdir -p build/ios/SourcePackages
+          mkdir -p build/ios/iphoneos
+
       - name: Install Flutter Dependencies
-        run: flutter pub get
+        run: |
+          mkdir -p build/ios/SourcePackages
+          flutter pub get
 
       - name: Install CocoaPods
         run: |
