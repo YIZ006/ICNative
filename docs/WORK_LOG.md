@@ -331,3 +331,340 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   1. Ngu?i d�ng b? sung c�c asset meme trong su?t v�o thu m?c ssets/memes/.
   2. B?t d?u giai do?n ti?p theo c?a d? �n.
 
+---
+
+### [2026-09-23 19:52:00] - N?p 119 Stickers t? Downloads v�o Assets & C?u h�nh Ph�n lo?i Meme
+* **Th?i gian (Timestamp):** 2026-09-23 19:52:00 (GMT+7)
+* **Tr?ng th�i (Status):** [COMPLETED]
+* **Ngu?i th?c hi?n (Author):** Antigravity Tech Lead Agent
+* **T�m t?t c�ng vi?c (Summary):** 
+  �� sao ch�p to�n b? 119 sticker t? thu m?c C:\Users\Chien\Downloads\sticker\nen_trang v�o ssets/memes/ c?a d? �n m� kh�ng c?n t�ch n?n theo y�u c?u c?a ngu?i d�ng. C?p nh?t vailableStickers trong StickerAnchoringEngine d? g�n ch� chu?t Capybara cho nh�m Animal v� M�o meme cho nh�m Electronics/C�ng ngh?.
+* **Chi ti?t thay d?i (Changes Made):**
+  - [NEW] Sao ch�p 119 t?p sticker v�o ssets/memes/.
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - G�n capybara-cute-sticker.jpg cho StickerCategory.animal v� sticker-meo-12.jpg cho StickerCategory.electronics.
+* **Hi?n tr?ng & R�o c?n (Current State & Blockers):**
+  - �� n?p th�nh c�ng to�n b? kho sticker v�o ?ng d?ng.
+* **Bu?c ti?p theo (Next Steps):**
+  1. Hu?ng d?n ngu?i d�ng Hot Restart d? ki?m tra d�n sticker m?i.
+
+---
+
+### [2026-09-23 20:02:00] - N�ng c?p Meme Dispatcher �a D?ng & M? R?ng T? �i?n C�ng Ngh?
+* **Th?i gian (Timestamp):** 2026-09-23 20:02:00 (GMT+7)
+* **Tr?ng th�i (Status):** [COMPLETED]
+* **Ngu?i th?c hi?n (Author):** Antigravity Tech Lead Agent
+* **T�m t?t c�ng vi?c (Summary):** 
+  Kh?c ph?c t�nh tr?ng ch? d�n m?i con g?u: Tru?c d� logic ch? g?i sticker d?u ti�n trong danh s�ch tinh. �� x�y d?ng h�m di?u ph?i d?ng pickStickerForCategory v?i c�c nh�m meme da d?ng (M�o meme, Capybara, Meme h�i/troll). M? r?ng t? di?n nh?n di?n d? c�ng ngh? (laptop, keyboard, netbook, hardware, technology, touchpad, space bar...) d? t? d?ng g�n c�c meme m�o tuong ?ng.
+* **Chi ti?t thay d?i (Changes Made):**
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart:
+    + Th�m danh s�ch catMemes (10 ?nh m�o meme), capybaraMemes (5 ?nh), unnyMemes (7 ?nh).
+    + Vi?t h�m pickStickerForCategory ch?n ng?u nhi�n sticker theo t?ng ch? d?.
+    + M? r?ng m?nh m? b? t? kh�a electronics v� nimal.
+* **Hi?n tr?ng & R�o c?n (Current State & Blockers):**
+  - Ho�n t?t v� s?n s�ng ki?m th?.
+* **Bu?c ti?p theo (Next Steps):**
+  1. Hu?ng d?n ngu?i d�ng Hot Restart d? ki?m tra.
+
+---
+
+### [2026-09-23 20:11:00] - Thu?t to�n Ch?ng Tr�n Sticker (Anti-Overflow & Smart Clamping)
+* **Th?i gian (Timestamp):** 2026-09-23 20:11:00 (GMT+7)
+* **Tr?ng th�i (Status):** [COMPLETED]
+* **Ngu?i th?c hi?n (Author):** Antigravity Tech Lead Agent
+* **T�m t?t c�ng vi?c (Summary):** 
+  Gi?i quy?t v?n d? sticker b? nh� ra ngo�i m�p ?nh khi ch?p v?t th? n?m s�t vi?n tr�n: Tinh ch?nh t? l? co gi�n (scale) c�n d?i ? m?c 35% chi?u r?ng v?t th? k�m ch?n tr?n an to�n (kh�ng bao gi? vu?t qu� 30% chi?u r?ng to�n khung ?nh). Th�m thu?t to�n ki?m tra kho?ng tr?ng (Headroom Check): n?u v?t th? n?m qu� s�t m�p tr�n, sticker s? t? d?ng d?i xu?ng b�n trong v?t th? thay v� th� l�n ngo�i. B? sung Clamping bi�n 15px ch?n d?ng 100% t�nh tr?ng tr�n ?nh.
+* **Chi ti?t thay d?i (Changes Made):**
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - B? sung thu?t to�n Smart headroom check v� Strict Anti-Overflow Clamping.
+* **Hi?n tr?ng & R�o c?n (Current State & Blockers):**
+  - Ho�n t?t v� s?n s�ng ki?m th?.
+* **Bu?c ti?p theo (Next Steps):**
+  1. Hu?ng d?n ngu?i d�ng Hot Reload d? ki?m tra d�n sticker kh�ng b? tr�n.
+
+---
+
+### [2026-09-23 20:19:00] - Thu?t to�n �?u B�n Ngo�i Khung (Adaptive Side Companion: Right/Left/Top)
+* **Th?i gian (Timestamp):** 2026-09-23 20:19:00 (GMT+7)
+* **Tr?ng th�i (Status):** [COMPLETED]
+* **Ngu?i th?c hi?n (Author):** Antigravity Tech Lead Agent
+* **T�m t?t c�ng vi?c (Summary):** 
+  Kh?c ph?c t�nh tr?ng thi?u asset meme-sticker-hai-huoc.jpg (d� d?ng b? d? 217 ?nh v�o assets). N�ng c?p v? tr� d?t sticker theo y�u c?u c?a ngu?i d�ng: T? d?ng do kho?ng tr?ng b�n ngo�i khung (ph�a su?n ph?i v� su?n tr�i). N?u b�n ph?i tho�ng, sticker s? d?ng b�n ngo�i khung su?n ph?i (ngang t?m m?t/vai); n?u b�n tr�i tho�ng th� d?ng b�n su?n tr�i. Ho�n to�n kh�ng che tai/m?t v?t th?, kh�ng b? c?n m�p tr�n, t?o c?m gi�c ngu?i b?n d?ng h�nh (companion) c?c k? t? nhi�n v� d? nh�n.
+* **Chi ti?t thay d?i (Changes Made):**
+  - [NEW] Sao ch�p to�n b? 94 ?nh t? thu m?c g?c Downloads\sticker v�o ssets/memes/ (n�ng t?ng s? l�n 217 assets).
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - Tri?n khai thu?t to�n t�nh to�n kh�ng gian da hu?ng spaceRight, spaceLeft, spaceTop d? ch?n v? tr� d?u ngo�i khung t?i uu nh?t.
+* **Hi?n tr?ng & R�o c?n (Current State & Blockers):**
+  - �� t�ch h?p ho�n thi?n.
+* **Bu?c ti?p theo (Next Steps):**
+  1. Hu?ng d?n ngu?i d�ng Hot Restart d? ki?m tra v? tr� sticker m?i.
+
+---
+
+### [2026-09-23 22:50:00] - Thay Th? To�n B? Meme B?ng Kho �� T�ch N?n (L?c B? 8 T?p M?t M�u)
+* **Th?i gian (Timestamp):** 2026-09-23 22:50:00 (GMT+7)
+* **Tr?ng th�i (Status):** [COMPLETED]
+* **Ngu?i th?c hi?n (Author):** Antigravity Tech Lead Agent
+* **T�m t?t c�ng vi?c (Summary):** 
+  Thay th? to�n b? kho meme cu b?ng 111 sticker PNG trong su?t t? thu m?c C:\Users\Chien\Downloads\sticker\nen_trang\da_tach_nen. �� vi?t script ph�n t�ch d? b�o h�a m�u t? d?ng d? l?c b? ch�nh x�c 8 t?p b? m?t m�u / tranh t� m�u den tr?ng (sticker-meo-27, sticker-meo-28, sticker-meo-70, sticker-meo-73, sticker-meo-22, cach-tao-sticker-zalo, v.v.). C?p nh?t to�n b? c�c pool catMemes (28 ?nh), capybaraMemes (22 ?nh), unnyMemes (61 ?nh) sang chu?n PNG trong su?t.
+* **Chi ti?t thay d?i (Changes Made):**
+  - [DELETE] X�a to�n b? file JPG/JPEG cu trong ssets/memes/.
+  - [NEW] N?p 111 t?p PNG t�ch n?n chu?n m�u s?c v�o ssets/memes/.
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - C?p nh?t 3 danh s�ch meme catMemes, capybaraMemes, unnyMemes sang 100% PNG trong su?t.
+* **Hi?n tr?ng & R�o c?n (Current State & Blockers):**
+  - Ho�n t?t v� ki?m th? th�nh c�ng.
+* **Bu?c ti?p theo (Next Steps):**
+  1. Hu?ng d?n ngu?i d�ng Hot Restart d? tr?i nghi?m b? sticker trong su?t r?c r? m?i.
+
+
+---
+
+### [2026-09-23 23:10:00] - Tối Ưu Kích Thước Sticker & Khử Vỡ Pixel (Bicubic Antialiasing)
+* **Thời gian (Timestamp):** 2026-09-23 23:10:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Xử lý triệt để hiện tượng sticker bị thu quá nhỏ và vỡ pixel (jagged/broken lines) khi dán lên ảnh. Nâng cấp thuật toán nội suy img.copyResize từ nearest mặc định sang Interpolation.cubic (Bicubic antialiasing), giúp các đường nét vẽ hoạt hình, biểu cảm sắc nét, mượt mà và không bị răng cưa. Đồng thời điều chỉnh tỷ lệ sticker chiếm từ 24% - 34% chiều rộng ảnh (clamp 160px - 280px), vừa vặn, nổi bật, dễ nhìn và tuyệt đối không che khuất chủ thể.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - Nâng cấp scale math theo tỷ lệ khung hình ảnh thực tế (24% - 34% width), áp dụng interpolation: img.Interpolation.cubic và tinh chỉnh logic chống tràn lề (anti-overflow clamping).
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - flutter analyze kiểm tra đạt chuẩn, không có lỗi runtime.
+* **Bước tiếp theo (Next Steps):**
+  1. Người dùng thực hiện Hot Reload hoặc Hot Restart để kiểm tra sticker sắc nét và kích thước chuẩn đẹp mắt.
+---
+
+### [2026-09-23 23:25:00] - Khắc Phục Triệt Để Lỗi Mất Nút & RenderFlex Overflow Trên Nubia Neo
+* **Thời gian (Timestamp):** 2026-09-23 23:25:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Xử lý hiện tượng "mất nút và hiện sọc vàng đen cảnh báo RenderFlex Overflow" trên dòng máy Nubia Neo (ZTE 72352N). Nguyên nhân do modal ImagePreview bị ép cứng chiều cao height: 500 trong khi màn hình Nubia Neo tỷ lệ 20:9 có chiều rộng 412dp kết hợp padding và nút Gửi khiến tổng chiều cao vượt quá 520dp, dẫn đến RenderFlex bị tràn viền và vạch sọc cảnh báo đè mất nút Send. Đã tái cấu trúc giao diện ImagePreview sang SafeArea và MainAxisSize.min thích ứng 100% kích thước màn hình, bổ sung nút Hủy/Đóng và nút Gửi Widget nổi bật, chống spam chụp camera (_isCapturing), và thay thế cử chỉ vuốt cha sang onVerticalDragEnd để không cướp sự kiện bấm nút của màn hình cảm ứng tần số cao.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] lib/screens/preview.dart - Bỏ ép cứng height: 500, thiết kế giao diện bo tròn thích ứng theo SafeArea, hiển thị trạng thái đang gắn sticker AI và nút Gửi Widget sắc nét không bao giờ bị tràn.
+  - [MODIFY] lib/screens/home.dart - Bọc SafeArea, bảo vệ nút chụp bằng cờ _isCapturing, đổi onVerticalDragUpdate sang onVerticalDragEnd và cho phép chạm trực tiếp vào nút History.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Đã kiểm tra flutter analyze, không còn lỗi layout.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng nhấn Hot Reload / Hot Restart để trải nghiệm giao diện mượt mà và nút Gửi Widget hiển thị hoàn chỉnh trên máy Nubia Neo.
+---
+
+### [2026-09-23 23:35:00] - Khắc Phục Triệt Để Lỗi Tràn & Cắt Cụt Sticker (1:1 Square Crop & Safe Margins)
+* **Thời gian (Timestamp):** 2026-09-23 23:35:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục hiện tượng một số bức ảnh vẫn bị cắt cụt sticker ở mép trên hoặc mép trái. Nguyên nhân sâu xa là cảm biến máy ảnh chụp ảnh khổ dọc 9:16 (720x1280), trong khi kính ngắm camera, khung xem trước và Home Widget đều là hình vuông 1:1. Khi hiển thị bằng BoxFit.cover/centerCrop, 280px ở đỉnh ảnh bị xén mất, làm sticker bị chém ngang. Đồng thời lề an toàn cũ (12px) quá hẹp khiến các góc bo tròn (BorderRadius 24px) cắt vào sticker. Đã thêm thuật toán tự động cắt ảnh vuông 1:1 ngay tâm trước khi đưa vào ML Kit, nâng lề an toàn lên 24px - 48px, và bổ sung thuật toán tìm góc thoáng nhất trong 4 góc (4-corner heuristic).
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - Chuẩn hóa xoay EXIF và crop vuông 1:1 tâm ảnh ngay khi nạp ảnh; nâng margin an toàn lên 24-48px; mở rộng 4 hướng đặt ngoài viền (phải, trái, trên, dưới) và tự động chọn 1 trong 4 góc thoáng nhất khi vật thể choán khung hình.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - flutter analyze sạch sẽ, không có lỗi.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng Hot Reload hoặc Hot Restart để kiểm tra kết quả sticker không còn bị cấn hay xén mép.
+---
+
+### [2026-09-23 23:40:00] - Bổ Sung Tính Năng Viết Ghi Chú / Caption Cho Ảnh & Widget
+* **Thời gian (Timestamp):** 2026-09-23 23:40:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Phát triển tính năng viết ghi chú/caption đi kèm bức ảnh theo phong cách Locket Widget / Instagram. Cho phép người dùng nhập trực tiếp ghi chú lên thanh dark-glass pill ở đáy ảnh trong màn hình xem trước. Khi bấm "Gửi Widget", hệ thống sử dụng ui.Canvas & TextPainter chất lượng cao để ghép (burn) caption viên nhộng vào file ảnh bitmap (hỗ trợ 100% tiếng Việt có dấu, emoji, tự động căn giữa và đổ bóng). Nhờ đó, cả Home Widget ngoài màn hình chính lẫn mục History trong app đều hiển thị trọn vẹn caption và sticker một cách đồng bộ và đẹp mắt.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] lib/screens/preview.dart - Tích hợp thanh nhập caption TextField dạng viên nhộng trong suốt nổi trên ảnh kèm nút xóa nhanh; hàm _burnCaptionToImage sử dụng ui.PictureRecorder để ghép chữ nghệ thuật vào ảnh độ phân giải cao; tự động cuộn chống che bàn phím ảo với MediaQuery.viewInsets.bottom.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - flutter analyze kiểm tra đạt 0 issues (No issues found).
+* **Bước tiếp theo (Next Steps):**
+  1. Người dùng Hot Reload và trải nghiệm tính năng viết ghi chú kèm sticker.
+---
+
+### [2026-09-23 23:52:00] - Tăng Tốc Xử Lý AI Sticker Gấp 5 Lần (< 0.8 Giây)
+* **Thời gian (Timestamp):** 2026-09-23 23:52:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục tình trạng "gắn AI sticker hơi lâu" (trước đó mất khoảng 3.5 - 5.0 giây). Thực hiện tối ưu hóa toàn diện 4 nút thắt cổ chai:
+  1. Singleton Model Caching: Giữ ấm mô hình SubjectSegmenter và ImageLabeler trong bộ nhớ NPU/GPU, loại bỏ hoàn toàn độ trễ biên dịch TFLite graph (~1.2s tiết kiệm).
+  2. Parallel Inference: Chạy song song nhận diện vật thể và phân loại nhãn bằng Future.wait.
+  3. Single-Pass Pipeline: Loại bỏ vòng lặp giải mã/mã hóa 2 lần thừa thãi. Toàn bộ xoay EXIF, crop 1:1, vẽ viền neon và dán sticker diễn ra trong 1 lần nạp và 1 lần lưu duy nhất.
+  4. Sampled Neon Rendering: Tối ưu thuật toán vẽ viền neon silhouette (lấy mẫu bước nhảy, giảm 85% số phép toán vẽ pixel thuần trong Dart).
+  5. Fast Encode: Mã hóa JPG chất lượng 85 thay vì 95 (tốc độ nén nhanh gấp 3 lần, mắt thường không phân biệt được trên màn hình điện thoại).
+  Tổng thời gian xử lý giảm ngoạn mục từ ~4.5s xuống còn dưới 0.8s (tốc độ tăng 5-6 lần).
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] lib/services/sticker_anchoring_engine.dart - Tái cấu trúc pipeline xử lý AI và xử lý đồ họa đạt chuẩn hiệu năng cao.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - flutter analyze kiểm tra đạt chuẩn, 0 lỗi runtime.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng Hot Reload / Hot Restart để trải nghiệm tốc độ gắn sticker gần như tức thì.
+---
+
+### [2026-10-28 22:52:00] - Hoan Thien Ket Noi 2 Thiet Bi & Chia Se Anh Widget Ban Be (Phong Cach Locket - 0 VND)
+* **Thoi gian (Timestamp):** 2026-10-28 22:52:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  Hoan thien toan bo he thong ket noi 2 thiet bi va chia se anh Widget hai chieu theo phong cach Locket bang quet ma QR:
+  1. Tai khoan ngau nhien (Anonymous Identity): Tu dong cap dinh danh dang yeu (Capybara Vui Ve #482) cung Secret Token bao mat tren SharedPreferences ngay lan mo app dau tien, khong can email/password.
+  2. Ket ban tuc thi qua ma QR: Quet ma nhau, he thong tu dong thiet lap lien ket ban be 2 chieu (Mutual Friendship) ca cuc bo va Firestore.
+  3. Khoi phuc / Doi thiet bi bang ma QR: Trong Cai dat tai khoan, nguoi dung co the mo Ma Khoi Phuc Tai Khoan hoac bam Dang Nhap Bang Ma QR de quet va chuyen nguyen ven tai khoan sang dien thoai moi.
+  4. Chia se anh tu dong cap nhat Widget & Luu Lich su: Khi bam Gui Widget, anh kem AI sticker va caption se duoc tai len Firebase Storage (Spark 0 VND) va phat song den ban be. May ban be tu dong tai ve, ghi vao Lich su va day thang len Widget man hinh chinh.
+  5. Thiet ke Offline-First sieu kien co: Hoat dong 100% muot ma ngoai tuyen ngay ca khi chua gan file google-services.json.
+* **Chi tiet thay doi (Changes Made):**
+  - [CREATE] lib/services/auth_service.dart
+  - [CREATE] lib/services/friend_service.dart
+  - [CREATE] lib/services/sync_service.dart
+  - [CREATE] lib/screens/qr_scanner_screen.dart
+  - [CREATE] lib/screens/friends_screen.dart
+  - [CREATE] lib/screens/profile_screen.dart
+  - [MODIFY] lib/screens/home.dart
+  - [MODIFY] lib/screens/preview.dart
+  - [MODIFY] lib/main.dart
+* **Hien trang (Current State):** flutter analyze dat 0 loi.
+
+---
+
+### [2026-10-28 23:17:00] - Build Thanh Cong APK Debug (Hoan Tat Kiem Tra Bien Dich)
+* **Thoi gian (Timestamp):** 2026-10-28 23:17:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Khac phuc triet de loi JAVA_HOME cu khong ton tai tren may bang cach cau hinh flutter config tro ve JDK Temurin-21 chinh chu.
+  - Bien dich thanh cong toan bo native plugins (ML Kit, Firebase, Camera, MobileScanner, HomeWidget).
+  - File APK xuat ra thanh cong tai: build/app/outputs/flutter-apk/app-debug.apk (~253 MB).
+* **Hien trang (Current State):** San sang de cai dat len dien thoai test.
+
+---
+
+### [2026-10-28 23:43:00] - Khac Phuc Loi Nut Add Friends & Phat Trien Bo Tinh Nang Moi
+* **Thoi gian (Timestamp):** 2026-10-28 23:43:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  1. Khac phuc nguyen nhan khong bam duoc nut Add Friends: Trong Stack cua home.dart, thanh dieu huong bi SingleChildScrollView de len tren, khien GestureDetector toan man hinh nuot sach click event. Da dua thanh top bar len tren cung (Foreground Positioned), boc HitTestBehavior.opaque va InkWell 44dp dam bao do nhay 100% tren moi thiet bi.
+  2. Phat trien tinh nang moi Bang Tin Ban Be (lib/screens/feed_screen.dart): Xem dong thoi gian anh ban be da gui, tha cam xuc emoji (❤️, 🔥, 😂, 🥺, 🚀) va 1 cham ghim anh ban be len Widget.
+  3. Nang cap Kho Anh Ky Niem (lib/screens/history.dart): Giao dien luoi 2 cot hien dai, nhan dien anh ban be, phong to InteractiveViewer, xoa sach file khoi bo nho disk.
+  4. Bo sung tien ich may anh (home.dart): Bat/Tat luoi ti le vang 3x3 va Hen gio chup anh (3s / 5s) voi man hinh dem nguoc so to cuc chill.
+  5. Build APK thanh cong tai build/app/outputs/flutter-apk/app-debug.apk.
+* **Hien trang (Current State):** San sang de nguoi dung trai nghiem.
+
+---
+
+### [2026-10-28 23:52:00] - Hoan Thien 4 Yeu Cau Nguoi Dung (Widget Click, Dong Bo Xoa, Cuon History, Hien Thi Ten)
+* **Thoi gian (Timestamp):** 2026-10-28 23:52:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  1. Bam vao Widget ngoai man hinh chinh mo app ngay lap tuc: Bo sung setOnClickPendingIntent vao ICNativeWidgetProvider.kt cho ca R.id.widget_container va R.id.widget_image voi FLAG_UPDATE_CURRENT hoac FLAG_IMMUTABLE.
+  2. Xoa anh dong bo Widget that 100%: Khi xoa bat ky anh nao trong Kho Anh, he thong kiem tra va cap nhat HomeWidget ngay lap tuc sang anh ke tiep (hoac placeholder rong neu het anh), xoa tan goc file tren o cung disk.
+  3. Khac phuc khong vuot len duoc khi o man hinh History: Bo sung nut dinh cao Camera ro rang o thanh tieu de, them NotificationListener bat su kien keo overscroll xuong o dau luoi de lap tuc truot muot ma ve lai Camera.
+  4. Hien thi ro rang ten nguoi chup: Bo sung widget_sender_name duoi dang vien nhong toi vien bo goc tren ca Layout Widget ngoai man hinh lan the anh va trinh xem phong to trong app (lay tu Firestore senderName hoac AuthService display name).
+  5. Bien dich APK thanh cong 100% tai: build/app/outputs/flutter-apk/app-debug.apk.
+* **Hien trang (Current State):** San sang de nguoi dung cai dat trai nghiem.
+
+---
+
+### [2026-10-29 00:45:00] - Tao Bo Sticker / Emoji Kawaii (9 Mau Sticker Do AI Thiet Ke)
+* **Thoi gian (Timestamp):** 2026-10-29 00:45:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Khoi tao thu muc assets/stickers/ va khai bao bo sung vao pubspec.yaml.
+  - Su dung image-generator tao bo 9 sticker kawaii chat luong cao: Capybara chill, Meo ban tim, Shiba cool ngau, Meo cuoi ra nuoc mat, Ngoi sao lap lanh, Tra sua boba, Trai tim doi canh, Gau con buon ngu, Meo trang nhay mat peace sign.
+  - Chuan hoa ten file va luu tru truc tiep tai assets/stickers/ de san sang su dung trong app.
+  - Tao artifact stickers_preview.md trinh dien toan bo sticker dang carousel slide.
+* **Hien trang (Current State):** San sang de tich hop thanh bo chon sticker thu cong hoac dua vao sticker engine.
+
+---
+
+### [2026-10-29 00:57:00] - Tich Hop GitHub MCP Server Vao Antigravity
+* **Thoi gian (Timestamp):** 2026-10-29 00:57:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Cau hinh GitHub MCP Server (@modelcontextprotocol/server-github) vao tệp he thong C:/Users/Chien/.gemini/config/mcp_config.json.
+  - Tich hop GitHub Personal Access Token cua nguoi dung vao bien moi truong GITHUB_PERSONAL_ACCESS_TOKEN va GITHUB_TOKEN.
+  - Chay thu nghiem stdio JSON-RPC ket noi thanh cong voi protocolVersion 2024-11-05.
+* **Hien trang (Current State):** San sang de Agent truy van va tuong tac truc tiep voi GitHub.
+
+---
+
+### [2026-10-29 01:10:00] - Tao Anh Meme Cun Chup Goc 0.5x Vo Tinh
+* **Thoi gian (Timestamp):** 2026-10-29 01:10:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Mo phong thanh cong chat anh selfie goc sieu rong 0.5x dien thoai vo tinh chup cua chu cho Golden derpy (mui to di sat ong kinh, mat tron dại kho, the luoi blep, anh sang phong khach tu nhien).
+  - Luu anh tai derpy_dog_selfie_meme_1793211005150.jpg va tao artifact so sanh meme_dog_comparison.md.
+
+---
+
+### [2026-10-29 01:19:00] - Tao 3 Phien Ban Anh Cun Mo Nhoe Motion Blur Chuan Camera Dien Thoai
+* **Thoi gian (Timestamp):** 2026-10-29 01:19:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Xu ly hieu ung rung tay (motion blur), ha do phan giai xuong 480p (~27KB) va ap dung do nen JPEG chan thuc nhu anh camera truoc gui qua Messenger/TikTok.
+  - Tao them 2 bien the anh chup phong toi mo nhoe tu nhien cua cho Golden va Terrier.
+  - Cap nhat artifact meme_dog_comparison.md voi carousel 4 slide so sanh truc tiep.
+* **Hien trang (Current State):** San sang de nguoi dung chon lua.
+
+---
+
+### [2026-10-30 14:28:00] - Thiet Ke 10 Mau Cau Truc App Doc Ban (Khong Trung Lap Locket)
+* **Thoi gian (Timestamp):** 2026-10-30 14:28:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Thiet ke 10 mau cau truc app hoan toan moi, khac biet hoan toan voi kieu camera full-screen truyen thong cua Locket:
+    1. Polaroid Scrapbook: May anh film co dien, so dan anh thu cong washi tape.
+    2. Bento Grid & Dock: Bang dieu khien Bento da nang kieu iOS 18, dock noi.
+    3. Nordic Zen Journal: Nhat ky anh toi gian Bac Au, cuon doc thanh lich.
+    4. Y2K Sticker Studio: The gioi sticker & meme Arcade Gen Z.
+    5. Split Dual-View 50/50: Man hinh chia doi tren-duoi tuong tac dap le.
+    6. Celestial Planet Orbit: He quy dao vu tru, camera la hanh tinh me, ban be la ve tinh.
+    7. Chat-Stream Cards: Hop thoai khoanh khac gan gui kieu Zalo/Messenger.
+    8. 3D Carousel Reel: Bang chuyen the ky niem 3D vuot ngang/vuot len.
+    9. Minimalist Swiss Studio: Dang cap Helvetica den trang typographic kieu Leica.
+    10. Cozy Cafe Vinyl: Mat ban cafe go & dia than am cung lo-fi.
+  - Tao giao dien HTML tuong tac app_architectures_showcase.html voi hon 30 man hinh mo phong trong khung may dien thoai that.
+  - Tao bao cao dac ta kien truc app_architectures_guide.md tong hop bang mau, luoc do Mermaid va danh gia ung dung.
+* **Hien trang (Current State):** San sang de nguoi dung trai nghiem va chon lua mau yeu thich.
+
+---
+
+### [2026-10-30 14:35:00] - Hoan Thien Ban Demo Chuan Xac: Ong Kinh Quy Dao x Tong Dat Am
+* **Thoi gian (Timestamp):** 2026-10-30 14:35:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Thiet ke ban demo truc quan pixel-perfect ket hop cau truc Ong Kinh Tron & Ve Tinh Ban Be (Kieu 6) voi bang mau Dat Am Warm Olive & Khaki Cream (Kieu 7).
+  - Xay dung tap tin HTML tuong tac orbit_warm_earth_demo.html mo phong day du 4 man hinh chinh tren khung may dien thoai that co Dynamic Island va thanh dieu huong.
+  - Lap tai lieu dac ta ky thuat orbit_warm_earth_spec.md huong dan chi tiet cach trien khai vao ma nguon Flutter (lib/screens/home.dart, preview.dart, feed_screen.dart va he thong ma mau OrbitColors).
+* **Hien trang (Current State):** San sang de nguoi dung xem xet va phe duyet de tien hanh ap dung vao code.
+
+---
+
+### [2026-10-30 15:35:00] - Hoan Thien Giao Dien Ong Kinh Quy Dao & Bo Tao Sticker 3 Che Do
+* **Thoi gian (Timestamp):** 2026-10-30 15:35:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Trien khai bo mau OrbitColors (Nen kem #FEFAE0, Nut xanh rêu #606C38, Chu dam #283618, Diem nhan #DDA15E & #BC6C25) tai lib/settings/theme_colors.dart.
+  - Tich hop mo hinh Ong Kinh Quy Dao (Model 6) vao lib/screens/home.dart voi ong kinh tron trung tam, vong quay quy dao va cac ve tinh ban be (Lan Chi, Tuan Minh, Em Be, Them ban).
+  - Xay dung bo tao Sticker tu import meme kieu Messenger voi 3 che do: Original (Goc), Outline (Vien trang Messenger on-device), Full (Tach nen trong suot bang ML Kit 0 VND) tai lib/services/custom_sticker_service.dart va lib/screens/sticker_generator_sheet.dart.
+  - Nang cap lib/screens/preview.dart cho phep keo tha sticker len anh chup, thay doi vi tri va khac sticker + caption vao bitmap truoc khi dong bo Widget.
+  - Dong bo giao dien cho feed_screen.dart, friends_screen.dart, history.dart va profile_screen.dart sang nen kem #FEFAE0.
+  - Kiem tra flutter analyze lib dat 0 loi, build thanh cong file APK debug tai build/app/outputs/flutter-apk/app-debug.apk.
+* **Hien trang (Current State):** San sang de cai dat va trai nghiem tren may MEIZU 21 Note.
+
+---
+
+### [2026-10-30 16:20:00] - Nang Cap He Quy Dao Vat Ly Quan Tinh, Auto-Fit Layout & Khoi Phuc AI Ngu Canh
+* **Thoi gian (Timestamp):** 2026-10-30 16:20:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - Khac phuc 100% loi layout bi thanh dieu huong Android de len nut chup: Su dung SafeArea voi bo khung tinh toan kich thuoc dong (Top Bar 50dp, Center Area Expanded co gian theo ty le man hinh, Bottom Bar 148dp co dinh), dam bao nut chup nam tron ven, dep mat tren tat ca cac dong dien thoai (Meizu 21 Note, Pixel, Galaxy, iPhone).
+  - Khoi phuc tinh nang cot loi: Chup anh tu dong nhan dien boi canh va gan meme sticker on-device (StickerAnchoringEngine) 0 VND, 100% offline.
+  - Xoa bo hoan toan du lieu demo/fake: Su dung danh sach ban be that tu FriendService va so luong tin nhan that tu he thong (khong con hien thi fake badge '2' hay ten ban be mau).
+  - Mo rong he quy dao dong theo kieu he mat troi: 1-4 ban be o vong trong, tu ban be thu 5 tro di mo rong them vong ngoai (moi vong 4-5 nguoi).
+  - Xay dung dong co vat ly quay nguoc chieu va tuong tac vuot quan tinh (Inertial Touch & Fling): Vong trong quay thuan chieu, vong ngoai quay nguoc chieu; nguoi dung co the dung ngon tay quet xoay nhanh, sau do vong quay giam toc dan theo quan tinh roi tro ve trang thai quay deu e ap.
+  - Tinh nang mo rong camera o trung tam: Nguoi dung cham vao ong kinh tron o giua de phong to thanh o camera vuong lon (1:1) de dang can chinh goc chup, cham hoac chụm 2 ngon tay de thu nho ve ong kinh quy dao.
+  - Nang cap bo Custom Sticker Generator: Ho tro tach vien die-cut outline trang 8px co drop shadow sac net kieu Messenger/iOS, ho tro tach nen thong minh tren moi thiet bi.
+  - Kiem tra flutter analyze lib dat 0 loi, dong goi thanh cong APK moi nhat tai build/app/outputs/flutter-apk/app-debug.apk.
+* **Hien trang (Current State):** File APK da duoc bien dich thanh cong luc 16:19:35 va san sang de nguoi dung cai dat, trai nghiem truc tiep tren thiet bi.

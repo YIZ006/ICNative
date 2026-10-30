@@ -1,12 +1,16 @@
 package com.abom.utas.utas
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
+import java.io.File
 
 class ICNativeWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(
@@ -17,31 +21,74 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
     ) {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
+                // 1. Click on widget to launch app directly
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val pendingIntent = PendingIntent.getActivity(
+                    context,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+                setOnClickPendingIntent(R.id.widget_image, pendingIntent)
+
+                // 2. Load Image & Sender Name
                 val imagePath = widgetData.getString("widget_image_path", null)
-                if (imagePath != null) {
+                val senderName = widgetData.getString("widget_sender_name", null)
+
+                if (imagePath != null && File(imagePath).exists()) {
                     var bitmap = BitmapFactory.decodeFile(imagePath)
-                    
-                    // Fix EXIF Rotation
-                    try {
-                        val exif = ExifInterface(imagePath)
-                        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-                        val matrix = Matrix()
-                        when (orientation) {
-                            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-                            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-                            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+
+                    if (bitmap != null) {
+                        // Fix EXIF Rotation
+                        try {
+                            val exif = ExifInterface(imagePath)
+                            val orientation = exif.getAttributeInt(
+                                ExifInterface.TAG_ORIENTATION,
+                                ExifInterface.ORIENTATION_NORMAL
+                            )
+                            val matrix = Matrix()
+                            when (orientation) {
+                                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                            }
+                            if (!matrix.isIdentity) {
+                                bitmap = android.graphics.Bitmap.createBitmap(
+                                    bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                                )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                        if (!matrix.isIdentity) {
-                            bitmap = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+                        setImageViewBitmap(R.id.widget_image, bitmap)
+                        setViewVisibility(R.id.widget_empty_text, View.GONE)
+
+                        // 3. Display sender name if provided
+                        if (!senderName.isNullOrBlank()) {
+                            setTextViewText(R.id.widget_sender_name, senderName)
+                            setViewVisibility(R.id.widget_sender_name, View.VISIBLE)
+                        } else {
+                            setViewVisibility(R.id.widget_sender_name, View.GONE)
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    } else {
+                        showEmptyState(this)
                     }
-                    
-                    setImageViewBitmap(R.id.widget_image, bitmap)
+                } else {
+                    // Image was deleted or not set!
+                    showEmptyState(this)
                 }
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }
+    }
+
+    private fun showEmptyState(views: RemoteViews) {
+        views.setImageViewResource(R.id.widget_image, R.drawable.widget_placeholder_bg)
+        views.setViewVisibility(R.id.widget_empty_text, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_sender_name, View.GONE)
     }
 }

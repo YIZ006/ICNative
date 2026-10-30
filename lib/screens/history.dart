@@ -1,13 +1,14 @@
 import 'dart:io';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:icnative/services/sync_service.dart';
 import 'package:icnative/settings/global.dart';
-import 'package:icnative/settings/sizes.dart';
-
+import 'package:icnative/settings/theme_colors.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final VoidCallback? onBackToCamera;
+
+  const HistoryScreen({super.key, this.onBackToCamera});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -15,71 +16,453 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   @override
-  void initState() {
-    print(images.length);
-    // TODO: implement initState
-    super.initState();
-  }
-  @override
   Widget build(BuildContext context) {
-
     return Container(
-      alignment: Alignment.center,
-      color: Colors.transparent,
-        padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 15),
-        height: Sizes.height(context),
-        width: Sizes.width(context),
-        child:images.isEmpty?Container(
-          child: const Center(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_not_supported,size: 100,color: Colors.white,),
-              Text("No Images Yet,\n Try To Take Photo",textAlign:TextAlign.center,style: TextStyle(color: Colors.white,fontSize: 20),),
-            ],
-          )),
-        ):ListView.builder(
-
-          padding: const EdgeInsets.only(top: 150,left: 15,right: 15 ),
-            itemCount: images.length,
-            itemBuilder: (context,i){
-
-          return Container(
-            alignment: Alignment.bottomCenter,
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            height: 200,
-            width: Sizes.width(context),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              image: DecorationImage(
-                image: FileImage(File(images[i])),
-                fit: BoxFit.cover
-              )
-            ),
-            child: Container(
-width: 40,
-              height: 40,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(100.0),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
+      color: OrbitColors.background,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Top Bar of History with Back to Camera Action
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Back to camera button
+                  Material(
                     color: Colors.transparent,
-                    child: GestureDetector(
-                      onTap: (){
-                        setState(() {
-                          images.removeAt(i);
-                        });
-                      },
-
-                      child: Icon(Icons.delete,size: 30,color: Colors.white.withOpacity(0.5),)),
-
-
+                    child: InkWell(
+                      onTap: widget.onBackToCamera,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: OrbitColors.buttonPrimary,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.15),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.arrow_upward_rounded, color: OrbitColors.textLight, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Camera',
+                              style: TextStyle(
+                                color: OrbitColors.textLight,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
+
+                  // Title
+                  const Text(
+                    'Kho Ảnh Kỷ Niệm',
+                    style: TextStyle(
+                      color: OrbitColors.deepOlive,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  // Photo Count Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: OrbitColors.surfaceCream,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '${images.length} ảnh',
+                      style: const TextStyle(
+                        color: OrbitColors.buttonPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Pull down hint
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onBackToCamera,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.keyboard_arrow_up_rounded,
+                        size: 16, color: OrbitColors.deepOlive.withValues(alpha: 0.6)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Vuốt hoặc bấm để quay lại chụp ảnh',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive.withValues(alpha: 0.6),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          );
 
-        }) );
+            // Content: Empty State or Grid of Photos
+            Expanded(
+              child: images.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 64,
+                            color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'Chưa Có Ảnh Nào',
+                            style: TextStyle(
+                              color: OrbitColors.deepOlive,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Hãy chụp ảnh và gửi widget để lưu lại khoảnh khắc nhé!',
+                            style: TextStyle(
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.6),
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: OrbitColors.buttonPrimary,
+                              foregroundColor: OrbitColors.textLight,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            onPressed: widget.onBackToCamera,
+                            icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                            label: const Text('Mở Camera Ngay',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ],
+                      ),
+                    )
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is OverscrollNotification && notification.overscroll < -15) {
+                          widget.onBackToCamera?.call();
+                          return true;
+                        }
+                        return false;
+                      },
+                      child: GridView.builder(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.0,
+                        ),
+                        itemCount: images.length,
+                        itemBuilder: (context, i) {
+                          final reversedIndex = images.length - 1 - i;
+                          final filePath = images[reversedIndex];
+                          final file = File(filePath);
+                          final isFriendPhoto = filePath.contains('friend_widget_');
+
+                          return GestureDetector(
+                            onTap: () => _openFullscreenViewer(filePath, reversedIndex),
+                            child: Hero(
+                              tag: 'history_img_$reversedIndex',
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isFriendPhoto
+                                        ? OrbitColors.terracotta
+                                        : OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                                    width: isFriendPhoto ? 2 : 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: OrbitColors.deepOlive.withValues(alpha: 0.12),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(19),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (file.existsSync())
+                                        Image.file(
+                                          file,
+                                          fit: BoxFit.cover,
+                                        )
+                                      else
+                                        Container(
+                                          color: OrbitColors.surfaceCream,
+                                          child: const Icon(
+                                            Icons.broken_image,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+
+                                      // Sender Name Badge at Bottom of Card
+                                      Positioned(
+                                        bottom: 8,
+                                        left: 8,
+                                        right: 8,
+                                        child: FutureBuilder<String>(
+                                          future: SyncService.getPhotoSender(filePath),
+                                          builder: (ctx, snap) {
+                                            final senderName = snap.data ??
+                                                (isFriendPhoto ? 'Bạn bè' : 'Tôi');
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: OrbitColors.deepOlive.withValues(alpha: 0.8),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: isFriendPhoto
+                                                      ? OrbitColors.terracotta
+                                                      : OrbitColors.buttonPrimary,
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isFriendPhoto
+                                                        ? Icons.pets_rounded
+                                                        : Icons.person_rounded,
+                                                    size: 13,
+                                                    color: OrbitColors.khakiGold,
+                                                  ),
+                                                  const SizedBox(width: 5),
+                                                  Expanded(
+                                                    child: Text(
+                                                      senderName,
+                                                      style: const TextStyle(
+                                                        color: OrbitColors.textLight,
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openFullscreenViewer(String filePath, int index) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.94),
+      builder: (dialogCtx) => Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+            onPressed: () => Navigator.pop(dialogCtx),
+          ),
+          title: FutureBuilder<String>(
+            future: SyncService.getPhotoSender(filePath),
+            builder: (ctx, snap) {
+              final name = snap.data ?? (filePath.contains('friend_widget_') ? 'Bạn bè' : 'Tôi');
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: OrbitColors.deepOlive,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: OrbitColors.buttonPrimary),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person, color: OrbitColors.khakiGold, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: OrbitColors.textLight,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          centerTitle: true,
+          actions: [
+            // Button: Pin to Home Widget
+            IconButton(
+              icon: const Icon(Icons.widgets_rounded, color: OrbitColors.khakiGold),
+              tooltip: 'Ghim lên màn hình chính',
+              onPressed: () async {
+                final senderName = await SyncService.getPhotoSender(filePath);
+                await HomeWidget.saveWidgetData<String>('widget_image_path', filePath);
+                await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName);
+                await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: OrbitColors.buttonPrimary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text('Đã ghim ảnh của "$senderName" lên Widget!'),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: OrbitColors.deepOlive,
+                    ),
+                  );
+                }
+              },
+            ),
+
+            // Button: Delete photo
+            IconButton(
+              icon: Icon(Icons.delete_outline_rounded,
+                  color: Colors.redAccent.withValues(alpha: 0.9)),
+              tooltip: 'Xóa ảnh',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: dialogCtx,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: OrbitColors.background,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Xóa ảnh này?',
+                        style: TextStyle(color: OrbitColors.deepOlive, fontSize: 16, fontWeight: FontWeight.bold)),
+                    content: const Text(
+                      'Ảnh sẽ bị xóa hoàn toàn khỏi máy và Widget màn hình chính sẽ được cập nhật.',
+                      style: TextStyle(color: OrbitColors.deepOlive, fontSize: 13),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Hủy', style: TextStyle(color: OrbitColors.deepOlive)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Xóa', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  try {
+                    final f = File(filePath);
+                    if (f.existsSync()) f.deleteSync();
+                  } catch (_) {}
+
+                  setState(() {
+                    images.remove(filePath);
+                  });
+
+                  String nextImagePath = '';
+                  String nextSenderName = '';
+                  if (images.isNotEmpty) {
+                    nextImagePath = images.last;
+                    nextSenderName = await SyncService.getPhotoSender(nextImagePath);
+                  }
+
+                  await HomeWidget.saveWidgetData<String>('widget_image_path', nextImagePath);
+                  await HomeWidget.saveWidgetData<String>('widget_sender_name', nextSenderName);
+                  await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(images.isNotEmpty
+                            ? 'Đã xóa ảnh! Widget đã cập nhật sang ảnh tiếp theo.'
+                            : 'Đã xóa ảnh! Widget đã làm trống.'),
+                        backgroundColor: OrbitColors.deepOlive,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+
+                  if (dialogCtx.mounted) {
+                    Navigator.pop(dialogCtx);
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            panEnabled: true,
+            minScale: 0.8,
+            maxScale: 3.5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: File(filePath).existsSync()
+                  ? Image.file(
+                      File(filePath),
+                      fit: BoxFit.contain,
+                    )
+                  : const Icon(Icons.broken_image, size: 80, color: Colors.white38),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
