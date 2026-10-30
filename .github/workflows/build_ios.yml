@@ -1,0 +1,74 @@
+name: Build & Release iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag to attach IPA'
+        required: false
+        default: 'v1.4.0'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java (for Gradle / cross tools if needed)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter & Xcode Environment
+        run: |
+          flutter --version
+          xcodebuild -version
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Build iOS App (No Codesign)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package Payload to IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r Orbit-${{ github.event.inputs.release_tag || github.ref_name || 'v1.4.0' }}.ipa Payload
+          ls -lh Orbit-*.ipa
+
+      - name: Upload IPA Artifact to Workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-iOS-IPA
+          path: Orbit-*.ipa
+          retention-days: 14
+
+      - name: Upload IPA to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.release_tag || github.ref_name || 'v1.4.0' }}"
+          echo "Uploading IPA to Release Tag: $TAG"
+          gh release upload "$TAG" Orbit-*.ipa --clobber
