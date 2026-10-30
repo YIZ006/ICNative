@@ -199,27 +199,43 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
             // Action Buttons
             if (!isDownloading) ...[
-              ElevatedButton(
-                onPressed: _startUpdate,
+              ElevatedButton.icon(
+                onPressed: () {
+                  UpdateService.instance.openReleasePage();
+                  Navigator.pop(context);
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: OrbitColors.deepOlive,
+                  backgroundColor: OrbitColors.buttonPrimary,
                   foregroundColor: OrbitColors.textLight,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text(
-                  '⚡ Tải & Cập Nhật Tức Thì',
+                icon: const Icon(Icons.open_in_browser_rounded, size: 20),
+                label: const Text(
+                  '🌐 Mở Trang Tải GitHub Releases',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _startUpdate,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: OrbitColors.deepOlive,
+                  side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: const Text(
+                  'Tải trực tiếp trong app',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
               TextButton(
-                onPressed: () {
-                  UpdateService.instance.dismissUpdate(widget.releaseInfo.tagName);
-                  Navigator.pop(context);
-                },
+                onPressed: () => Navigator.pop(context),
                 child: Text(
-                  'Để sau',
+                  'Đóng',
                   style: TextStyle(
                     color: OrbitColors.deepOlive.withValues(alpha: 0.7),
                     fontWeight: FontWeight.bold,

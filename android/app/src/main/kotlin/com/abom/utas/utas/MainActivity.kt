@@ -19,40 +19,57 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // 1. Kênh tự động cập nhật APK từ GitHub
+        // 1. Kênh cập nhật APK & Mở liên kết GitHub Releases
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATER_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "installApk") {
-                val filePath = call.argument<String>("filePath")
-                if (filePath != null) {
-                    try {
-                        val file = File(filePath)
-                        if (file.exists()) {
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                    FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                } else {
-                                    Uri.fromFile(file)
+            when (call.method) {
+                "installApk" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath != null) {
+                        try {
+                            val file = File(filePath)
+                            if (file.exists()) {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
+                                    } else {
+                                        Uri.fromFile(file)
+                                    }
+                                    setDataAndType(uri, "application/vnd.android.package-archive")
                                 }
-                                setDataAndType(uri, "application/vnd.android.package-archive")
+                                context.startActivity(intent)
+                                result.success(true)
+                            } else {
+                                result.error("FILE_NOT_FOUND", "Tệp APK không tồn tại tại $filePath", null)
+                            }
+                        } catch (e: Exception) {
+                            result.error("INSTALL_ERROR", "Lỗi cài đặt APK: ${e.message}", null)
+                        }
+                    } else {
+                        result.error("INVALID_PATH", "Đường dẫn APK null", null)
+                    }
+                }
+                "openUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (url != null) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             context.startActivity(intent)
                             result.success(true)
-                        } else {
-                            result.error("FILE_NOT_FOUND", "Tệp APK không tồn tại tại $filePath", null)
+                        } catch (e: Exception) {
+                            result.error("OPEN_URL_ERROR", "Lỗi mở liên kết: ${e.message}", null)
                         }
-                    } catch (e: Exception) {
-                        result.error("INSTALL_ERROR", "Lỗi cài đặt APK: ${e.message}", null)
+                    } else {
+                        result.error("INVALID_URL", "URL null", null)
                     }
-                } else {
-                    result.error("INVALID_PATH", "Đường dẫn APK null", null)
                 }
-            } else {
-                result.notImplemented()
+                else -> result.notImplemented()
             }
         }
 

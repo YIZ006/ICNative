@@ -40,8 +40,6 @@ class UpdateService {
   static const String repoName = 'ICNative';
   static const MethodChannel _channel = MethodChannel('com.abom.utas.utas/app_updater');
 
-  bool _hasCheckedThisSession = false;
-
   /// Lưu trạng thái người dùng bấm "Để sau" để không làm phiền trong 24 giờ
   Future<void> dismissUpdate(String tagName) async {
     try {
@@ -59,13 +57,12 @@ class UpdateService {
     } catch (_) {}
   }
 
-  /// Kiểm tra phiên bản mới nhất từ GitHub Releases (0 VNĐ & Cực nhanh)
+  /// Kiểm tra phiên bản mới nhất từ GitHub Releases (chỉ thực hiện khi người dùng bấm thủ công)
   Future<GitHubReleaseInfo?> checkForUpdate({bool isManual = false}) async {
-    // Không tự động kiểm tra lặp lại nhiều lần trong cùng một phiên mở app
-    if (!isManual && _hasCheckedThisSession) {
+    // Tuyệt đối KHÔNG tự động kiểm tra ngầm hoặc hiển thị popup tự động làm phiền người dùng
+    if (!isManual) {
       return null;
     }
-    _hasCheckedThisSession = true;
 
     try {
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
@@ -81,42 +78,28 @@ class UpdateService {
         final notes = (data['body'] as String? ?? '').trim();
         final publishedAt = (data['published_at'] as String? ?? '').trim();
 
-        // Kiểm tra xem phiên bản này đã cài đặt hoặc đã bị người dùng tạm hoãn chưa
-        if (!isManual) {
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            final installedTag = prefs.getString('installed_update_tag');
-            if (installedTag == tagName) {
-              return null; // Đã cài phiên bản này rồi
-            }
-
-            final dismissedTag = prefs.getString('dismissed_update_tag');
-            final dismissedTime = prefs.getInt('dismissed_update_time') ?? 0;
-            final now = DateTime.now().millisecondsSinceEpoch;
-            // Nếu người dùng bấm "Để sau", không nhắc lại trong 24 giờ
-            if (dismissedTag == tagName && (now - dismissedTime) < 86400000) {
-              return null;
-            }
-          } catch (_) {}
-        }
-
         final assets = (data['assets'] as List<dynamic>? ?? []);
         String? apkUrl;
         int apkSize = 0;
 
+        // Ưu tiên tệp clean-release.apk nếu có
         for (final asset in assets) {
           final assetName = (asset['name'] as String? ?? '').toLowerCase();
-          if (assetName.endsWith('.apk')) {
+          if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
             apkUrl = asset['browser_download_url'] as String?;
             apkSize = asset['size'] as int? ?? 0;
             break;
           }
         }
-
-        // Nếu không có file APK đính kèm trong release asset, fallback lấy url release
-        if (apkUrl == null || apkUrl.isEmpty) {
-          debugPrint('GitHub Release $tagName does not contain an .apk asset yet.');
-          return null;
+        if (apkUrl == null) {
+          for (final asset in assets) {
+            final assetName = (asset['name'] as String? ?? '').toLowerCase();
+            if (assetName.endsWith('.apk')) {
+              apkUrl = asset['browser_download_url'] as String?;
+              apkSize = asset['size'] as int? ?? 0;
+              break;
+            }
+          }
         }
 
         // So sánh phiên bản
@@ -125,7 +108,7 @@ class UpdateService {
             tagName: tagName,
             title: title,
             notes: notes,
-            apkDownloadUrl: apkUrl,
+            apkDownloadUrl: apkUrl ?? 'https://github.com/$repoOwner/$repoName/releases/latest',
             apkSizeBytes: apkSize,
             publishedAt: publishedAt,
           );
@@ -135,6 +118,20 @@ class UpdateService {
       debugPrint('Error checking GitHub updates: $e');
     }
     return null;
+  }
+
+  /// Mở trình duyệt web trực tiếp đến trang GitHub Releases để người dùng tải nhanh, minh bạch
+  Future<bool> openReleasePage([String? url]) async {
+    final targetUrl = url ?? 'https://github.com/$repoOwner/$repoName/releases/latest';
+    try {
+      final bool? result = await _channel.invokeMethod<bool>('openUrl', {
+        'url': targetUrl,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('PlatformException during openUrl: ${e.message}');
+      return false;
+    }
   }
 
   /// Tải tệp APK từ GitHub với thanh tiến trình trực tiếp và kích hoạt cài đặt tức thì

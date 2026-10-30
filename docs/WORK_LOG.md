@@ -1049,3 +1049,30 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Bước tiếp theo (Next Steps):**
   - Commit mã nguồn và đẩy lên nhánh `main` của GitHub.
   - Cập nhật file cài đặt Release trên GitHub Releases.
+
+
+---
+
+### [2026-10-31 03:05:00] - Loại bỏ hoàn toàn Popup tự động cập nhật & Chuyển sang GitHub Releases trực tiếp
+* **Thời gian (Timestamp):** 2026-10-31 03:05:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Xử lý dứt điểm khiếu nại về tính năng cập nhật trực tiếp gây phiền toái, liên tục đòi cập nhật phiên bản cũ đè lên bản mới. Đã gỡ bỏ 100% cơ chế tự động pop-up hộp thoại cập nhật khi mở app trong `HomeScreen`. Chuyển đổi phương thức cập nhật sang cơ chế mở trực tiếp trang GitHub Releases trên trình duyệt web, giúp người dùng hoàn toàn chủ động và tránh mọi lỗi phân tích gói (Parse Error) hay chặn quyền cài đặt của Android.
+* **Chi tiết thay đổi (Changes Made):**
+  - **1. Gỡ bỏ Popup cập nhật tự động khi khởi động (`lib/screens/home.dart`)**:
+    + Xóa bỏ hoàn toàn Timer 3 giây và lệnh `UpdateDialog.show` trong `HomeScreen.initState()`.
+    + Ứng dụng khi mở lên sẽ lập tức sẵn sàng sử dụng, không còn bất kỳ hộp thoại nào làm phiền hay cản trở người dùng.
+  - **2. Bổ sung kênh mở URL hệ thống (`android/.../MainActivity.kt` & `lib/services/update_service.dart`)**:
+    + Thêm phương thức `openUrl` qua Android Intent native: mở trực tiếp liên kết GitHub Releases bằng trình duyệt mặc định (Chrome, Samsung Internet, v.v.) không cần phụ thuộc thư viện bên ngoài.
+    + Cập nhật `UpdateService.instance.openReleasePage()`: trỏ thẳng đến `https://github.com/YIZ006/ICNative/releases/latest`.
+    + Vô hiệu hóa mọi hành vi kiểm tra ngầm: `checkForUpdate` chỉ trả về thông tin khi người dùng bấm thủ công (`isManual == true`).
+  - **3. Cải tiến màn hình Cá Nhân & Hộp thoại Cập nhật (`lib/screens/profile_screen.dart`, `lib/screens/update_dialog.dart`)**:
+    + Chuyển thẻ thông tin phiên bản sang nút "Mở GitHub Releases 🌐": cho phép người dùng 1 chạm vào thẳng trang phát hành để xem các file APK/IPA mới nhất và tải về tùy ý.
+    + Thêm tùy chọn "🌐 Mở Trang Tải GitHub Releases" trong `UpdateDialog` nếu người dùng kiểm tra thủ công.
+  - **4. Kiểm thử & Đóng gói sản phẩm**:
+    + `flutter analyze --no-fatal-infos`: 0 lỗi, 0 cảnh báo.
+    + `flutter build apk --release`: Đóng gói thành công `Orbit-v1.4.0-clean-release.apk` (144.3 MB).
+* **Hiện trạng (Current State):**
+  - Ứng dụng không còn bất kỳ thông báo cập nhật tự động phiền toái nào.
+  - Trải nghiệm mở app mượt mà, sẵn sàng ngay lập tức.

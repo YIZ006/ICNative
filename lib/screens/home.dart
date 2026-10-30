@@ -10,12 +10,10 @@ import 'package:icnative/screens/friends_screen.dart';
 import 'package:icnative/screens/history.dart';
 import 'package:icnative/screens/preview.dart';
 import 'package:icnative/screens/profile_screen.dart';
-import 'package:icnative/screens/update_dialog.dart';
 import 'package:icnative/screens/widget_guide_screen.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/friend_service.dart';
 import 'package:icnative/services/locale_service.dart';
-import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/sizes.dart';
 import 'package:icnative/settings/theme_colors.dart';
@@ -199,15 +197,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final emojis = ['❤️', '🔥', '😂', '💖', '✨', '🐾', '🎉'];
       final emoji = emojis[random.nextInt(emojis.length)];
       _triggerReaction(friend.uid, emoji);
-    });
-
-    // Tự động kiểm tra bản cập nhật mới từ GitHub sau 3 giây
-    Future.delayed(const Duration(seconds: 3), () async {
-      if (!mounted) return;
-      final update = await UpdateService.instance.checkForUpdate();
-      if (update != null && mounted) {
-        UpdateDialog.show(context, update);
-      }
     });
   }
 

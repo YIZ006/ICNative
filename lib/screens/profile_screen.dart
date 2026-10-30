@@ -10,7 +10,6 @@ import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/update_service.dart';
 import 'qr_scanner_screen.dart';
-import 'update_dialog.dart';
 import 'widget_guide_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -258,33 +257,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 16),
 
-                // GitHub Auto-Update Card
+                // GitHub Releases & Update Card
                 _buildActionCard(
                   icon: Icons.system_update_alt_rounded,
-                  iconColor: OrbitColors.terracotta,
-                  title: 'Cập Nhật Ứng Dụng (GitHub)',
-                  subtitle: 'Phiên bản hiện tại: v${UpdateService.currentVersion}. Tự động tải bản mới từ GitHub Releases cực nhanh.',
-                  buttonText: 'Kiểm Tra Bản Mới ⚡',
+                  iconColor: OrbitColors.buttonPrimary,
+                  title: 'Phiên Bản & Bản Cập Nhật',
+                  subtitle: 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Mở trực tiếp trang phát hành GitHub để tải APK/IPA mới.',
+                  buttonText: 'Mở GitHub Releases 🌐',
                   onTap: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Đang kiểm tra bản cập nhật từ GitHub...'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    final update = await UpdateService.instance.checkForUpdate(isManual: true);
-                    if (!context.mounted) return;
-                    if (update != null) {
-                      UpdateDialog.show(context, update);
-                    } else {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('🎉 Bạn đang sử dụng phiên bản mới nhất!'),
-                          backgroundColor: OrbitColors.deepOlive,
-                        ),
-                      );
-                    }
+                    await UpdateService.instance.openReleasePage();
                   },
                 ),
 
