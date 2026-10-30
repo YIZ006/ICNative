@@ -693,3 +693,21 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
     - Khoi tao GitHub Release chinh thuc: ICNative v1.1.0 - Orbit Lens & Custom Avatar (Tag: v1.1.0, Target: main) tai duong dan: https://github.com/YIZ006/ICNative/releases/tag/v1.1.0.
     - Tai tep ICNative-v1.1.0.apk len muc Assets cua Release de nguoi dung co the tai ve truc tiep tren dien thoai di dong (MEIZU 21 Note / Android).
 * **Hien trang (Current State):** Ma nguon da duoc dong bo len GitHub va ban phat hanh v1.1.0 da duoc xuat ban san sang de tai xuong.
+
+
+---
+
+### [2026-10-30 17:20:00] - Xu Ly Loi INSTALL_PARSE_FAILED_NO_CERTIFICATES & Xuat Ban Ban ARM64 Toi Uu
+* **Thoi gian (Timestamp):** 2026-10-30 17:20:00 (GMT+7)
+* **Trang thai (Status):** [COMPLETED]
+* **Nguoi thuc hien (Author):** Antigravity Tech Lead Agent
+* **Tom tat cong viec (Summary):**
+  - **Phan tich nguyen nhan loi tren MEIZU 21 Note**:
+    - Loi `INSTALL_PARSE_FAILED_NO_CERTIFICATES: ... SHA-256 digest of contents did not verify` xuat phat tu viec goi APK da kien truc nang 272 MB bi gian doan/chua tai xong tren dien thoai qua ket noi di dong cham (11.9 KB/s nhu tren thanh thong bao).
+    - File chua du byte hoac bi dut gãy giua chung khien he thong Android tinh toan ma SHA-256 tung khoi 1MB khong khop voi chu ky v2 trong goi.
+  - **Bien dich & Ky so ban chuyen biet ARM64**:
+    - Thuc hien bien dich ban chuyen biet `app-arm64-v8a-debug.apk` danh rieng cho chip 64-bit cua MEIZU 21 Note (Snapdragon 8 Gen 2/3), giam kich thuoc tu 272 MB xuong con ~151 MB (nhe hon gan 50%).
+    - Ky so day du bang Android SDK build-tools `apksigner` voi cac tieu chuan chu ky v2 va v3 toan ven.
+  - **Phat hanh ban cap nhat Release v1.1.0**:
+    - Tai tep `ICNative-v1.1.0-arm64.apk` truc tiep len muc Assets cua GitHub Release v1.1.0 giup nguoi dung tai nhanh hon gap doi va khong bi loi chung chi hay rot mang.
+* **Hien trang (Current State):** San sang de nguoi dung tai ban ARM64 moi va huong dan ky truc tiep qua MT Manager neu can.
