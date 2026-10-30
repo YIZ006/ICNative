@@ -34,7 +34,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '1.3.0';
+  static const String currentVersion = '1.4.0';
   static const String repoOwner = 'YIZ006';
   static const String repoName = 'ICNative';
   static const MethodChannel _channel = MethodChannel('com.abom.utas.utas/app_updater');
