@@ -21,6 +21,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
+  void initState() {
+    super.initState();
+    UpdateService.instance.getInstalledVersion().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<UserProfile?>(
       valueListenable: AuthService.instance.currentUserNotifier,

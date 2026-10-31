@@ -35,10 +35,22 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '1.4.0';
+  static String _currentVersion = '1.4.0';
+  static String get currentVersion => _currentVersion;
   static const String repoOwner = 'YIZ006';
   static const String repoName = 'ICNative';
   static const MethodChannel _channel = MethodChannel('com.abom.utas.utas/app_updater');
+
+  /// Lấy phiên bản thực tế đã cài đặt trên thiết bị từ Android PackageManager
+  Future<String> getInstalledVersion() async {
+    try {
+      final String? ver = await _channel.invokeMethod<String>('getAppVersion');
+      if (ver != null && ver.isNotEmpty) {
+        _currentVersion = ver;
+      }
+    } catch (_) {}
+    return _currentVersion;
+  }
 
   /// Lưu trạng thái người dùng bấm "Để sau" để không làm phiền trong 24 giờ
   Future<void> dismissUpdate(String tagName) async {
@@ -102,8 +114,9 @@ class UpdateService {
           }
         }
 
+        final currentVer = await getInstalledVersion();
         // So sánh phiên bản
-        if (_isNewerVersion(tagName, currentVersion)) {
+        if (_isNewerVersion(tagName, currentVer)) {
           return GitHubReleaseInfo(
             tagName: tagName,
             title: title,
@@ -204,6 +217,11 @@ class UpdateService {
     try {
       final cleanRemote = remoteTag.replaceAll(RegExp(r'[^0-9.]'), '');
       final cleanCurrent = currentVer.replaceAll(RegExp(r'[^0-9.]'), '');
+
+      // Nếu 2 chuỗi version bằng nhau tuyệt đối (ví dụ: 1.4.0 == 1.4.0) -> Tuyệt đối KHÔNG phải bản mới
+      if (cleanRemote == cleanCurrent) {
+        return false;
+      }
 
       final rParts = cleanRemote.split('.').map((e) => int.tryParse(e) ?? 0).toList();
       final cParts = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();

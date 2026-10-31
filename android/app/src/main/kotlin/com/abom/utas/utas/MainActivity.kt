@@ -69,6 +69,19 @@ class MainActivity: FlutterActivity() {
                         result.error("INVALID_URL", "URL null", null)
                     }
                 }
+                "getAppVersion" -> {
+                    try {
+                        val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            context.packageManager.getPackageInfo(context.packageName, 0)
+                        }
+                        result.success(pInfo.versionName ?: "1.4.0")
+                    } catch (e: Exception) {
+                        result.success("1.4.0")
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

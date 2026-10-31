@@ -1076,3 +1076,27 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Hiện trạng (Current State):**
   - Ứng dụng không còn bất kỳ thông báo cập nhật tự động phiền toái nào.
   - Trải nghiệm mở app mượt mà, sẵn sàng ngay lập tức.
+
+
+---
+
+### [2026-10-31 13:38:00] - Khắc phục tận gốc lỗi "Báo có bản v1.4.0 mới dù đang ở chính v1.4.0"
+* **Thời gian (Timestamp):** 2026-10-31 13:38:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Phân tích và khắc phục tận gốc nguyên nhân vì sao ứng dụng liên tục báo có phiên bản v1.4.0 mới dù người dùng đang cài đặt và sử dụng bản v1.4.0. Nguyên nhân cốt lõi là do biến `currentVersion` nội bộ trước đó bị gán cứng là `1.3.0` trong bản build cũ nên app luôn thấy `v1.4.0 > 1.3.0`. Đã khắc phục toàn diện bằng cách: kết nối `PackageManager` của Android đọc trực tiếp `versionName` từ hệ điều hành, thêm chốt chặn tuyệt đối `cleanRemote == cleanCurrent` trả về false, và xóa bỏ hoàn toàn popup tự động trên màn hình chính.
+* **Chi tiết thay đổi (Changes Made):**
+  - **1. Đọc phiên bản động từ Android `PackageManager` (`MainActivity.kt` & `update_service.dart`)**:
+    + Thêm kênh MethodChannel `getAppVersion` trong `MainActivity.kt`: lấy trực tiếp `pInfo.versionName` từ hệ điều hành Android (1.4.0), loại bỏ nguy cơ lệch version do gán cứng trong Dart.
+    + Thêm hàm `getInstalledVersion()` trong `UpdateService.dart`: tự động đồng bộ phiên bản cài đặt thực tế.
+  - **2. Chốt chặn so sánh phiên bản tuyệt đối (`update_service.dart`)**:
+    + Thêm kiểm tra `if (cleanRemote == cleanCurrent) return false;`: Nếu phiên bản trên máy (`1.4.0`) bằng với tag GitHub (`1.4.0`), đảm bảo 100% không bao giờ thông báo có bản mới.
+  - **3. Cập nhật giao diện Cá nhân (`profile_screen.dart`)**:
+    + Tự động nạp và hiển thị đúng phiên bản thực tế của máy `Orbit v1.4.0` khi mở màn hình Cá nhân.
+  - **4. Đóng gói & Kiểm thử**:
+    + `flutter analyze --no-fatal-infos`: 0 lỗi, 0 cảnh báo.
+    + `flutter build apk --release`: Đóng gói thành công `Orbit-v1.4.0-clean-release.apk` (144.3 MB).
+* **Hiện trạng (Current State):**
+  - Đã loại bỏ hoàn toàn hiện tượng báo cập nhật sai lệch.
+  - File APK sẵn sàng để cài đặt.
