@@ -151,6 +151,44 @@ class StickerAnchoringEngine {
     );
   }
 
+  /// 0 VNĐ & 100% Offline: Nhận diện bối cảnh ảnh (ML Kit) và gợi ý Sticker phù hợp
+  /// Trả về metadata của sticker (assetPath, category, v.v.) mà KHÔNG can thiệp/phá vỡ ảnh gốc!
+  static Future<StickerMetadata?> detectAndSuggestSticker(String imagePath) async {
+    try {
+      final inputImage = InputImage.fromFilePath(imagePath);
+      final labeler = _getLabeler();
+      final labels = await labeler.processImage(inputImage);
+
+      StickerCategory category = StickerCategory.scene;
+      for (final label in labels) {
+        final text = label.label.toLowerCase();
+        final conf = label.confidence;
+        if (text.contains('cat') || text.contains('dog') || text.contains('pet') || text.contains('animal') || text.contains('fur') || text.contains('whiskers') || text.contains('mammal')) {
+          category = StickerCategory.animal;
+          break;
+        } else if (text.contains('food') || text.contains('cake') || text.contains('pizza') || text.contains('snack') || text.contains('sandwich') || text.contains('bread')) {
+          category = StickerCategory.food;
+          break;
+        } else if (text.contains('drink') || text.contains('cup') || text.contains('bottle') || text.contains('beverage') || text.contains('coffee')) {
+          category = StickerCategory.beverage;
+          break;
+        } else if (text.contains('laptop') || text.contains('computer') || text.contains('phone') || text.contains('keyboard') || text.contains('screen')) {
+          category = StickerCategory.electronics;
+          break;
+        } else if (text.contains('person') || text.contains('face') || text.contains('human') || text.contains('smile') || text.contains('man') || text.contains('woman')) {
+          if (conf > 0.5) {
+            category = StickerCategory.person;
+            break;
+          }
+        }
+      }
+      return pickStickerForCategory(category);
+    } catch (e) {
+      debugPrint('detectAndSuggestSticker Error: $e');
+      return null;
+    }
+  }
+
   static Future<String?> processAndMerge(String imagePath) async {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
@@ -294,8 +332,6 @@ class StickerAnchoringEngine {
     final rectWidth = args['rectWidth'] as int;
     final rectHeight = args['rectHeight'] as int;
     final preference = AnchorPreference.values[args['preference'] as int];
-    final isScene = args['isScene'] as bool? ?? false;
-    final mask = args['mask'] as List<double>?;
 
     // Single-pass: Decode original image in background isolate
     final originalBytes = File(originalPath).readAsBytesSync();
@@ -318,90 +354,8 @@ class StickerAnchoringEngine {
     // 3. Transform subject bounding box to cropped square coordinates
     final rectLeft = origRectLeft - cropX;
     final rectTop = origRectTop - cropY;
-    final img.Image baseImage = originalImage;
 
-    // 4. Fast Neon Glow Contour & Cyberpunk HUD Effect
-    if (!isScene && rectWidth > 0 && rectHeight > 0) {
-      final List<img.Point> edgePoints = [];
-
-      if (mask != null && mask.length == rectWidth * rectHeight) {
-        // Fast edge detection: step by 2 pixels to cut iterations by 75%
-        for (int y = 0; y < rectHeight; y += 2) {
-          for (int x = 0; x < rectWidth; x += 2) {
-            int idx = y * rectWidth + x;
-            if (mask[idx] > 0.5) {
-              bool isEdge = false;
-              if (x <= 1 || x >= rectWidth - 2 || y <= 1 || y >= rectHeight - 2) {
-                isEdge = true;
-              } else {
-                if (mask[y * rectWidth + (x - 2)] <= 0.5 ||
-                    mask[y * rectWidth + (x + 2)] <= 0.5 ||
-                    mask[(y - 2) * rectWidth + x] <= 0.5 ||
-                    mask[(y + 2) * rectWidth + x] <= 0.5) {
-                  isEdge = true;
-                }
-              }
-              if (isEdge) {
-                edgePoints.add(img.Point(rectLeft + x, rectTop + y));
-              }
-            }
-          }
-        }
-      } else {
-        // Fast contrast gradient fallback
-        const step = 4;
-        final xStart = rectLeft.clamp(0, originalImage.width - 1);
-        final xEnd = (rectLeft + rectWidth).clamp(0, originalImage.width - 3);
-        final yStart = rectTop.clamp(0, originalImage.height - 1);
-        final yEnd = (rectTop + rectHeight).clamp(0, originalImage.height - 3);
-
-        for (int y = yStart + 4; y < yEnd - 4; y += step) {
-          for (int x = xStart + 4; x < xEnd - 4; x += step) {
-            final p = originalImage.getPixel(x, y);
-            final pRight = originalImage.getPixel(x + 2, y);
-            final pDown = originalImage.getPixel(x, y + 2);
-
-            final diffR = (p.r - pRight.r).abs() + (p.r - pDown.r).abs();
-            final diffG = (p.g - pRight.g).abs() + (p.g - pDown.g).abs();
-            final diffB = (p.b - pRight.b).abs() + (p.b - pDown.b).abs();
-            final diff = (diffR + diffG + diffB) / 3;
-
-            if (diff > 35) {
-              edgePoints.add(img.Point(x, y));
-            }
-          }
-        }
-      }
-
-      // Fast Neon Glow Rendering (Sampled for lightning speed & smooth visuals)
-      for (int i = 0; i < edgePoints.length; i += 4) {
-        final pt = edgePoints[i];
-        img.fillCircle(originalImage, x: pt.x.toInt(), y: pt.y.toInt(), radius: 4, color: img.ColorRgba8(0, 255, 255, 90));
-      }
-      for (int i = 0; i < edgePoints.length; i += 2) {
-        final pt = edgePoints[i];
-        img.fillCircle(originalImage, x: pt.x.toInt(), y: pt.y.toInt(), radius: 2, color: img.ColorRgba8(240, 255, 255, 255));
-      }
-
-      // Cyberpunk Neon Corner Brackets [  ]
-      final cornerLen = (rectWidth * 0.18).clamp(24.0, 70.0).toInt();
-      void drawNeonLine(int x1, int y1, int x2, int y2) {
-        img.drawLine(baseImage, x1: x1, y1: y1, x2: x2, y2: y2, color: img.ColorRgba8(0, 255, 255, 80), thickness: 6);
-        img.drawLine(baseImage, x1: x1, y1: y1, x2: x2, y2: y2, color: img.ColorRgba8(240, 255, 255, 255), thickness: 2);
-      }
-
-      // 4 corners
-      drawNeonLine(rectLeft, rectTop, rectLeft + cornerLen, rectTop);
-      drawNeonLine(rectLeft, rectTop, rectLeft, rectTop + cornerLen);
-      drawNeonLine(rectLeft + rectWidth, rectTop, rectLeft + rectWidth - cornerLen, rectTop);
-      drawNeonLine(rectLeft + rectWidth, rectTop, rectLeft + rectWidth, rectTop + cornerLen);
-      drawNeonLine(rectLeft, rectTop + rectHeight, rectLeft + cornerLen, rectTop + rectHeight);
-      drawNeonLine(rectLeft, rectTop + rectHeight, rectLeft, rectTop + rectHeight - cornerLen);
-      drawNeonLine(rectLeft + rectWidth, rectTop + rectHeight, rectLeft + rectWidth - cornerLen, rectTop + rectHeight);
-      drawNeonLine(rectLeft + rectWidth, rectTop + rectHeight, rectLeft + rectWidth, rectTop + rectHeight - cornerLen);
-    }
-
-    // 5. Decode & Resize Sticker
+    // 4. Decode & Resize Sticker (Giữ nguyên ảnh gốc hoàn toàn sạch sẽ, không vẽ đè vạch neon hay chấm tròn)
     var stickerImage = img.decodeImage(stickerBytes);
     if (stickerImage == null) return originalPath;
 

@@ -93,13 +93,22 @@ class _ImagePreviewState extends State<ImagePreview> {
     CustomStickerService.instance.initialize();
   }
 
-  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gắn sticker meme phù hợp (0 VNĐ, Offline)
+  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gợi ý sticker meme phù hợp (0 VNĐ, Offline)
+  /// Giữ nguyên ảnh gốc hoàn hảo 100%, gán sticker gợi ý thành interactive overlay có thể di chuyển/xoay/xóa tùy thích!
   Future<void> _runAiContextualEngine() async {
     try {
-      final mergedPath = await StickerAnchoringEngine.processAndMerge(widget.imagePath);
-      if (mergedPath != null && mounted) {
+      final stickerMeta = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
+      if (stickerMeta != null && mounted) {
         setState(() {
-          currentImagePath = mergedPath;
+          activeCustomSticker = CustomStickerItem(
+            id: 'ai_suggest_${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Meme AI Gợi Ý',
+            path: stickerMeta.assetPath,
+            isAsset: true,
+          );
+          stickerPosition = const Offset(0.55, 0.15);
+          stickerScale = 0.95;
+          stickerRotation = 0.04;
         });
       }
     } catch (e) {
@@ -501,11 +510,16 @@ class _ImagePreviewState extends State<ImagePreview> {
                     borderRadius: BorderRadius.circular(24),
                     child: Stack(
                       children: [
-                        // 1. Anh da chup (da duoc AI tu dong gan meme theo ngu canh)
+                        // 1. Anh da chup (Ho tro thu phong 2 ngon tay InteractiveViewer)
                         Positioned.fill(
-                          child: Image.file(
-                            File(currentImagePath),
-                            fit: BoxFit.cover,
+                          child: InteractiveViewer(
+                            minScale: 1.0,
+                            maxScale: 4.0,
+                            clipBehavior: Clip.hardEdge,
+                            child: Image.file(
+                              File(currentImagePath),
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
 

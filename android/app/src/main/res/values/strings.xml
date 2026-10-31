@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Orbit</string>
-    <string name="widget_galaxy_title">Orbit - Thiên Hà Vệ Tinh (Kiểu 10)</string>
+    <string name="widget_galaxy_title">Orbit - Thiên Hà Vệ Tinh</string>
     <string name="widget_galaxy_desc">Widget thiên hà vệ tinh lướt êm ái quanh ảnh bạn bè</string>
-    <string name="widget_pebble_title">Orbit - Đá Cuội Gợn Sóng (Kiểu 3)</string>
+    <string name="widget_pebble_title">Orbit - Đá Cuội Gợn Sóng</string>
     <string name="widget_pebble_desc">Widget viên đá cuội hữu cơ với 3 tầng gợn sóng quan hệ</string>
 </resources>

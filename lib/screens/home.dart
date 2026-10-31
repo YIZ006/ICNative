@@ -763,39 +763,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildCentralLensAndOrbits({required double availW, required double availH}) {
     final double maxDimension = math.min(availW, availH);
 
-    // Kich thuoc dong cua ong kinh tron & ban kinh quy dao 3 tang (ho tro toi da 30 ban)
-    final double lensDiameter = (maxDimension * 0.40).clamp(150.0, 195.0);
+    // Kích thước ống kính tròn & Bán kính an toàn tuyệt đối
+    final double lensDiameter = (maxDimension * 0.36).clamp(130.0, 155.0);
+    final double lensRadius = lensDiameter / 2;
     final double boxSize = (math.min(availW - 28, availH - 20)).clamp(220.0, 380.0);
 
-    // Danh sach ban be (Demo 30 ban be hoac ban be that)
+    // Danh sách bạn bè (Demo hoặc bạn bè thật)
     final List<Friend> friends = _isDemoMode
         ? _demoFriendsList
         : FriendService.instance.friends;
 
-    // Khoang cach dong giua cac tang quy dao (Dynamic Adaptive Spacing)
-    // Cang nhieu ban be ket noi, khoang cach giua cac vong cang gian rong ra de khong bi day dac
-    final double gapInner;
-    final double gapOuter;
-    final double gapFar;
+    // Bán kính an toàn tối đa cho vòng ngoài cùng (Tầng 3):
+    // Đảm bảo toàn bộ 3 vòng quỹ đạo nằm gọn hoàn hảo bên trong khung hình (360px max)
+    // Tuyệt đối không bao giờ tràn ra ngoài màn hình và không đè lên Top bar hay Bottom toolbar!
+    final double maxSafeRadius = (availW / 2 - 28.0).clamp(142.0, 180.0);
 
-    if (friends.length <= 4) {
-      gapInner = 46.0;
-      gapOuter = 58.0;
-      gapFar = 58.0;
-    } else if (friends.length <= 11) {
-      gapInner = 52.0;
-      gapOuter = 74.0;
-      gapFar = 72.0;
-    } else {
-      // Tu 12 den 30 ban be: Gian rong thoai mai trong khong gian vu tru 2D!
-      gapInner = 58.0;
-      gapOuter = 88.0;
-      gapFar = 94.0;
-    }
-
-    final double rInner = lensDiameter / 2 + gapInner;
-    final double rOuter = rInner + gapOuter;
-    final double rFar = rOuter + gapFar;
+    // Bán kính 3 tầng quỹ đạo thông minh (Smart Dynamic Proximity):
+    // Tầng 1: Cận tâm - tương tác gần nhất (3-5 bạn thân nhất, vừa gửi ảnh, nhắn tin trong 24-48h)
+    // Tầng 2: Tầm trung - tương tác thường xuyên
+    // Tầng 3: Vòng ngoài - lâu không tương tác
+    final double rInner = lensRadius + (maxSafeRadius - lensRadius) * 0.35;
+    final double rOuter = lensRadius + (maxSafeRadius - lensRadius) * 0.68;
+    final double rFar = maxSafeRadius;
 
     // Tinh toan gia tri bien hinh cuc muot tu Tron sang Vuong
     final double morphT = _morphAnimation.value;
@@ -805,145 +794,232 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final double expandedControlsOpacity = ((morphT - 0.40) / 0.60).clamp(0.0, 1.0);
     final double badgeOpacity = (1.0 - morphT * 2.0).clamp(0.0, 1.0);
 
-    // Phan chia ban be vao 3 quy dao thien ha (ho tro toi da 30 nguoi)
+    // Phân tầng bạn bè theo mức độ tương tác gần nhất
     final List<_SatelliteItem> innerSatellites = [];
     final List<_SatelliteItem> outerSatellites = [];
     final List<_SatelliteItem> farSatellites = [];
 
     if (friends.isEmpty) {
-      // Chua co ban be: 1 ve tinh nut [+] them ban duy nhat
+      // Chưa có bạn bè: 1 nút [+] Thêm bạn ở Tầng 1
       innerSatellites.add(_SatelliteItem(
         id: 'add_friend',
         name: 'Thêm',
         initial: '+',
         isAddButton: true,
+        ringIndex: 1,
       ));
     } else if (friends.length <= 4) {
-      for (final f in friends) {
+      // 3-4 bạn thân nhất: Đều ở Tầng 1 với chỉ số tương tác cao
+      final demoReactions = [28, 21, 17, 14];
+      for (int i = 0; i < friends.length; i++) {
+        final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        innerSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        innerSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 1,
+          reactionCount: demoReactions[i % demoReactions.length],
+          lastActive: 'vừa xong',
+        ));
       }
-      innerSatellites.add(_SatelliteItem(id: 'add_friend', name: 'Thêm', initial: '+', isAddButton: true));
+      innerSatellites.add(_SatelliteItem(
+        id: 'add_friend',
+        name: 'Thêm',
+        initial: '+',
+        isAddButton: true,
+        ringIndex: 1,
+      ));
     } else if (friends.length <= 11) {
-      // 4 ban dau o vong trong
+      // Tầng 1 (Cận tâm): 4 bạn thân nhất (vừa tương tác 24-48h)
+      final demoReactionsTier1 = [28, 21, 17, 14];
       for (int i = 0; i < 4; i++) {
         final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        innerSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        innerSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 1,
+          reactionCount: demoReactionsTier1[i % demoReactionsTier1.length],
+          lastActive: i == 0 ? 'vừa xong' : '${(i + 1) * 2}h trước',
+        ));
       }
-      // Cac ban con lai o vong ngoai
+      // Tầng 2 (Tầm trung): Các bạn còn lại
+      final demoReactionsTier2 = [8, 6, 5, 4, 3, 3, 2];
       for (int i = 4; i < friends.length; i++) {
         final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        outerSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        outerSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 2,
+          reactionCount: demoReactionsTier2[(i - 4) % demoReactionsTier2.length],
+          lastActive: 'hôm qua',
+        ));
       }
-      outerSatellites.add(_SatelliteItem(id: 'add_friend', name: 'Thêm', initial: '+', isAddButton: true));
+      outerSatellites.add(_SatelliteItem(
+        id: 'add_friend',
+        name: 'Thêm',
+        initial: '+',
+        isAddButton: true,
+        ringIndex: 2,
+      ));
     } else {
-      // 12 den 30 ban be: Phan bo vao he thien ha 3 tang (5 inner, 9 outer, con lai vao far)
-      for (int i = 0; i < 5; i++) {
+      // >= 12 bạn: Hệ thiên hà 3 tầng hoàn chỉnh
+      // Tầng 1 (Cận tâm - Tương tác gần nhất): 4 bạn thân nhất
+      final demoReactionsTier1 = [28, 21, 17, 14];
+      for (int i = 0; i < 4; i++) {
         final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        innerSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        innerSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 1,
+          reactionCount: demoReactionsTier1[i % demoReactionsTier1.length],
+          lastActive: i == 0 ? 'vừa xong' : '${(i + 1) * 2}h trước',
+        ));
       }
-      for (int i = 5; i < math.min(friends.length, 14); i++) {
+      // Tầng 2 (Tầm trung): 8 bạn thường xuyên tương tác
+      final demoReactionsTier2 = [8, 7, 6, 5, 5, 4, 3, 3];
+      for (int i = 4; i < math.min(friends.length, 12); i++) {
         final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        outerSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        outerSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 2,
+          reactionCount: demoReactionsTier2[(i - 4) % demoReactionsTier2.length],
+          lastActive: 'hôm qua',
+        ));
       }
-      for (int i = 14; i < math.min(friends.length, 30); i++) {
+      // Tầng 3 (Vòng ngoài): Các bạn lâu không tương tác
+      for (int i = 12; i < math.min(friends.length, 25); i++) {
         final f = friends[i];
         final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        farSatellites.add(_SatelliteItem(id: f.uid, name: f.displayName, initial: initial));
+        farSatellites.add(_SatelliteItem(
+          id: f.uid,
+          name: f.displayName,
+          initial: initial,
+          ringIndex: 3,
+          reactionCount: (i % 3 == 0) ? 1 : 0,
+          lastActive: '1 tuần trước',
+        ));
       }
-      farSatellites.add(_SatelliteItem(id: 'add_friend', name: 'Thêm', initial: '+', isAddButton: true));
+      farSatellites.add(_SatelliteItem(
+        id: 'add_friend',
+        name: 'Thêm',
+        initial: '+',
+        isAddButton: true,
+        ringIndex: 3,
+      ));
     }
 
     final bool hasOuterOrbit = outerSatellites.isNotEmpty;
     final bool hasFarOrbit = farSatellites.isNotEmpty;
-    final double totalContainerSize = hasFarOrbit
-        ? (rFar * 2 + 100)
-        : (hasOuterOrbit ? (rOuter * 2 + 80) : (rInner * 2 + 80));
+    final double totalContainerSize = (rFar * 2 + 70.0).clamp(260.0, availW);
 
     return Center(
       child: GestureDetector(
-        onPanStart: (details) {
+        onScaleStart: (details) {
           if (isLensExpanded || morphT > 0.05) return;
           if (_springController.isAnimating) {
             _springController.stop();
           }
 
-          final RenderBox box = context.findRenderObject() as RenderBox;
-          final local = box.globalToLocal(details.globalPosition);
-          final cx = availW / 2;
-          final cy = availH / 2;
-          final dx = local.dx - cx;
-          final dy = local.dy - cy;
-          final dist = math.sqrt(dx * dx + dy * dy);
-
-          _isDragging = true;
-          // Nearest Euclidean Distance Ring Targeting:
-          // Xac dinh chinh xac tuyet doi vong gan ngon tay nhat theo khoang cach vat ly
-          final d1 = (dist - rInner).abs();
-          final d2 = hasOuterOrbit ? (dist - rOuter).abs() : double.infinity;
-          final d3 = hasFarOrbit ? (dist - rFar).abs() : double.infinity;
-
-          if (d3 < d2 && d3 < d1) {
-            _activeDragRing = 3;
-          } else if (d2 < d1) {
-            _activeDragRing = 2;
+          if (details.pointerCount >= 2) {
+            // Đặt gốc tỷ lệ thu phóng cho cử chỉ 2 ngón tay
+            _baseScale = _currentScale;
           } else {
-            _activeDragRing = 1;
-          }
+            // Chạm 1 ngón: Xác định tầng quỹ đạo gần nhất và chuẩn bị xoay / pan đàn hồi
+            final RenderBox box = context.findRenderObject() as RenderBox;
+            final local = box.globalToLocal(details.focalPoint);
+            final cx = availW / 2;
+            final cy = availH / 2;
+            final dx = local.dx - cx;
+            final dy = local.dy - cy;
+            final dist = math.sqrt(dx * dx + dy * dy);
 
-          _lastTouchAngle = math.atan2(local.dy - cy, local.dx - cx);
-          _lastTouchTime = DateTime.now();
+            _isDragging = true;
+            final d1 = (dist - rInner).abs();
+            final d2 = hasOuterOrbit ? (dist - rOuter).abs() : double.infinity;
+            final d3 = hasFarOrbit ? (dist - rFar).abs() : double.infinity;
+
+            if (d3 < d2 && d3 < d1) {
+              _activeDragRing = 3;
+            } else if (d2 < d1) {
+              _activeDragRing = 2;
+            } else {
+              _activeDragRing = 1;
+            }
+
+            _lastTouchAngle = math.atan2(dy, dx);
+            _lastTouchTime = DateTime.now();
+          }
         },
-        onPanUpdate: (details) {
+        onScaleUpdate: (details) {
           if (isLensExpanded || morphT > 0.05) return;
-          final RenderBox box = context.findRenderObject() as RenderBox;
-          final local = box.globalToLocal(details.globalPosition);
-          final cx = availW / 2;
-          final cy = availH / 2;
 
-          // 2D Elastic Universe Panning: Di chuyển sang trái/phải/lên/xuống/chéo
-          final double currentDist = _universePanOffset.distance;
-          final double resistance = 1.0 / (1.0 + currentDist / 220.0);
-          _universePanOffset += details.delta * (0.82 * resistance);
-
-          // Đồng thời quay vòng quỹ đạo theo góc ngón tay
-          final currentAngle = math.atan2(local.dy - cy, local.dx - cx);
-          double delta = currentAngle - _lastTouchAngle;
-          if (delta > math.pi) delta -= 2 * math.pi;
-          if (delta < -math.pi) delta += 2 * math.pi;
-
-          final now = DateTime.now();
-          final dt = (now.difference(_lastTouchTime).inMicroseconds) / 1000000.0;
-
-          if (_activeDragRing == 1) {
-            _angleInner += delta;
-            if (dt > 0.003) {
-              final instantV = (delta / dt).clamp(-16.0, 16.0);
-              _velocityInner = _velocityInner * 0.3 + instantV * 0.7;
-            }
-          } else if (_activeDragRing == 2) {
-            _angleOuter += delta;
-            if (dt > 0.003) {
-              final instantV = (delta / dt).clamp(-16.0, 16.0);
-              _velocityOuter = _velocityOuter * 0.3 + instantV * 0.7;
+          if (details.pointerCount >= 2) {
+            // CỬ CHỈ 2 NGÓN TAY: Thu phóng Camera ống kính cực mượt (Pinch to Zoom)
+            if (controller != null && controller!.value.isInitialized) {
+              final double targetScale = (_baseScale * details.scale).clamp(1.0, _maxZoomLevel);
+              if ((targetScale - _currentScale).abs() > 0.01) {
+                _currentScale = targetScale;
+                controller?.setZoomLevel(_currentScale);
+                setState(() {});
+              }
             }
           } else {
-            _angleFar += delta;
-            if (dt > 0.003) {
-              final instantV = (delta / dt).clamp(-16.0, 16.0);
-              _velocityFar = _velocityFar * 0.3 + instantV * 0.7;
-            }
-          }
+            // CỬ CHỈ 1 NGÓN TAY: 2D Elastic Universe Panning + Xoay vòng quỹ đạo
+            final RenderBox box = context.findRenderObject() as RenderBox;
+            final local = box.globalToLocal(details.focalPoint);
+            final cx = availW / 2;
+            final cy = availH / 2;
 
-          _lastTouchAngle = currentAngle;
-          _lastTouchTime = now;
-          _orbitNotifier.value = _angleInner;
+            // 2D Elastic Universe Panning: Di chuyển sang trái/phải/lên/xuống/chéo
+            final double currentDist = _universePanOffset.distance;
+            final double resistance = 1.0 / (1.0 + currentDist / 220.0);
+            _universePanOffset += details.focalPointDelta * (0.82 * resistance);
+
+            // Đồng thời quay vòng quỹ đạo theo góc ngón tay
+            final currentAngle = math.atan2(local.dy - cy, local.dx - cx);
+            double delta = currentAngle - _lastTouchAngle;
+            if (delta > math.pi) delta -= 2 * math.pi;
+            if (delta < -math.pi) delta += 2 * math.pi;
+
+            final now = DateTime.now();
+            final dt = (now.difference(_lastTouchTime).inMicroseconds) / 1000000.0;
+
+            if (_activeDragRing == 1) {
+              _angleInner += delta;
+              if (dt > 0.003) {
+                final instantV = (delta / dt).clamp(-16.0, 16.0);
+                _velocityInner = _velocityInner * 0.3 + instantV * 0.7;
+              }
+            } else if (_activeDragRing == 2) {
+              _angleOuter += delta;
+              if (dt > 0.003) {
+                final instantV = (delta / dt).clamp(-16.0, 16.0);
+                _velocityOuter = _velocityOuter * 0.3 + instantV * 0.7;
+              }
+            } else {
+              _angleFar += delta;
+              if (dt > 0.003) {
+                final instantV = (delta / dt).clamp(-16.0, 16.0);
+                _velocityFar = _velocityFar * 0.3 + instantV * 0.7;
+              }
+            }
+
+            _lastTouchAngle = currentAngle;
+            _lastTouchTime = now;
+            _orbitNotifier.value = _angleInner;
+          }
         },
-        onPanEnd: (details) {
+        onScaleEnd: (details) {
           if (isLensExpanded || morphT > 0.05) return;
           _isDragging = false;
           // Thả tay ra: Đàn hồi lò xo bật trở về vị trí trung tâm (0, 0)!
@@ -1380,128 +1456,205 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final bool isSelected = selectedRecipientName == item.name;
     final reactions = _friendReactions[item.id] ?? [];
 
-    return SizedBox(
-      width: 52,
-      height: 52,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          // 0. BIỂU TƯỢNG CẢM XÚC BAY LÊN TRÊN ĐẦU (Floating Reaction Emitter)
-          if (reactions.isNotEmpty)
-            ...reactions.map((r) => Positioned(
-                  top: -12,
-                  child: _FloatingReactionBubble(
-                    key: ValueKey(r.id),
-                    emoji: r.emoji,
-                    onComplete: () => _removeReaction(item.id, r.id),
-                  ),
-                )),
+    // Tầng 1 (Cận tâm): 52px (lớn nhất, sắc nét, có hào quang ánh kim, kèm badge số lần thả tim)
+    // Tầng 2 (Tầm trung): 40px (vừa vặn, viền olive đặc trưng)
+    // Tầng 3 (Vòng ngoài): 32px (nhỏ hơn, mờ nhẹ 0.80 tạo chiều sâu không gian)
+    final double avatarSize = ringIndex == 1 ? 52.0 : (ringIndex == 2 ? 40.0 : 32.0);
+    final double labelTop = avatarSize + 3.0;
+    final double labelMaxWidth = ringIndex == 1 ? 68.0 : (ringIndex == 2 ? 58.0 : 50.0);
+    final double labelFontSize = ringIndex == 1 ? 10.0 : (ringIndex == 2 ? 9.0 : 8.2);
+    final double initialFontSize = ringIndex == 1
+        ? (item.isAddButton ? 24.0 : 17.0)
+        : (ringIndex == 2 ? (item.isAddButton ? 20.0 : 14.0) : (item.isAddButton ? 16.0 : 11.5));
+    final double ringOpacity = ringIndex == 3 ? 0.80 : 1.0;
 
-          // 1. Avatar Tròn To (52px x 52px)
-          GestureDetector(
-            onPanDown: (_) {
-              // Khóa chính xác vòng quay khi chạm trực tiếp vào avatar trên vòng đó
-              _activeDragRing = ringIndex;
-            },
-            onDoubleTap: () {
-              if (!item.isAddButton) {
-                // Nhấp đúp thả tim / biểu tượng cảm xúc bay lên trên đầu
-                _triggerReaction(item.id, '❤️');
-              }
-            },
-            onTap: () {
-              if (item.isAddButton) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
-                );
-              } else {
-                setState(() {
-                  selectedRecipientName = isSelected ? null : item.name;
-                });
-              }
-            },
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: item.isAddButton ? OrbitColors.surfaceCard : OrbitColors.buttonPrimary,
-                border: Border.all(
-                  color: isSelected
-                      ? OrbitColors.terracotta
-                      : (item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.background),
-                  width: isSelected ? 3.5 : 2.4,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isSelected
-                        ? OrbitColors.terracotta.withValues(alpha: 0.5)
-                        : OrbitColors.deepOlive.withValues(alpha: 0.22),
-                    blurRadius: isSelected ? 14 : 7,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  item.initial,
-                  style: TextStyle(
-                    color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
-                    fontWeight: FontWeight.bold,
-                    fontSize: item.isAddButton ? 24 : 17,
-                  ),
-                ),
-              ),
-            ),
-          ),
+    return Opacity(
+      opacity: ringOpacity,
+      child: SizedBox(
+        width: avatarSize,
+        height: avatarSize,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            // 0. BIỂU TƯỢNG CẢM XÚC BAY LÊN TRÊN ĐẦU (Floating Reaction Emitter)
+            if (reactions.isNotEmpty)
+              ...reactions.map((r) => Positioned(
+                    top: -12,
+                    child: _FloatingReactionBubble(
+                      key: ValueKey(r.id),
+                      emoji: r.emoji,
+                      onComplete: () => _removeReaction(item.id, r.id),
+                    ),
+                  )),
 
-          // 2. Tên bạn bè bên dưới avatar (Nếu dài quá tự động để dấu ...)
-          if (!item.isAddButton)
-            Positioned(
-              top: 55,
-              child: GestureDetector(
-                onTap: () {
+            // 1. Avatar Tròn với Hiệu ứng Viền & Hào Quang riêng biệt cho từng tầng
+            GestureDetector(
+              onPanDown: (_) {
+                // Khóa chính xác vòng quay khi chạm trực tiếp vào avatar trên vòng đó
+                _activeDragRing = ringIndex;
+              },
+              onDoubleTap: () {
+                if (!item.isAddButton) {
+                  // Nhấp đúp thả tim / biểu tượng cảm xúc bay lên trên đầu
+                  _triggerReaction(item.id, '❤️');
+                }
+              },
+              onTap: () {
+                if (item.isAddButton) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+                  );
+                } else {
                   setState(() {
                     selectedRecipientName = isSelected ? null : item.name;
                   });
-                },
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 68),
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: OrbitColors.background.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected
-                          ? OrbitColors.terracotta
-                          : OrbitColors.buttonPrimary.withValues(alpha: 0.3),
-                      width: 0.8,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
+                }
+              },
+              child: Container(
+                width: avatarSize,
+                height: avatarSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: item.isAddButton ? OrbitColors.surfaceCard : OrbitColors.buttonPrimary,
+                  border: Border.all(
+                    color: isSelected
+                        ? OrbitColors.terracotta
+                        : (item.isAddButton
+                            ? OrbitColors.buttonPrimary
+                            : (ringIndex == 1 ? OrbitColors.khakiGold : OrbitColors.background)),
+                    width: isSelected
+                        ? 3.5
+                        : (ringIndex == 1 ? 2.6 : (ringIndex == 2 ? 2.0 : 1.4)),
                   ),
+                  boxShadow: ringIndex == 1
+                      ? [
+                          // Hào quang tỏa sáng Tầng 1 (Cận tâm - Tương tác gần nhất)
+                          BoxShadow(
+                            color: isSelected
+                                ? OrbitColors.terracotta.withValues(alpha: 0.65)
+                                : OrbitColors.khakiGold.withValues(alpha: 0.55),
+                            blurRadius: isSelected ? 16 : 13,
+                            spreadRadius: isSelected ? 2.5 : 1.8,
+                          ),
+                          BoxShadow(
+                            color: OrbitColors.deepOlive.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: isSelected
+                                ? OrbitColors.terracotta.withValues(alpha: 0.5)
+                                : OrbitColors.deepOlive.withValues(alpha: ringIndex == 2 ? 0.22 : 0.14),
+                            blurRadius: isSelected ? 12 : (ringIndex == 2 ? 7 : 4),
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                ),
+                child: Center(
                   child: Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+                    item.initial,
                     style: TextStyle(
-                      color: isSelected ? OrbitColors.terracotta : OrbitColors.deepOlive,
-                      fontSize: 10,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
+                      fontWeight: FontWeight.bold,
+                      fontSize: initialFontSize,
                     ),
                   ),
                 ),
               ),
             ),
-        ],
+
+            // 2. BADGE SỐ LẦN THẢ TYM / BIỂU CẢM (Tầng 1 cận tâm & Tầng 2 tầm trung)
+            if (!item.isAddButton && item.reactionCount > 0)
+              Positioned(
+                top: ringIndex == 1 ? -6 : -4,
+                right: ringIndex == 1 ? -6 : -4,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: ringIndex == 1 ? 5.5 : 4.0,
+                    vertical: ringIndex == 1 ? 1.5 : 1.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: OrbitColors.deepOlive,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: ringIndex == 1 ? OrbitColors.khakiGold : OrbitColors.buttonPrimary,
+                      width: ringIndex == 1 ? 1.2 : 0.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('❤️', style: TextStyle(fontSize: 8.5)),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${item.reactionCount}',
+                        style: TextStyle(
+                          color: OrbitColors.textLight,
+                          fontSize: ringIndex == 1 ? 8.5 : 7.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 3. Tên bạn bè bên dưới avatar (Nếu dài quá tự động để dấu ...)
+            if (!item.isAddButton)
+              Positioned(
+                top: labelTop,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      selectedRecipientName = isSelected ? null : item.name;
+                    });
+                  },
+                  child: Container(
+                    constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                    padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.2),
+                    decoration: BoxDecoration(
+                      color: OrbitColors.background.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: isSelected
+                            ? OrbitColors.terracotta
+                            : OrbitColors.buttonPrimary.withValues(alpha: 0.3),
+                        width: 0.8,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isSelected ? OrbitColors.terracotta : OrbitColors.deepOlive,
+                        fontSize: labelFontSize,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1705,12 +1858,18 @@ class _SatelliteItem {
   final String name;
   final String initial;
   final bool isAddButton;
+  final int ringIndex; // 1: Cận tâm (gần nhất), 2: Tầm trung, 3: Vòng ngoài
+  final int reactionCount; // Số lần thả tym/biểu cảm
+  final String? lastActive;
 
   _SatelliteItem({
     required this.id,
     required this.name,
     required this.initial,
     this.isAddButton = false,
+    this.ringIndex = 1,
+    this.reactionCount = 0,
+    this.lastActive,
   });
 }
 

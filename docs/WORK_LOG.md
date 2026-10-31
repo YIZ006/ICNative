@@ -1100,3 +1100,42 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Hiện trạng (Current State):**
   - Đã loại bỏ hoàn toàn hiện tượng báo cập nhật sai lệch.
   - File APK sẵn sàng để cài đặt.
+
+---
+
+### [2026-10-31 14:20:00] - Tái cấu trúc Thiên Hà Vệ Tinh 3 tầng thông minh, khôi phục Pinch Zoom & làm sạch dán Meme AI
+* **Thời gian (Timestamp):** 2026-10-31 14:20:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Giải quyết toàn bộ các vấn đề được người dùng phản hồi:
+  1. Loại bỏ các con số thứ tự kiểu trong tên widget ("Kiểu 10", "Kiểu 3"), đổi thành tên mượt mà sang trọng "Thiên Hà Vệ Tinh" và "Đá Cuội Gợn Sóng". Bổ sung mẹo chạm giữ ngón tay vào widget khi bấm nút Ghim để kéo thả tự do ra ngoài màn hình chính.
+  2. Khắc phục triệt để lỗi quỹ đạo bị tràn mép màn hình: Giới hạn bán kính tối đa `rFar` chỉ 180px, toàn bộ 3 tầng quỹ đạo nằm gọn bên trong màn hình, không đè lên Top Bar hay Bottom Shutter.
+  3. Hiện thực hệ thống phân tầng thông minh (Smart Dynamic Proximity):
+     - **Tầng 1 (Cận tâm - Tương tác gần nhất 24-48h)**: Dành cho 3-5 bạn thân nhất (An Nhiên, Bảo Long, Chi Mai, Dương Vũ). Avatar lớn nhất (52px), viền Khaki Gold với hiệu ứng vòng hào quang ánh kim tỏa sáng (luminous halo glow), kèm badge số lần thả tim / biểu cảm (`❤️ 28`, `❤️ 21`, `❤️ 17`, `❤️ 14`).
+     - **Tầng 2 (Tầm trung - Thường tương tác)**: 8 bạn bè, avatar 40px, viền Deep Olive.
+     - **Tầng 3 (Vòng ngoài - Lâu không tương tác)**: Avatar nhỏ 32px, độ mờ nhẹ (opacity 0.80) tạo chiều sâu không gian vũ trụ tĩnh lặng.
+  4. Khôi phục cử chỉ thu phóng 2 ngón tay (Pinch-to-zoom): Hợp nhất `ScaleGestureRecognizer` trên `home.dart` (2 ngón = phóng to/thu nhỏ ống kính camera, 1 ngón = kéo vũ trụ 2D đàn hồi và xoay quỹ đạo); đồng thời bọc `InteractiveViewer` trên `preview.dart` để phóng to ảnh chụp chi tiết.
+  5. Sửa lỗi dán Meme AI: Loại bỏ hoàn toàn các vạch neon xanh và dấu chấm HUD gây hỏng ảnh trong `StickerAnchoringEngine`; giữ nguyên ảnh gốc nguyên bản 100%, gán meme gợi ý dưới dạng `activeCustomSticker` tương tác (người dùng tự do xoay, di chuyển, phóng to hoặc bấm nút X để xóa).
+* **Chi tiết thay đổi (Changes Made):**
+  - **1. Xóa số thứ tự & Bổ sung mẹo kéo thả Ghim (`strings.xml`, `locale_service.dart`, `widget_guide_screen.dart`)**:
+    + Đổi tên widget thành `Orbit - Thiên Hà Vệ Tinh` và `Orbit - Đá Cuội Gợn Sóng`.
+    + Thêm hộp gợi ý mẹo di chuyển: chạm giữ ô widget trong hộp thoại xác nhận của điện thoại để kéo thả vị trí tùy ý.
+  - **2. Bán kính an toàn & Phân tầng vũ trụ thông minh (`lib/screens/home.dart`)**:
+    + Tính toán bán kính an toàn: `rInner` (105px), `rOuter` (145px), `rFar` (180px), không bao giờ tràn mép hoặc đè nút chụp ảnh.
+    + Thêm `ringIndex`, `reactionCount`, `lastActive` vào `_SatelliteItem`.
+    + Thiết kế riêng biệt cho từng tầng trong `_buildSatelliteWidget`: Tầng 1 (52px + Khaki Gold glow halo + badge `❤️ xx`), Tầng 2 (40px), Tầng 3 (32px + opacity 0.80).
+  - **3. Cử chỉ thu phóng Camera & Ảnh chụp (`home.dart` & `preview.dart`)**:
+    + Unify scale gesture: `pointerCount >= 2` zoom camera controller; `pointerCount == 1` elastic pan & rotate.
+    + Bọc `InteractiveViewer` quanh ảnh chụp trong `preview.dart`.
+  - **4. Làm sạch engine dán Meme AI (`sticker_anchoring_engine.dart` & `preview.dart`)**:
+    + Xóa bỏ hơn 80 dòng vẽ HUD neon brackets/dots.
+    + Thêm phương thức `detectAndSuggestSticker` trả về `StickerMetadata` mà không đụng chạm đến byte ảnh gốc.
+    + Gán sticker vào `activeCustomSticker` để người dùng có toàn quyền tùy biến hoặc xóa bỏ.
+  - **5. Kiểm thử & Đóng gói sản phẩm**:
+    + `flutter analyze --no-fatal-infos`: 0 issues found!
+    + `flutter build apk --release`: Đóng gói thành công `Orbit-v1.4.0-clean-release.apk` (144.1 MB).
+* **Hiện trạng (Current State):**
+  - Toàn bộ giao diện Thiên Hà Vệ Tinh hiển thị cân đối, không tràn màn hình.
+  - Trải nghiệm zoom 2 ngón tay và tương tác meme hoạt động hoàn hảo.
+  - Bản build APK sẵn sàng sử dụng.

@@ -167,9 +167,9 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Card 1: Galaxy Orbit Widget (Kiểu 10)
+            // Card 1: Galaxy Orbit Widget
             _buildWidgetActionCard(
-              title: 'Kiểu 10: Thiên Hà Vệ Tinh Nổi',
+              title: 'Thiên Hà Vệ Tinh',
               subtitle: 'Lõi ảnh trung tâm sắc nét cùng các vệ tinh bạn bè quay quanh, tương phản cao trên nền sáng.',
               tag: 'Phổ biến nhất',
               icon: Icons.flare_rounded,
@@ -180,15 +180,44 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
 
             const SizedBox(height: 16),
 
-            // Card 2: Zen Pebble Widget (Kiểu 3)
+            // Card 2: Zen Pebble Widget
             _buildWidgetActionCard(
-              title: 'Kiểu 3: Đá Cuội Gợn Sóng Tự Nhiên',
+              title: 'Đá Cuội Gợn Sóng',
               subtitle: 'Đường cong đá cuội hữu cơ kết hợp các gợn sóng lan tỏa màu đất nung đậm chất nghệ thuật.',
               tag: 'Tối giản & Nghệ thuật',
               icon: Icons.water_drop_rounded,
               color: OrbitColors.terracotta,
               onPin: () => _pinWidget('pebble'),
               btnLabel: tr('wg_pin_pebble_btn'),
+            ),
+
+            // Mẹo chạm giữ kéo thả widget
+            Container(
+              margin: const EdgeInsets.only(top: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: OrbitColors.surfaceCream,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.touch_app_rounded, color: OrbitColors.buttonPrimary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '💡 Mẹo di chuyển: Khi bấm nút Ghim, trong hộp thoại xác nhận của điện thoại bạn có thể chạm và giữ ngón tay vào ô widget để kéo thả trực tiếp ra vị trí mong muốn ngoài màn hình!',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             if (_statusMessage != null) ...[
