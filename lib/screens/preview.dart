@@ -59,16 +59,27 @@ class _ImagePreviewState extends State<ImagePreview> {
     }
 
     setState(() => isDetectingLocation = true);
-    final result = await LocationService.instance.getCurrentLocationWithSmartName();
+    String? statusMessage;
+    final result = await LocationService.instance.getCurrentLocationWithSmartName(
+      onStatusMessage: (msg) => statusMessage = msg,
+    );
     if (mounted) {
       setState(() {
         isDetectingLocation = false;
         if (result != null) {
           locationBadgeText = '📍 ${result.displayName}';
-        } else {
-          locationBadgeText = '📍 Vị trí hiện tại';
         }
       });
+      if (result == null && statusMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(statusMessage!),
+            backgroundColor: OrbitColors.buttonPrimary,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 

@@ -814,20 +814,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // 1. Profile Badge with Custom Avatar Support
-          ValueListenableBuilder<UserProfile?>(
-            valueListenable: AuthService.instance.currentUserNotifier,
-            builder: (context, user, _) {
-              final avatarPath = user?.avatarPath;
-              final hasCustomAvatar = avatarPath != null && File(avatarPath).existsSync();
+          Flexible(
+            flex: 4,
+            child: ValueListenableBuilder<UserProfile?>(
+              valueListenable: AuthService.instance.currentUserNotifier,
+              builder: (context, user, _) {
+                final avatarPath = user?.avatarPath;
+                final hasCustomAvatar = avatarPath != null && File(avatarPath).existsSync();
 
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (ctx) => const ProfileScreen()),
-                  );
-                },
-                child: Container(
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (ctx) => const ProfileScreen()),
+                    );
+                  },
+                  child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: OrbitColors.buttonPrimary,
@@ -864,12 +866,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        user?.displayName ?? 'Tôi',
-                        style: const TextStyle(
-                          color: OrbitColors.textLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          user?.displayName ?? 'Tôi',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: OrbitColors.textLight,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -877,22 +883,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                 ),
               );
             },
+            ),
           ),
+          const SizedBox(width: 8),
 
           // 2. Friends Hub Pill (Hiển thị số bạn bè & badge lời mời kết bạn nổi bật)
-          ValueListenableBuilder<List<FriendRequest>>(
-            valueListenable: FriendService.instance.pendingRequestsNotifier,
-            builder: (context, pendingList, _) {
-              final int pendingCount = pendingList.length;
+          Flexible(
+            flex: 5,
+            child: ValueListenableBuilder<List<FriendRequest>>(
+              valueListenable: FriendService.instance.pendingRequestsNotifier,
+              builder: (context, pendingList, _) {
+                final int pendingCount = pendingList.length;
 
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
-                  );
-                },
-                child: Container(
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+                    );
+                  },
+                  child: Container(
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
@@ -921,14 +931,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         size: 16,
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        pendingCount > 0
-                            ? 'Lời mời ($pendingCount)'
-                            : (friendsCount > 0 ? "${tr('friends_title')} ($friendsCount)" : tr('add_friend')),
-                        style: TextStyle(
-                          color: pendingCount > 0 ? const Color(0xFFFFD54F) : OrbitColors.textLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          pendingCount > 0
+                              ? 'Lời mời ($pendingCount)'
+                              : (friendsCount > 0 ? "Bạn bè ($friendsCount)" : tr('add_friend')),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: pendingCount > 0 ? const Color(0xFFFFD54F) : OrbitColors.textLight,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -936,7 +950,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                 ),
               );
             },
+            ),
           ),
+          const SizedBox(width: 8),
 
           // 2.5 Quick Widget Setup Guide Button
           GestureDetector(

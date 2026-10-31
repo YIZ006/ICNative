@@ -79,31 +79,36 @@ class LocationService {
     LandmarkPOI(name: 'Cầu Trường Tiền', lat: 16.4678, lng: 107.5919, radiusMeters: 300),
   ];
 
-  /// Yêu cầu cấp quyền và lấy tên địa điểm (Địa danh hoặc Tên đường)
-  Future<LocationResult?> getCurrentLocationWithSmartName() async {
+  /// Yêu cầu cấp quyền và lấy tên địa điểm (Địa danh hoặc Tên đường thực tế)
+  Future<LocationResult?> getCurrentLocationWithSmartName({
+    void Function(String message)? onStatusMessage,
+  }) async {
     try {
-      // 1. Kiểm tra & hỏi quyền vị trí
+      // 1. Kiểm tra dịch vụ định vị GPS
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        debugPrint('Location services are disabled.');
+        onStatusMessage?.call('Dịch vụ GPS đang tắt. Vui lòng bật vị trí.');
+        await Geolocator.openLocationSettings();
         return null;
       }
 
+      // 2. Kiểm tra & hỏi quyền vị trí chính thức
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          debugPrint('Location permission denied.');
+          onStatusMessage?.call('Cần cấp quyền vị trí để lấy tên địa điểm.');
           return null;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        debugPrint('Location permissions permanently denied.');
+        onStatusMessage?.call('Quyền vị trí bị từ chối vĩnh viễn. Vui lòng bật trong Cài đặt.');
+        await Geolocator.openAppSettings();
         return null;
       }
 
-      // 2. Lấy vị trí GPS hiện tại (nhanh & chính xác)
+      // 3. Lấy vị trí GPS hiện tại (nhanh & chính xác)
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -111,7 +116,7 @@ class LocationService {
         ),
       );
 
-      // 3. Ưu tiên 1: Quét xem có đang ở gần địa danh tiêu biểu nổi tiếng nào không
+      // 4. Ưu tiên 1: Quét xem có đang ở gần địa danh tiêu biểu nổi tiếng nào không
       final matchedLandmark = _findNearbyLandmark(position.latitude, position.longitude);
       if (matchedLandmark != null) {
         return LocationResult(
@@ -123,10 +128,9 @@ class LocationService {
         );
       }
 
-      // 4. Ưu tiên 2: Sử dụng Android Geocoder hệ thống (0 VNĐ, Native On-Device)
+      // 5. Ưu tiên 2: Sử dụng Geocoder hệ thống Native On-Device (0 VNĐ)
       try {
-        final geocoding = Geocoding();
-        final placemarks = await geocoding.placemarkFromCoordinates(
+        final placemarks = await Geocoding().placemarkFromCoordinates(
           position.latitude,
           position.longitude,
         );
@@ -134,13 +138,12 @@ class LocationService {
         if (placemarks.isNotEmpty) {
           final p = placemarks.first;
 
-          // Kiểm tra xem p.name có phải là tên toà nhà / địa danh / POI hay không
           final name = p.name?.trim();
           final street = p.thoroughfare?.trim();
           final subLocality = p.subLocality?.trim();
           final locality = p.locality?.trim();
+          final administrativeArea = p.administrativeArea?.trim();
 
-          // Nếu name khác với số nhà thuần túy và khác tên đường -> Đây là địa danh/tòa nhà
           final isNumericOnly = name != null && RegExp(r'^\d+[\w/-]*$').hasMatch(name);
           final isSpecialPoi = name != null &&
               name.isNotEmpty &&
@@ -150,8 +153,12 @@ class LocationService {
               !name.toLowerCase().startsWith('phố');
 
           if (isSpecialPoi) {
+            String fullDisplay = name;
+            if (subLocality != null && subLocality.isNotEmpty && !name.contains(subLocality)) {
+              fullDisplay = '$name, $subLocality';
+            }
             return LocationResult(
-              displayName: name,
+              displayName: fullDisplay,
               landmark: name,
               street: street,
               latitude: position.latitude,
@@ -160,7 +167,7 @@ class LocationService {
             );
           }
 
-          // Không gần địa danh: Hiển thị tên đường
+          // Hiển thị tên đường kèm Phường/Quận
           if (street != null && street.isNotEmpty) {
             final streetName = street.toLowerCase().startsWith('đường') ||
                     street.toLowerCase().startsWith('phố') ||
@@ -168,8 +175,12 @@ class LocationService {
                 ? street
                 : 'Đường $street';
 
+            final areaSuffix = (subLocality != null && subLocality.isNotEmpty)
+                ? ', $subLocality'
+                : (locality != null && locality.isNotEmpty ? ', $locality' : '');
+
             return LocationResult(
-              displayName: streetName,
+              displayName: '$streetName$areaSuffix',
               street: streetName,
               latitude: position.latitude,
               longitude: position.longitude,
@@ -177,14 +188,15 @@ class LocationService {
             );
           }
 
-          // Nếu không có tên đường: Hiển thị phường/quận
-          final fallbackArea = (subLocality != null && subLocality.isNotEmpty)
-              ? subLocality
-              : (locality ?? 'Việt Nam');
+          // Không có tên đường: hiển thị Phường/Quận/Thành phố
+          final parts = [subLocality, locality, administrativeArea]
+              .whereType<String>().where((s) => s.isNotEmpty)
+              .toList();
+          final areaName = parts.isNotEmpty ? parts.take(2).join(', ') : 'Việt Nam';
 
           return LocationResult(
-            displayName: fallbackArea,
-            street: fallbackArea,
+            displayName: areaName,
+            street: areaName,
             latitude: position.latitude,
             longitude: position.longitude,
             isLandmark: false,
@@ -194,15 +206,18 @@ class LocationService {
         debugPrint('Geocoder error: $geocodeErr');
       }
 
-      // Fallback nếu không geocode được: Toạ độ đẹp
+      // Fallback khi offline: Toạ độ GPS gọn gàng
+      final latStr = position.latitude.toStringAsFixed(2);
+      final lngStr = position.longitude.toStringAsFixed(2);
       return LocationResult(
-        displayName: 'Vị trí hiện tại',
+        displayName: 'GPS: $latStr, $lngStr',
         latitude: position.latitude,
         longitude: position.longitude,
         isLandmark: false,
       );
     } catch (e) {
       debugPrint('Get location error: $e');
+      onStatusMessage?.call('Lỗi khi lấy vị trí: $e');
       return null;
     }
   }

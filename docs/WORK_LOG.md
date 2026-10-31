@@ -5,6 +5,28 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-10-31 21:30:00] - Khắc phục lỗi tràn viền Top Bar, thiếu tệp Meme Asset và cơ chế cấp quyền vị trí thực tế
+* **Thời gian (Timestamp):** 2026-10-31 21:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục dứt điểm 3 vấn đề người dùng phản hồi kèm ảnh chụp màn hình kiểm thử thực tế:
+  1. **Lỗi tràn viền Top Bar (`RIGHT OVERFLOWED`):** Bọc các Pill Profile và Friends Hub bằng `Flexible` kèm `TextOverflow.ellipsis`, rút gọn nhãn hiển thị thành `Bạn bè ($friendsCount)` thay vì cụm từ dài vượt chiều rộng màn hình.
+  2. **Lỗi thiếu asset meme (`Unable to load asset: "assets/memes/meme_scene.png"`):** Loại bỏ hoàn toàn các đường dẫn tĩnh ảo không tồn tại (`meme_scene.png`, `meme_food.png`, `meme_drink.png`). Ánh xạ 100% các nhóm bối cảnh sang 115 meme thực tế có sẵn (`capybaraMemes`, `funnyMemes`, `catMemes`).
+  3. **Cơ chế cấp quyền và lấy tên địa danh/tên đường thực tế:** Khi bấm "Gán địa điểm", hệ thống kiểm tra trạng thái bật/tắt GPS và quyền vị trí hệ thống (`Geolocator.requestPermission()`). Nếu thiếu quyền hoặc GPS tắt, hiển thị SnackBar hướng dẫn cụ thể thay vì tự ý gán chuỗi giả định "Vị trí hiện tại". Khi có GPS, sử dụng Geocoder native để lấy địa danh nổi tiếng hoặc tên đường/phường/quận chi tiết.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/screens/home.dart`: Bọc Pill Profile và Friends Hub bằng `Flexible` kết hợp `TextOverflow.ellipsis` và `maxLines: 1`, đảm bảo không bao giờ bị tràn layout trên màn hình hẹp.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Thay thế các asset giả định bằng kho 115 meme có thật (`capybaraMemes`, `funnyMemes`), đảm bảo mọi bức ảnh chụp đều tải đúng tệp meme hợp lệ.
+  - [MODIFY] `lib/services/location_service.dart`: Nâng cấp hàm `getCurrentLocationWithSmartName` hỗ trợ callback thông báo trạng thái, tự động yêu cầu quyền vị trí và giải mã địa chỉ chi tiết theo cấp đường/phường/quận.
+  - [MODIFY] `lib/screens/preview.dart`: Tích hợp xử lý thông báo cấp quyền và bật GPS qua SnackBar khi người dùng bấm nút "Gán địa điểm".
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze` đạt 0 lỗi (No issues found).
+* **Bước tiếp theo (Next Steps):**
+  - Commit và đẩy mã nguồn lên nhánh chính GitHub.
+  - Báo cáo kết quả chi tiết tới người dùng.
+
+---
+
 ### [2026-10-31 21:00:00] - Sửa triệt để 5 lỗi từ video kiểm thử: Kẹt Camera Cold Start, Trắng mờ/Xám đặc xem trước ảnh, Đổi sticker, Xung đột layout và Crash AI Gene Sticker Meme
 * **Thời gian (Timestamp):** 2026-10-31 21:00:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

@@ -81,28 +81,31 @@ class StickerAnchoringEngine {
           bitePoint: const ui.Offset(0.5, 0.85),
         );
       case StickerCategory.food:
-        return const StickerMetadata(
-          id: 'food_bite',
-          assetPath: 'assets/memes/meme_food.png',
+        final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
+        return StickerMetadata(
+          id: 'food_capybara',
+          assetPath: path,
           category: StickerCategory.food,
           preference: AnchorPreference.topEdge,
-          bitePoint: ui.Offset(0.5, 0.9),
+          bitePoint: const ui.Offset(0.5, 0.9),
         );
       case StickerCategory.beverage:
-        return const StickerMetadata(
-          id: 'drink_hug',
-          assetPath: 'assets/memes/meme_drink.png',
+        final path = funnyMemes[rand.nextInt(funnyMemes.length)];
+        return StickerMetadata(
+          id: 'drink_react',
+          assetPath: path,
           category: StickerCategory.beverage,
           preference: AnchorPreference.center,
-          bitePoint: ui.Offset(0.5, 0.5),
+          bitePoint: const ui.Offset(0.5, 0.5),
         );
       case StickerCategory.scene:
-        return const StickerMetadata(
-          id: 'scene_overlay',
-          assetPath: 'assets/memes/meme_scene.png',
+        final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
+        return StickerMetadata(
+          id: 'scene_capybara',
+          assetPath: path,
           category: StickerCategory.scene,
           preference: AnchorPreference.bottomScene,
-          bitePoint: ui.Offset(0.5, 1.0),
+          bitePoint: const ui.Offset(0.5, 1.0),
         );
       case StickerCategory.general:
         final all = [...funnyMemes, ...catMemes];
