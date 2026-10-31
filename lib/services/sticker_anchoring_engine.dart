@@ -17,6 +17,7 @@ class StickerMetadata {
   final StickerCategory category;
   final AnchorPreference preference;
   final ui.Offset bitePoint; // 0.0 to 1.0
+  final ui.Offset? detectedAnchorOffset;
 
   const StickerMetadata({
     required this.id,
@@ -24,7 +25,26 @@ class StickerMetadata {
     required this.category,
     required this.preference,
     required this.bitePoint,
+    this.detectedAnchorOffset,
   });
+
+  StickerMetadata copyWith({
+    String? id,
+    String? assetPath,
+    StickerCategory? category,
+    AnchorPreference? preference,
+    ui.Offset? bitePoint,
+    ui.Offset? detectedAnchorOffset,
+  }) {
+    return StickerMetadata(
+      id: id ?? this.id,
+      assetPath: assetPath ?? this.assetPath,
+      category: category ?? this.category,
+      preference: preference ?? this.preference,
+      bitePoint: bitePoint ?? this.bitePoint,
+      detectedAnchorOffset: detectedAnchorOffset ?? this.detectedAnchorOffset,
+    );
+  }
 }
 
 class StickerAnchoringEngine {
@@ -53,25 +73,18 @@ class StickerAnchoringEngine {
   static StickerMetadata pickStickerForCategory(StickerCategory category) {
     final rand = math.Random();
     switch (category) {
-      case StickerCategory.electronics:
+      case StickerCategory.animal:
+        // Động vật, thú cưng, chó mèo -> Chọn từ kho 29 meme mèo bựa & cute
         final path = catMemes[rand.nextInt(catMemes.length)];
         return StickerMetadata(
-          id: 'electronics_cat',
-          assetPath: path,
-          category: StickerCategory.electronics,
-          preference: AnchorPreference.topEdge,
-          bitePoint: const ui.Offset(0.5, 0.85),
-        );
-      case StickerCategory.animal:
-        final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
-        return StickerMetadata(
-          id: 'animal_capybara',
+          id: 'animal_cat',
           assetPath: path,
           category: StickerCategory.animal,
           preference: AnchorPreference.topEdge,
           bitePoint: const ui.Offset(0.5, 0.85),
         );
       case StickerCategory.person:
+        // Con người, khuôn mặt, selfie -> Chọn từ kho 64 meme biểu cảm hài hước
         final path = funnyMemes[rand.nextInt(funnyMemes.length)];
         return StickerMetadata(
           id: 'person_funny',
@@ -81,24 +94,39 @@ class StickerAnchoringEngine {
           bitePoint: const ui.Offset(0.5, 0.85),
         );
       case StickerCategory.food:
-        final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
+        // Đồ ăn -> Chọn từ các meme thèm ăn, há miệng háo hức trong funnyMemes & catMemes
+        final foodPool = [...funnyMemes, ...catMemes];
+        final path = foodPool[rand.nextInt(foodPool.length)];
         return StickerMetadata(
-          id: 'food_capybara',
+          id: 'food_meme',
           assetPath: path,
           category: StickerCategory.food,
           preference: AnchorPreference.topEdge,
           bitePoint: const ui.Offset(0.5, 0.9),
         );
       case StickerCategory.beverage:
-        final path = funnyMemes[rand.nextInt(funnyMemes.length)];
+        // Đồ uống -> Chọn từ funnyMemes & catMemes
+        final drinkPool = [...funnyMemes, ...catMemes];
+        final path = drinkPool[rand.nextInt(drinkPool.length)];
         return StickerMetadata(
-          id: 'drink_react',
+          id: 'drink_meme',
           assetPath: path,
           category: StickerCategory.beverage,
           preference: AnchorPreference.center,
           bitePoint: const ui.Offset(0.5, 0.5),
         );
+      case StickerCategory.electronics:
+        // Công nghệ, laptop, máy tính, điện thoại -> Meme mèo gõ phím, công nghệ
+        final path = catMemes[rand.nextInt(catMemes.length)];
+        return StickerMetadata(
+          id: 'tech_cat',
+          assetPath: path,
+          category: StickerCategory.electronics,
+          preference: AnchorPreference.topEdge,
+          bitePoint: const ui.Offset(0.5, 0.85),
+        );
       case StickerCategory.scene:
+        // KHÔNG CÓ VẬT THỂ RÕ RÀNG -> Chụp phong cảnh thư giãn -> Capybara chill ngâm bồn, đội cam
         final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
         return StickerMetadata(
           id: 'scene_capybara',
@@ -108,8 +136,9 @@ class StickerAnchoringEngine {
           bitePoint: const ui.Offset(0.5, 1.0),
         );
       case StickerCategory.general:
-        final all = [...funnyMemes, ...catMemes];
-        final path = all[rand.nextInt(all.length)];
+        // CÓ VẬT THỂ RÕ RÀNG NHƯNG LÀ ĐỒ VẬT KHÁC (móc khóa, bàn làm việc, đồ chơi, sách vở...)
+        // -> Chọn ngẫu nhiên phong phú từ toàn bộ 115 meme (Mèo, Capybara, Reaction)
+        final path = allMemes[rand.nextInt(allMemes.length)];
         return StickerMetadata(
           id: 'general_meme',
           assetPath: path,
@@ -154,38 +183,109 @@ class StickerAnchoringEngine {
     );
   }
 
-  /// 0 VNĐ & 100% Offline: Nhận diện bối cảnh ảnh (ML Kit) và gợi ý Sticker phù hợp
-  /// Trả về metadata của sticker (assetPath, category, v.v.) mà KHÔNG can thiệp/phá vỡ ảnh gốc!
+  /// 0 VNĐ & 100% Offline: Phân tích bối cảnh theo tình huống & phân biệt vật thể rõ ràng vs phong cảnh
+  /// - Nếu có vật thể rõ ràng (> 8% diện tích): Nhận diện cụ thể (thú cưng, người, đồ ăn, nước uống, laptop, đồ chơi/đồ vật)
+  /// - Nếu không có vật thể rõ ràng: Xếp vào chụp phong cảnh (Scene Mode - Capybara chill)
   static Future<StickerMetadata?> detectAndSuggestSticker(String imagePath) async {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
-      final labeler = _getLabeler();
-      final labels = await labeler.processImage(inputImage);
 
-      StickerCategory category = StickerCategory.scene;
-      for (final label in labels) {
-        final text = label.label.toLowerCase();
-        final conf = label.confidence;
-        if (text.contains('cat') || text.contains('dog') || text.contains('pet') || text.contains('animal') || text.contains('fur') || text.contains('whiskers') || text.contains('mammal')) {
-          category = StickerCategory.animal;
-          break;
-        } else if (text.contains('food') || text.contains('cake') || text.contains('pizza') || text.contains('snack') || text.contains('sandwich') || text.contains('bread')) {
-          category = StickerCategory.food;
-          break;
-        } else if (text.contains('drink') || text.contains('cup') || text.contains('bottle') || text.contains('beverage') || text.contains('coffee')) {
-          category = StickerCategory.beverage;
-          break;
-        } else if (text.contains('laptop') || text.contains('computer') || text.contains('phone') || text.contains('keyboard') || text.contains('screen')) {
-          category = StickerCategory.electronics;
-          break;
-        } else if (text.contains('person') || text.contains('face') || text.contains('human') || text.contains('smile') || text.contains('man') || text.contains('woman')) {
-          if (conf > 0.5) {
-            category = StickerCategory.person;
+      // Đọc kích thước ảnh nhanh qua Skia
+      final bytes = await File(imagePath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final double origW = frame.image.width.toDouble();
+      final double origH = frame.image.height.toDouble();
+      frame.image.dispose();
+      codec.dispose();
+
+      final double imageArea = origW * origH;
+
+      // 1. Chạy song song ObjectDetector và ImageLabeler
+      final detectorFuture = _getObjectDetector().processImage(inputImage);
+      final labelerFuture = _getLabeler().processImage(inputImage);
+
+      final results = await Future.wait([
+        detectorFuture.then<dynamic>((v) => v).catchError((_) => <DetectedObject>[]),
+        labelerFuture.then<dynamic>((v) => v).catchError((_) => <ImageLabel>[]),
+      ]);
+
+      final objects = (results[0] as List<DetectedObject>?) ?? [];
+      final labels = (results[1] as List<ImageLabel>?) ?? [];
+
+      // 2. Tìm vật thể lớn nhất trong khung hình
+      Rect? targetRect;
+      double maxArea = 0;
+      for (final obj in objects) {
+        final area = (obj.boundingBox.width * obj.boundingBox.height).toDouble();
+        if (area > maxArea) {
+          maxArea = area;
+          targetRect = obj.boundingBox;
+        }
+      }
+
+      StickerCategory category;
+
+      // 3. Phân biệt chính xác: Có vật thể rõ ràng (> 8% diện tích ảnh) vs Không có vật thể (Chụp phong cảnh)
+      final bool hasClearObject = targetRect != null && imageArea > 0 && (maxArea / imageArea) > 0.08;
+
+      if (!hasClearObject) {
+        // KHÔNG CÓ VẬT THỂ RÕ RÀNG -> Chụp phong cảnh (Scene Mode)
+        category = StickerCategory.scene;
+      } else {
+        // CÓ VẬT THỂ RÕ RÀNG -> Mặc định là vật thể chung (general - đa dạng 115 meme), sau đó rà soát nhãn chi tiết
+        category = StickerCategory.general;
+        bool hasPerson = false;
+
+        for (final label in labels) {
+          final text = label.label.toLowerCase();
+          final conf = label.confidence;
+
+          // Nhận diện Con người / Khuôn mặt
+          if (text == 'person' || text == 'face' || text == 'human' || text == 'man' || text == 'woman' || text == 'boy' || text == 'girl' || RegExp(r'\b(hair|head|smile)\b').hasMatch(text)) {
+            if (conf > 0.5) hasPerson = true;
+          }
+
+          // Nhận diện Đồ ăn
+          if (text.contains('food') || text.contains('cake') || text.contains('donut') || text.contains('apple') || text.contains('banana') || text.contains('sandwich') || text.contains('pizza') || text.contains('hot dog') || text.contains('bread') || text.contains('snack') || text.contains('noodle') || text.contains('meat') || text.contains('fruit')) {
+            category = StickerCategory.food;
+            break;
+          }
+          // Nhận diện Đồ uống
+          else if (text.contains('drink') || text.contains('cup') || text.contains('bottle') || (text.contains('glass') && !text.contains('sunglass') && !text.contains('eyeglass')) || text.contains('liquid') || text.contains('beverage') || text.contains('beer') || text.contains('coffee') || text.contains('tea')) {
+            category = StickerCategory.beverage;
+            break;
+          }
+          // Nhận diện Thú cưng / Động vật
+          else if (text.contains('animal') || text.contains('cat') || text.contains('dog') || text.contains('bird') || text.contains('pet') || text.contains('bear') || text.contains('mammal') || text.contains('carnivore') || text.contains('felidae') || text.contains('canidae') || text.contains('whiskers') || text.contains('fur')) {
+            category = StickerCategory.animal;
+            break;
+          }
+          // Nhận diện Thiết bị điện tử / Công nghệ
+          else if (text.contains('laptop') || text.contains('computer') || text.contains('phone') || text.contains('keyboard') || text.contains('mouse') || text.contains('screen') || text.contains('electronic') || text.contains('netbook') || text.contains('technology') || text.contains('gadget') || text.contains('hardware') || text.contains('monitor') || text.contains('display')) {
+            category = StickerCategory.electronics;
             break;
           }
         }
+
+        if (hasPerson) {
+          category = StickerCategory.person;
+        }
       }
-      return pickStickerForCategory(category);
+
+      final metadata = pickStickerForCategory(category);
+
+      // 4. Nếu có vật thể rõ ràng, tính toán tọa độ neo tự động bám theo đỉnh vật thể
+      ui.Offset? anchorOffset;
+      if (hasClearObject && origW > 0 && origH > 0) {
+        final double normX = ((targetRect.center.dx - (origW * 0.16)) / origW).clamp(0.06, 0.65);
+        final double normY = ((targetRect.top - (origH * 0.16)) / origH).clamp(0.06, 0.45);
+        anchorOffset = ui.Offset(normX, normY);
+      }
+
+      return metadata.copyWith(
+        detectedAnchorOffset: anchorOffset ?? const ui.Offset(0.08, 0.35),
+      );
     } catch (e) {
       debugPrint('detectAndSuggestSticker Error: $e');
       return null;

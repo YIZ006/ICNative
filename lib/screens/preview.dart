@@ -116,8 +116,8 @@ class _ImagePreviewState extends State<ImagePreview> {
             title: suggested.id,
             isAsset: true,
           );
-          // Định vị sticker mặc định an toàn bên trên thanh nhập ghi chú
-          stickerPosition = const Offset(0.08, 0.35);
+          // Tự động neo sticker theo tọa độ vật thể phát hiện được (hoặc vị trí an toàn)
+          stickerPosition = suggested.detectedAnchorOffset ?? const Offset(0.08, 0.35);
           stickerScale = 1.0;
           stickerRotation = 0.04;
         });

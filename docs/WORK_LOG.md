@@ -5,6 +5,34 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-10-31 21:50:00] - Khôi phục toàn diện logic phân tích tình huống On-Device AI và phân biệt rõ ràng vật thể vs phong cảnh
+* **Thời gian (Timestamp):** 2026-10-31 21:50:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Giải quyết triệt để vấn đề "chụp ảnh nào cũng chỉ hiện mỗi 1 con Capybara":
+  1. **Định nghĩa phân loại chuẩn xác theo chỉ đạo người dùng:**
+     - **Có vật thể rõ ràng (> 8% diện tích ảnh):** Chạy phân tích nhận diện chuyên sâu (Thú cưng/Mèo, Người/Biểu cảm, Đồ ăn, Nước uống, Laptop/Công nghệ, hoặc Đồ vật khác trên bàn như móc khóa/đồ chơi).
+     - **Không có vật thể rõ ràng:** Được xác định là **Chụp phong cảnh (Scene Mode)** ➔ Gắn meme Capybara chill ngâm bồn/đội cam thư giãn ngoài trời.
+  2. **Tái phân bổ kho Meme 115 ảnh đúng ngữ cảnh:**
+     - Chó mèo/Thú cưng: Kho 29 Meme Mèo (`catMemes`).
+     - Người/Selfie: Kho 64 Meme biểu cảm hài hước (`funnyMemes`).
+     - Đồ ăn/Nước uống: Kho meme thèm ăn/uống (`funnyMemes` + `catMemes`).
+     - Công nghệ/Máy tính: Meme mèo gõ phím (`catMemes`).
+     - Đồ vật chung/Móc khóa/Bàn làm việc: Bốc ngẫu nhiên phong phú từ **toàn bộ 115 meme**.
+     - Phong cảnh: Kho 22 Capybara chill (`capybaraMemes`).
+  3. **Tọa độ neo tự động:** Nếu phát hiện vật thể, meme tự động được neo bám trên đỉnh vật thể đó.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Bổ sung `detectedAnchorOffset` vào `StickerMetadata`; cài đặt thuật toán kiểm tra `hasClearObject = (maxArea / imageArea) > 0.08` trong `detectAndSuggestSticker`; cập nhật `pickStickerForCategory` phân bổ đúng 115 meme theo ngữ cảnh.
+  - [MODIFY] `lib/screens/preview.dart`: Tự động neo sticker theo `suggested.detectedAnchorOffset` khi AI phân tích xong ảnh.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze` đạt 0 lỗi (No issues found).
+* **Bước tiếp theo (Next Steps):**
+  - Đẩy commit lên nhánh `main` GitHub.
+  - Báo cáo kết quả và hướng dẫn người dùng trải nghiệm.
+
+---
+
 ### [2026-10-31 21:30:00] - Khắc phục lỗi tràn viền Top Bar, thiếu tệp Meme Asset và cơ chế cấp quyền vị trí thực tế
 * **Thời gian (Timestamp):** 2026-10-31 21:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
