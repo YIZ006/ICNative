@@ -1288,3 +1288,29 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
      - Cập nhật `SyncService.init()`: Gọi `HomeWidget.setAppGroupId('group.com.abom.utas.utas')`.
 * **Hiện trạng (Current State):**
   - `flutter analyze`: **0 issues found**!
+
+
+---
+
+### [2026-10-31 19:05:00] - Khôi phục 100% logic gốc chụp tự động ghép Meme AI & Loại bỏ hoàn toàn tính năng Cắt Meme
+* **Thời gian (Timestamp):** 2026-10-31 19:05:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục ngay lập tức theo yêu cầu của người dùng:
+  1. **Khôi phục logic ghép Meme tự động ban đầu**: Khi người dùng nhấn chụp ảnh, ứng dụng ngay lập tức gọi `StickerAnchoringEngine.processAndMerge(widget.imagePath)`. AI On-Device tự động phân tích ngữ cảnh (mèo, cún, đồ ăn, đồ uống, con người...), chọn meme phù hợp nhất trong 115 meme và ghép trực tiếp vào ảnh theo tọa độ neo cực trị.
+  2. **Loại bỏ triệt để tính năng Cắt Meme / Màn trắng không yêu cầu**:
+     - Gỡ bỏ toàn bộ nút "Cắt Meme" trên thanh Top Bar của màn hình Xem trước.
+     - Gỡ bỏ nút "✨ Cắt Meme AI từ ảnh vừa chụp (Tách nền / Viền)" bên dưới khung ảnh.
+     - Gỡ bỏ nút "Cắt ảnh này" và "Ảnh khác" trong thanh khay sticker.
+     - Khôi phục khay sticker hiển thị danh sách 115 meme gốc phân loại, người dùng chỉ cần chạm để đổi meme nếu thích mà không bị hiện màn hình trắng hay công cụ cắt ghép rườm rà.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/screens/preview.dart`:
+    + Trả lại `_runAiContextualEngine()` gọi `StickerAnchoringEngine.processAndMerge()`.
+    + Xóa bỏ hàm `_cutFromCurrentPhoto()` và `_openStickerGenerator()`.
+    + Tinh gọn thanh Top Bar chỉ còn nút Hủy và tiêu đề "XEM TRƯỚC ẢNH & MEME".
+    + Xóa bỏ nút cắt meme dạng outline dưới ảnh.
+    + Khôi phục danh sách sticker ngang hiển thị trực tiếp các preset sticker.
+* **Hiện trạng (Current State):**
+  - `flutter analyze`: **0 issues found**.
+  - Quy trình chụp ảnh trở lại nguyên bản: Chụp -> AI tự động nhận diện và ghép thẳng meme -> Bấm gửi lên Widget bạn bè.

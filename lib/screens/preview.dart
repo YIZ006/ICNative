@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:icnative/screens/sticker_generator_sheet.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
 import 'package:icnative/services/location_service.dart';
@@ -36,7 +35,7 @@ class _ImagePreviewState extends State<ImagePreview> {
   bool isProcessingAi = true;
   bool isSending = false;
 
-  // Custom Sticker them vao (neu nguoi dung muon gan them hoac tu tao)
+  // Custom Sticker them vao (neu nguoi dung muon gan them hoac chon doi meme)
   CustomStickerItem? activeCustomSticker;
   Offset stickerPosition = const Offset(0.55, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
   double stickerScale = 1.0;
@@ -93,22 +92,13 @@ class _ImagePreviewState extends State<ImagePreview> {
     CustomStickerService.instance.initialize();
   }
 
-  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gợi ý sticker meme phù hợp (0 VNĐ, Offline)
-  /// Giữ nguyên ảnh gốc hoàn hảo 100%, gán sticker gợi ý thành interactive overlay có thể di chuyển/xoay/xóa tùy thích!
+  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và ghép sticker meme theo logic gốc ban đầu (0 VNĐ, Offline)
   Future<void> _runAiContextualEngine() async {
     try {
-      final stickerMeta = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
-      if (stickerMeta != null && mounted) {
+      final mergedPath = await StickerAnchoringEngine.processAndMerge(widget.imagePath);
+      if (mergedPath != null && mounted) {
         setState(() {
-          activeCustomSticker = CustomStickerItem(
-            id: 'ai_suggest_${DateTime.now().millisecondsSinceEpoch}',
-            title: 'Meme AI Gợi Ý',
-            path: stickerMeta.assetPath,
-            isAsset: true,
-          );
-          stickerPosition = const Offset(0.55, 0.15);
-          stickerScale = 0.95;
-          stickerRotation = 0.04;
+          currentImagePath = mergedPath;
         });
       }
     } catch (e) {
@@ -124,35 +114,6 @@ class _ImagePreviewState extends State<ImagePreview> {
   void dispose() {
     _captionController.dispose();
     super.dispose();
-  }
-
-  /// Cắt trực tiếp Meme từ bức ảnh vừa chụp (0 cần chọn lại ảnh!)
-  void _cutFromCurrentPhoto() async {
-    final newSticker = await StickerGeneratorSheet.show(
-      context,
-      initialPath: widget.imagePath,
-    );
-    if (newSticker != null && mounted) {
-      setState(() {
-        activeCustomSticker = newSticker;
-        stickerPosition = const Offset(0.50, 0.20);
-        stickerScale = 1.0;
-        stickerRotation = 0.0;
-      });
-    }
-  }
-
-  /// Mở Sticker Generator cho phép chọn ảnh khác từ Thư viện hoặc chụp mới
-  void _openStickerGenerator() async {
-    final newSticker = await StickerGeneratorSheet.show(context);
-    if (newSticker != null && mounted) {
-      setState(() {
-        activeCustomSticker = newSticker;
-        stickerPosition = const Offset(0.50, 0.20);
-        stickerScale = 1.0;
-        stickerRotation = 0.0;
-      });
-    }
   }
 
   /// Khắc Custom Sticker và Caption trực tiếp vào Bitmap trước khi gửi Widget
@@ -459,7 +420,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                       tooltip: "Hủy",
                     ),
                     const Text(
-                      'XEM TRƯỚC & GẮN STICKER',
+                      'XEM TRƯỚC ẢNH & MEME',
                       style: TextStyle(
                         color: OrbitColors.deepOlive,
                         fontSize: 13,
@@ -467,23 +428,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                         letterSpacing: 0.8,
                       ),
                     ),
-                    TextButton.icon(
-                      onPressed: _cutFromCurrentPhoto,
-                      style: TextButton.styleFrom(
-                        backgroundColor: OrbitColors.buttonPrimary.withValues(alpha: 0.12),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.auto_awesome, color: OrbitColors.buttonPrimary, size: 16),
-                      label: const Text(
-                        'Cắt Meme',
-                        style: TextStyle(
-                          color: OrbitColors.buttonPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    const SizedBox(width: 48), // Canh giữa với nút hủy bên trái
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -863,30 +808,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                 ),
                 const SizedBox(height: 10),
 
-                // Nút nhanh: Cắt Meme AI từ chính bức ảnh vừa chụp
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _cutFromCurrentPhoto,
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: OrbitColors.surfaceCream,
-                      side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    icon: const Icon(Icons.auto_awesome, color: OrbitColors.buttonPrimary, size: 17),
-                    label: const Text(
-                      '✨ Cắt Meme AI từ ảnh vừa chụp (Tách nền / Viền)',
-                      style: TextStyle(
-                        color: OrbitColors.deepOlive,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
 
                 // Quick Location & Time Badges Bar
                 Row(
@@ -999,131 +921,26 @@ class _ImagePreviewState extends State<ImagePreview> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Bộ Sticker Meme tinh gọn:',
-                          style: TextStyle(
-                            color: OrbitColors.deepOlive,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: _openStickerGenerator,
-                          child: const Text(
-                            '+ Đổi ảnh khác tạo',
-                            style: TextStyle(
-                              color: OrbitColors.buttonPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'Chọn đổi Meme khác:',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
 
-                    // Horizontal List of Stickers (Cắt từ ảnh này, Đổi ảnh khác, Custom Stickers, Top Presets)
+                    // Horizontal List of Stickers (115 meme gốc phân loại)
                     SizedBox(
                       height: 56,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: stickerList.length + 2,
+                        itemCount: stickerList.length,
                         separatorBuilder: (_, __) => const SizedBox(width: 8),
                         itemBuilder: (context, index) {
-                          // Nút 1: Cắt trực tiếp từ ảnh này
-                          if (index == 0) {
-                            return GestureDetector(
-                              onTap: _cutFromCurrentPhoto,
-                              child: Container(
-                                width: 72,
-                                height: 56,
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: OrbitColors.surfaceCream,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: OrbitColors.buttonPrimary,
-                                    width: 1.8,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: OrbitColors.buttonPrimary.withValues(alpha: 0.2),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: const Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.auto_awesome,
-                                      color: OrbitColors.buttonPrimary,
-                                      size: 19,
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Cắt ảnh này',
-                                      style: TextStyle(
-                                        color: OrbitColors.deepOlive,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          // Nút 2: Chọn ảnh khác từ Thư viện hoặc Camera
-                          if (index == 1) {
-                            return GestureDetector(
-                              onTap: _openStickerGenerator,
-                              child: Container(
-                                width: 62,
-                                height: 56,
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: OrbitColors.surfaceCard,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: OrbitColors.borderSubtle,
-                                    width: 1.2,
-                                  ),
-                                ),
-                                child: const Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.photo_library_outlined,
-                                      color: OrbitColors.deepOlive,
-                                      size: 18,
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Ảnh khác',
-                                      style: TextStyle(
-                                        color: OrbitColors.deepOlive,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          final item = stickerList[index - 2];
+                          final item = stickerList[index];
                           final isSelected = activeCustomSticker?.id == item.id;
-                          final isCustom = !item.isAsset;
 
                           return GestureDetector(
                             onTap: () {
@@ -1138,61 +955,39 @@ class _ImagePreviewState extends State<ImagePreview> {
                                 }
                               });
                             },
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 56,
-                                  height: 56,
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    color: OrbitColors.surfaceCard,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.borderSubtle,
-                                      width: isSelected ? 2.5 : 1,
-                                    ),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  child: item.isAsset
-                                      ? Image.asset(
-                                          item.path,
-                                          fit: BoxFit.contain,
-                                          filterQuality: FilterQuality.high,
-                                        )
-                                      : Image.file(
-                                          File(item.path),
-                                          fit: BoxFit.contain,
-                                          filterQuality: FilterQuality.high,
-                                        ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 56,
+                              height: 56,
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: OrbitColors.surfaceCard,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected ? OrbitColors.buttonPrimary : OrbitColors.borderSubtle,
+                                  width: isSelected ? 2.5 : 1,
                                 ),
-                                if (isCustom)
-                                  Positioned(
-                                    top: 2,
-                                    right: 2,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2.5),
-                                      decoration: const BoxDecoration(
-                                        color: OrbitColors.buttonPrimary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.star,
-                                        color: OrbitColors.textLight,
-                                        size: 8,
-                                      ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: item.isAsset
+                                  ? Image.asset(
+                                      item.path,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                    )
+                                  : Image.file(
+                                      File(item.path),
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
                                     ),
-                                  ),
-                              ],
                             ),
                           );
                         },
