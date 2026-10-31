@@ -66,13 +66,17 @@ Future<void> _warmupBackgroundServices() async {
 
 Future<void> _initCamerasFast() async {
   try {
-    cameras = await availableCameras().timeout(
-      const Duration(milliseconds: 1000),
-      onTimeout: () => <CameraDescription>[],
-    );
+    if (cameras.isEmpty) {
+      final camList = await availableCameras().timeout(
+        const Duration(milliseconds: 2000),
+        onTimeout: () => <CameraDescription>[],
+      );
+      if (camList.isNotEmpty) {
+        cameras = camList;
+      }
+    }
   } catch (e) {
     debugPrint('Camera fast init error: $e');
-    cameras = [];
   }
 }
 

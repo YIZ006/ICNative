@@ -30,9 +30,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   CameraController? controller;
   bool _isCameraInitializing = false;
+  int _cameraRetryCount = 0;
   final ScrollController scrollController = ScrollController();
 
   bool clicked = false;
@@ -145,6 +146,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     isDemoModeNotifier.addListener(_onDemoModeChanged);
 
     // Khoi tao Camera an toan (Non-blocking, zero wait, khong bao gio gay trang man hinh)
@@ -247,58 +249,99 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      final old = controller;
+      controller = null;
+      old?.dispose();
+      if (mounted) setState(() {});
+    } else if (state == AppLifecycleState.resumed) {
+      _initCameraSafe();
+    }
+  }
+
   Future<void> _initCameraSafe() async {
     if (_isCameraInitializing) return;
     _isCameraInitializing = true;
 
-    if (cameras.isEmpty) {
-      try {
-        cameras = await availableCameras().timeout(
-          const Duration(milliseconds: 1500),
-          onTimeout: () => <CameraDescription>[],
-        );
-      } catch (e) {
-        debugPrint('Camera discovery timeout or error: $e');
+    try {
+      if (cameras.isEmpty) {
+        try {
+          cameras = await availableCameras().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => <CameraDescription>[],
+          );
+        } catch (e) {
+          debugPrint('Camera discovery timeout or error: $e');
+        }
       }
-    }
 
-    if (cameras.isNotEmpty && mounted) {
-      final cam = cameras.firstWhere(
-        (c) => frontCamera
-            ? c.lensDirection == CameraLensDirection.front
-            : c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras[0],
-      );
+      if (cameras.isNotEmpty && mounted) {
+        final cam = cameras.firstWhere(
+          (c) => frontCamera
+              ? c.lensDirection == CameraLensDirection.front
+              : c.lensDirection == CameraLensDirection.back,
+          orElse: () => cameras[0],
+        );
 
-      final newController = CameraController(
-        cam,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
+        final oldController = controller;
+        controller = null;
+        await oldController?.dispose();
 
-      try {
+        final newController = CameraController(
+          cam,
+          ResolutionPreset.medium,
+          enableAudio: false,
+        );
+
         await newController.initialize();
         if (!mounted) {
           await newController.dispose();
           return;
         }
+
         try {
           await newController.setFocusMode(FocusMode.auto);
           await newController.setExposureMode(ExposureMode.auto);
           _maxZoomLevel = await newController.getMaxZoomLevel();
         } catch (_) {}
-        setState(() {
-          controller = newController;
-        });
-      } catch (e) {
-        debugPrint("Camera initialize error: $e");
+
+        if (mounted) {
+          setState(() {
+            controller = newController;
+            _cameraRetryCount = 0;
+          });
+        }
+      } else {
+        // Tu dong thu lai neu chua load duoc camera lan dau
+        if (_cameraRetryCount < 3 && mounted) {
+          _cameraRetryCount++;
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            if (mounted && (controller == null || !controller!.value.isInitialized)) {
+              _initCameraSafe();
+            }
+          });
+        }
       }
+    } catch (e) {
+      debugPrint("Camera initialize error: $e");
+      if (_cameraRetryCount < 3 && mounted) {
+        _cameraRetryCount++;
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted && (controller == null || !controller!.value.isInitialized)) {
+            _initCameraSafe();
+          }
+        });
+      }
+    } finally {
+      _isCameraInitializing = false;
     }
-    _isCameraInitializing = false;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
@@ -538,7 +581,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _capturePhoto() async {
-    if (_isCapturing || controller == null || !controller!.value.isInitialized) return;
+    if (controller == null || !controller!.value.isInitialized) {
+      _initCameraSafe();
+      return;
+    }
+    if (_isCapturing) return;
 
     if (timerSeconds > 0) {
       setState(() {
@@ -1577,30 +1624,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     } else {
-      return Container(
-        color: OrbitColors.surfaceCream,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: OrbitColors.buttonPrimary,
+      return GestureDetector(
+        onTap: () => _initCameraSafe(),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: OrbitColors.surfaceCream,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: OrbitColors.buttonPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                tr('camera_initializing'),
-                style: const TextStyle(
-                  color: OrbitColors.deepOlive,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(height: 10),
+                Text(
+                  tr('camera_initializing'),
+                  style: const TextStyle(
+                    color: OrbitColors.deepOlive,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

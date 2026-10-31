@@ -93,13 +93,22 @@ class _ImagePreviewState extends State<ImagePreview> {
     CustomStickerService.instance.initialize();
   }
 
-  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và ghép sticker meme theo logic gốc ban đầu (0 VNĐ, Offline)
+  /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gắn sticker meme thông minh (0 VNĐ, Offline)
   Future<void> _runAiContextualEngine() async {
     try {
-      final mergedPath = await StickerAnchoringEngine.processAndMerge(widget.imagePath);
-      if (mergedPath != null && mounted) {
+      final suggested = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
+      if (suggested != null && mounted) {
         setState(() {
-          currentImagePath = mergedPath;
+          activeCustomSticker = CustomStickerItem(
+            id: suggested.id,
+            path: suggested.assetPath,
+            title: suggested.id,
+            isAsset: true,
+          );
+          // Định vị sticker mặc định an toàn bên trên thanh nhập ghi chú
+          stickerPosition = const Offset(0.08, 0.35);
+          stickerScale = 1.0;
+          stickerRotation = 0.04;
         });
       }
     } catch (e) {
@@ -510,240 +519,231 @@ class _ImagePreviewState extends State<ImagePreview> {
                             ),
                           ),
 
-                        // 3. Interactive Custom Sticker Overlay (neu nguoi dung muon them)
-                        if (activeCustomSticker != null)
-                          LayoutBuilder(
-                            builder: (ctx, constraints) {
-                              final double stickerPixelSize = 135.0 * stickerScale;
-                              final double maxLeft = constraints.maxWidth - stickerPixelSize;
-                              final double maxTop = constraints.maxHeight - stickerPixelSize;
+                        // 3. Interactive Custom Sticker Overlay (Draggable, Scalable, Rotatable)
+                        if (activeCustomSticker != null) () {
+                          final double stickerPixelSize = 135.0 * stickerScale;
+                          final double maxLeft = photoBoxSize - stickerPixelSize;
+                          // Giới hạn biên dưới để sticker không đè lên thanh nhập ghi chú
+                          final double maxTop = photoBoxSize - stickerPixelSize - 65;
+                          final double left = (stickerPosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
+                          final double top = (stickerPosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
 
-                              final left = (stickerPosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
-                              final top = (stickerPosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
-
-                              return Positioned(
-                                left: left,
-                                top: top,
-                                child: GestureDetector(
-                                  onScaleStart: (details) {
-                                    _baseScale = stickerScale;
-                                    _baseRotation = stickerRotation;
-                                  },
-                                  onScaleUpdate: (ScaleUpdateDetails details) {
-                                    setState(() {
-                                      if (maxLeft > 0) {
-                                        final newX = (left + details.focalPointDelta.dx) / maxLeft;
-                                        final newY = (top + details.focalPointDelta.dy) / (maxTop > 0 ? maxTop : 1);
-                                        stickerPosition = Offset(
-                                          newX.clamp(0.0, 1.0),
-                                          newY.clamp(0.0, 1.0),
-                                        );
-                                      }
-                                      if (details.scale != 1.0) {
-                                        stickerScale = (_baseScale * details.scale).clamp(0.5, 2.5);
-                                      }
-                                      if (details.rotation != 0.0) {
-                                        stickerRotation = _baseRotation + details.rotation;
-                                      }
-                                    });
-                                  },
-                                  child: Transform.rotate(
-                                    angle: stickerRotation,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
+                          return Positioned(
+                            left: left,
+                            top: top,
+                            child: GestureDetector(
+                              onScaleStart: (details) {
+                                _baseScale = stickerScale;
+                                _baseRotation = stickerRotation;
+                              },
+                              onScaleUpdate: (ScaleUpdateDetails details) {
+                                setState(() {
+                                  if (maxLeft > 0) {
+                                    final newX = (left + details.focalPointDelta.dx) / maxLeft;
+                                    final newY = (top + details.focalPointDelta.dy) / (maxTop > 0 ? maxTop : 1);
+                                    stickerPosition = Offset(
+                                      newX.clamp(0.0, 1.0),
+                                      newY.clamp(0.0, 1.0),
+                                    );
+                                  }
+                                  if (details.scale != 1.0) {
+                                    stickerScale = (_baseScale * details.scale).clamp(0.5, 2.5);
+                                  }
+                                  if (details.rotation != 0.0) {
+                                    stickerRotation = _baseRotation + details.rotation;
+                                  }
+                                });
+                              },
+                              child: Transform.rotate(
+                                angle: stickerRotation,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              width: stickerPixelSize,
-                                              height: stickerPixelSize,
-                                              padding: const EdgeInsets.all(4),
-                                              child: activeCustomSticker!.isAsset
-                                                  ? Image.asset(
-                                                      activeCustomSticker!.path,
-                                                      fit: BoxFit.contain,
-                                                      filterQuality: FilterQuality.high,
-                                                    )
-                                                  : Image.file(
-                                                      File(activeCustomSticker!.path),
-                                                      fit: BoxFit.contain,
-                                                      filterQuality: FilterQuality.high,
-                                                    ),
-                                            ),
-                                            if (activeCustomSticker!.caption != null &&
-                                                activeCustomSticker!.caption!.trim().isNotEmpty)
-                                              Container(
-                                                margin: const EdgeInsets.only(top: 2),
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: OrbitColors.deepOlive.withValues(alpha: 0.95),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: OrbitColors.khakiGold, width: 1.4),
-                                                  boxShadow: const [
-                                                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                                                  ],
+                                        Container(
+                                          width: stickerPixelSize,
+                                          height: stickerPixelSize,
+                                          padding: const EdgeInsets.all(4),
+                                          child: activeCustomSticker!.isAsset
+                                              ? Image.asset(
+                                                  activeCustomSticker!.path,
+                                                  fit: BoxFit.contain,
+                                                  filterQuality: FilterQuality.high,
+                                                )
+                                              : Image.file(
+                                                  File(activeCustomSticker!.path),
+                                                  fit: BoxFit.contain,
+                                                  filterQuality: FilterQuality.high,
                                                 ),
-                                                child: Text(
-                                                  activeCustomSticker!.caption!,
-                                                  style: const TextStyle(
-                                                    color: OrbitColors.textLight,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.4,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
                                         ),
-                                        Positioned(
-                                          top: -6,
-                                          right: -6,
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              setState(() => activeCustomSticker = null);
-                                            },
-                                            child: Container(
-                                              width: 24,
-                                              height: 24,
-                                              decoration: const BoxDecoration(
-                                                color: OrbitColors.deepOlive,
-                                                shape: BoxShape.circle,
-                                                boxShadow: [
-                                                  BoxShadow(color: Colors.black26, blurRadius: 3),
-                                                ],
-                                              ),
-                                              child: const Icon(
-                                                Icons.close,
+                                        if (activeCustomSticker!.caption != null &&
+                                            activeCustomSticker!.caption!.trim().isNotEmpty)
+                                          Container(
+                                            margin: const EdgeInsets.only(top: 2),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: OrbitColors.deepOlive.withValues(alpha: 0.95),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: OrbitColors.khakiGold, width: 1.4),
+                                              boxShadow: const [
+                                                BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                              ],
+                                            ),
+                                            child: Text(
+                                              activeCustomSticker!.caption!,
+                                              style: const TextStyle(
                                                 color: OrbitColors.textLight,
-                                                size: 15,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.4,
                                               ),
                                             ),
                                           ),
-                                        ),
                                       ],
                                     ),
-                                  ),
+                                    Positioned(
+                                      top: -6,
+                                      right: -6,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() => activeCustomSticker = null);
+                                        },
+                                        child: Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: const BoxDecoration(
+                                            color: OrbitColors.deepOlive,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(color: Colors.black26, blurRadius: 3),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            color: OrbitColors.textLight,
+                                            size: 15,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                            ),
+                          );
+                        }(),
 
                         // Draggable Location Badge (Gán tên địa danh / đường)
-                        if (locationBadgeText != null)
-                          LayoutBuilder(
-                            builder: (ctx, constraints) {
-                              final double maxLeft = constraints.maxWidth - 160;
-                              final double maxTop = constraints.maxHeight - 45;
-                              final left = (locationBadgePosition.dx * maxLeft).clamp(0.0, maxLeft);
-                              final top = (locationBadgePosition.dy * maxTop).clamp(0.0, maxTop);
+                        if (locationBadgeText != null) () {
+                          final double maxLeft = photoBoxSize - 160;
+                          final double maxTop = photoBoxSize - 45 - 65;
+                          final left = (locationBadgePosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
+                          final top = (locationBadgePosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
 
-                              return Positioned(
-                                left: left,
-                                top: top,
-                                child: GestureDetector(
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
-                                      final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
-                                      locationBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: OrbitColors.deepOlive.withValues(alpha: 0.90),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(color: OrbitColors.terracotta, width: 1.5),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.25),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
+                          return Positioned(
+                            left: left,
+                            top: top,
+                            child: GestureDetector(
+                              onPanUpdate: (details) {
+                                setState(() {
+                                  final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
+                                  final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
+                                  locationBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.90),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: OrbitColors.terracotta, width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          locationBadgeText!,
-                                          style: const TextStyle(
-                                            color: OrbitColors.textLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        GestureDetector(
-                                          onTap: () => setState(() => locationBadgeText = null),
-                                          child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                              );
-                            },
-                          ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      locationBadgeText!,
+                                      style: const TextStyle(
+                                        color: OrbitColors.textLight,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () => setState(() => locationBadgeText = null),
+                                      child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }(),
 
                         // Draggable Time Badge (Gán giờ và phút)
-                        if (timeBadgeText != null)
-                          LayoutBuilder(
-                            builder: (ctx, constraints) {
-                              final double maxLeft = constraints.maxWidth - 100;
-                              final double maxTop = constraints.maxHeight - 45;
-                              final left = (timeBadgePosition.dx * maxLeft).clamp(0.0, maxLeft);
-                              final top = (timeBadgePosition.dy * maxTop).clamp(0.0, maxTop);
+                        if (timeBadgeText != null) () {
+                          final double maxLeft = photoBoxSize - 100;
+                          final double maxTop = photoBoxSize - 45 - 65;
+                          final left = (timeBadgePosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
+                          final top = (timeBadgePosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
 
-                              return Positioned(
-                                left: left,
-                                top: top,
-                                child: GestureDetector(
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
-                                      final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
-                                      timeBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: OrbitColors.deepOlive.withValues(alpha: 0.90),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(color: OrbitColors.khakiGold, width: 1.5),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.25),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
+                          return Positioned(
+                            left: left,
+                            top: top,
+                            child: GestureDetector(
+                              onPanUpdate: (details) {
+                                setState(() {
+                                  final newX = (left + details.delta.dx) / (maxLeft > 0 ? maxLeft : 1);
+                                  final newY = (top + details.delta.dy) / (maxTop > 0 ? maxTop : 1);
+                                  timeBadgePosition = Offset(newX.clamp(0.0, 1.0), newY.clamp(0.0, 1.0));
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.90),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: OrbitColors.khakiGold, width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          timeBadgeText!,
-                                          style: const TextStyle(
-                                            color: OrbitColors.textLight,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        GestureDetector(
-                                          onTap: () => setState(() => timeBadgeText = null),
-                                          child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                              );
-                            },
-                          ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      timeBadgeText!,
+                                      style: const TextStyle(
+                                        color: OrbitColors.textLight,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () => setState(() => timeBadgeText = null),
+                                      child: const Icon(Icons.close, color: OrbitColors.textLight, size: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }(),
 
                         // 4. Caption Input Pill at bottom of photo
                         Positioned(

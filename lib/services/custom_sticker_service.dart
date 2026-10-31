@@ -64,9 +64,9 @@ class CustomStickerService {
     return _segmenter ??= SubjectSegmenter(
       options: SubjectSegmenterOptions(
         enableForegroundBitmap: true,
-        enableForegroundConfidenceMask: true,
+        enableForegroundConfidenceMask: false,
         enableMultipleSubjects: SubjectResultOptions(
-          enableConfidenceMask: true,
+          enableConfidenceMask: false,
           enableSubjectBitmap: true,
         ),
       ),
@@ -318,7 +318,7 @@ class CustomStickerService {
     return badge;
   }
 
-  /// Tao Sticker theo 4 che do: Outline, Full, Badge, Original voi do phan giai cao (600px, Cubic)
+  /// Tao Sticker theo 4 che do: Outline, Full, Badge, Original voi do phan giai cao va thuat toan sieu toc
   Future<String> generateStickerVariation({
     required String sourcePath,
     required bool isAsset,
@@ -327,38 +327,39 @@ class CustomStickerService {
   }) async {
     final localPath = await _ensureLocalFile(sourcePath, isAsset);
     final bytes = await File(localPath).readAsBytes();
-    final baseImage = img.decodeImage(bytes);
+    img.Image? baseImage = img.decodeImage(bytes);
     if (baseImage == null) return localPath;
+
+    // Chống OOM: Giới hạn kích thước ảnh gốc ngay từ đầu
+    if (baseImage.width > 512 || baseImage.height > 512) {
+      baseImage = img.copyResize(
+        baseImage,
+        width: baseImage.width >= baseImage.height ? 512 : null,
+        height: baseImage.height > baseImage.width ? 512 : null,
+        interpolation: img.Interpolation.linear,
+      );
+    }
 
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    // 1. CHE DO ORIGINAL: Giu nguyen anh goc, thu nho sac net (max 600px, Bicubic)
+    // 1. CHE DO ORIGINAL: Giu nguyen anh goc, thu nho sac net (max 512px)
     if (mode == StickerEditMode.original) {
-      img.Image processed = baseImage;
-      if (processed.width > 600 || processed.height > 600) {
-        processed = img.copyResize(
-          processed,
-          width: processed.width >= processed.height ? 600 : null,
-          height: processed.height > processed.width ? 600 : null,
-          interpolation: img.Interpolation.cubic,
-        );
-      }
       final outPath = '${tempDir.path}/sticker_orig_$timestamp.png';
-      await File(outPath).writeAsBytes(img.encodePng(processed));
+      await File(outPath).writeAsBytes(img.encodePng(baseImage));
       return outPath;
     }
 
     // Lay chu the da duoc tach nen thong minh On-Device
     img.Image cutoutImage = await _extractForeground(localPath, baseImage);
 
-    // Resize cho vua tam sticker do net cao (max 560x560, Bicubic khong vo pixel)
-    if (cutoutImage.width > 560 || cutoutImage.height > 560) {
+    // Resize cho vua tam sticker do net cao (max 420x420)
+    if (cutoutImage.width > 420 || cutoutImage.height > 420) {
       cutoutImage = img.copyResize(
         cutoutImage,
-        width: cutoutImage.width >= cutoutImage.height ? 560 : null,
-        height: cutoutImage.height > cutoutImage.width ? 560 : null,
-        interpolation: img.Interpolation.cubic,
+        width: cutoutImage.width >= cutoutImage.height ? 420 : null,
+        height: cutoutImage.height > cutoutImage.width ? 420 : null,
+        interpolation: img.Interpolation.linear,
       );
     }
 
@@ -371,12 +372,12 @@ class CustomStickerService {
 
     // 3. CHE DO BADGE: Huy hieu tron phong cach Warm Earth (#FEFAE0 & #283618)
     if (mode == StickerEditMode.badge) {
-      final int badgeSize = (cutoutImage.width > cutoutImage.height ? cutoutImage.width : cutoutImage.height) + 32;
+      final int badgeSize = (cutoutImage.width > cutoutImage.height ? cutoutImage.width : cutoutImage.height) + 24;
       final badge = img.Image(width: badgeSize, height: badgeSize, numChannels: 4);
       img.fill(badge, color: img.ColorRgba8(0, 0, 0, 0));
 
       final center = badgeSize / 2.0;
-      final radius = (badgeSize / 2.0) - 4;
+      final radius = (badgeSize / 2.0) - 3;
       final bgColor = img.ColorRgba8(254, 250, 224, 255); // #FEFAE0 Warm Cream
       final borderColor = img.ColorRgba8(40, 54, 24, 255); // #283618 Deep Olive
       final shadowColor = img.ColorRgba8(40, 54, 24, 60);
@@ -399,7 +400,7 @@ class CustomStickerService {
           final dy = y - center;
           final distSq = dx * dx + dy * dy;
           if (distSq <= radius * radius) {
-            if (distSq >= (radius - 5) * (radius - 5)) {
+            if (distSq >= (radius - 4) * (radius - 4)) {
               badge.setPixel(x, y, borderColor);
             } else {
               badge.setPixel(x, y, bgColor);
@@ -425,9 +426,9 @@ class CustomStickerService {
       return outPath;
     }
 
-    // 4. CHE DO OUTLINE: Vien sticker trang day 12px min mang kieu iMessage/Messenger
-    const int outlineRadius = 12; // Vien trang day 12px cuc ro va noi bat
-    const int padding = outlineRadius + 6;
+    // 4. CHE DO OUTLINE: Vien sticker trang day min mang kieu iMessage/Messenger (Thuat toan bien nhanh ~1000x)
+    const int outlineRadius = 8;
+    const int padding = outlineRadius + 5;
 
     final int targetW = cutoutImage.width + padding * 2;
     final int targetH = cutoutImage.height + padding * 2;
@@ -436,49 +437,71 @@ class CustomStickerService {
     img.fill(outlined, color: img.ColorRgba8(0, 0, 0, 0));
 
     final whiteColor = img.ColorRgba8(255, 255, 255, 255);
-    final shadowColor = img.ColorRgba8(40, 54, 24, 85); // Drop shadow dam hon chong chim
+    final shadowColor = img.ColorRgba8(40, 54, 24, 75);
 
-    // Buoc 1: Ve bong do lech xuong duoi 4px
-    for (int y = 0; y < cutoutImage.height; y++) {
-      for (int x = 0; x < cutoutImage.width; x++) {
-        if (cutoutImage.getPixel(x, y).a > 40) {
-          for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
-            for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
-              if (dx * dx + dy * dy <= (outlineRadius + 3) * (outlineRadius + 3)) {
-                final nx = x + padding + dx;
-                final ny = y + padding + dy + 4;
-                if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
-                  outlined.setPixel(nx, ny, shadowColor);
-                }
-              }
+    final int cw = cutoutImage.width;
+    final int ch = cutoutImage.height;
+
+    // Chi quet qua cac pixel duong bien (Border Pixels) thay vi chay loop 400 trieu lan gay treo may (ANR)
+    final List<int> borderXs = [];
+    final List<int> borderYs = [];
+
+    for (int y = 0; y < ch; y++) {
+      for (int x = 0; x < cw; x++) {
+        if (cutoutImage.getPixel(x, y).a > 25) {
+          if (x == 0 || x == cw - 1 || y == 0 || y == ch - 1 ||
+              cutoutImage.getPixel(x - 1, y).a <= 25 ||
+              cutoutImage.getPixel(x + 1, y).a <= 25 ||
+              cutoutImage.getPixel(x, y - 1).a <= 25 ||
+              cutoutImage.getPixel(x, y + 1).a <= 25) {
+            borderXs.add(x);
+            borderYs.add(y);
+          }
+        }
+      }
+    }
+
+    final int numBorders = borderXs.length;
+    const int radSq = outlineRadius * outlineRadius;
+    const int shadowRadSq = (outlineRadius + 2) * (outlineRadius + 2);
+
+    // Buoc 1: Ve bong do tu cac diem bien
+    for (int i = 0; i < numBorders; i++) {
+      final bx = borderXs[i];
+      final by = borderYs[i];
+      for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
+        for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
+          if (dx * dx + dy * dy <= shadowRadSq) {
+            final nx = bx + padding + dx;
+            final ny = by + padding + dy + 3;
+            if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
+              outlined.setPixel(nx, ny, shadowColor);
             }
           }
         }
       }
     }
 
-    // Buoc 2: Ve vien trang day bao quanh chu the (Die-cut white contour)
-    for (int y = 0; y < cutoutImage.height; y++) {
-      for (int x = 0; x < cutoutImage.width; x++) {
-        if (cutoutImage.getPixel(x, y).a > 30) {
-          for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
-            for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
-              if (dx * dx + dy * dy <= outlineRadius * outlineRadius) {
-                final nx = x + padding + dx;
-                final ny = y + padding + dy;
-                if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
-                  outlined.setPixel(nx, ny, whiteColor);
-                }
-              }
+    // Buoc 2: Ve vien trang tu cac diem bien
+    for (int i = 0; i < numBorders; i++) {
+      final bx = borderXs[i];
+      final by = borderYs[i];
+      for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
+        for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
+          if (dx * dx + dy * dy <= radSq) {
+            final nx = bx + padding + dx;
+            final ny = by + padding + dy;
+            if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
+              outlined.setPixel(nx, ny, whiteColor);
             }
           }
         }
       }
     }
 
-    // Buoc 3: Ve chu the goc de len tren lop vien trang voi do net goc
-    for (int y = 0; y < cutoutImage.height; y++) {
-      for (int x = 0; x < cutoutImage.width; x++) {
+    // Buoc 3: Ve chu the goc de len tren lop vien trang voi do net cao
+    for (int y = 0; y < ch; y++) {
+      for (int x = 0; x < cw; x++) {
         final pixel = cutoutImage.getPixel(x, y);
         if (pixel.a > 15) {
           outlined.setPixel(x + padding, y + padding, pixel);

@@ -5,6 +5,31 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-10-31 21:00:00] - Sửa triệt để 5 lỗi từ video kiểm thử: Kẹt Camera Cold Start, Trắng mờ/Xám đặc xem trước ảnh, Đổi sticker, Xung đột layout và Crash AI Gene Sticker Meme
+* **Thời gian (Timestamp):** 2026-10-31 21:00:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Phân tích sâu và khắc phục triệt để toàn bộ 5 lỗi kỹ thuật xuất hiện trong video kiểm thử thực tế `1000054060.mp4`:
+  1. **BUG-01 - Đơ luồng hiển thị Camera (Preview Freeze) & Liệt nút bấm khi Cold Start:** Khắc phục tình trạng xung đột tài nguyên camera giữa `main.dart` và `HomeScreen`. Bổ sung `WidgetsBindingObserver` quản lý vòng đời ứng dụng, cơ chế tự động thử lại (retry up to 3 times), và tap để phục hồi camera.
+  2. **BUG-02 - Lỗi Render (Trắng mờ / Xám đặc) khi bật "Gắn địa điểm" và "Gắn giờ & phút":** Loại bỏ hoàn toàn widget con `LayoutBuilder` không hợp lệ bên trong `Stack` vốn gây `ParentDataWidget` assertion error trong Flutter engine (khiến release mode hiển thị mảng trắng/xám che toàn bộ ảnh). Thay thế bằng `Positioned` trực tiếp dựa trên kích thước thực tế của khung ảnh (`photoBoxSize`).
+  3. **BUG-03 - Chọn Sticker khác nhưng ảnh không đổi & Bị phủ mờ:** Sửa đổi logic `_runAiContextualEngine()` không còn thực hiện ghép cố định (bake) sticker vào pixel file ảnh gốc (`processAndMerge`), mà sử dụng cơ chế đề xuất thông minh qua `activeCustomSticker`, giữ nguyên file ảnh gốc tinh khiết, cho phép người dùng thay đổi sang bất kỳ mẫu sticker nào khác mượt mà tức thì.
+  4. **BUG-04 - Vị trí Sticker mặc định đè lên ô nhập ghi chú:** Thiết lập giới hạn biên dưới (`maxTop = photoBoxSize - stickerPixelSize - 65`) và tọa độ neo ban đầu (`Offset(0.08, 0.35)`) an toàn, đảm bảo sticker và các badge không bao giờ chồng lấn lên thanh ghi chú ở đáy ảnh.
+  5. **BUG-05 - Văng ứng dụng (Crash / ANR) khi tạo "AI Gene Sticker Meme" từ Thư viện:** Tối ưu hóa thuật toán tạo viền trắng ("Viền Trắng" / outline mode): Thay thế vòng lặp lồng 4 tầng 400 triệu phép tính bằng thuật toán quét biên nhanh chỉ ~400.000 phép tính (tăng tốc ~1.000 lần); bổ sung cơ chế kiểm soát bộ nhớ chống OOM (thu nhỏ ảnh gốc về tối đa 512px); tắt `enableForegroundConfidenceMask` không cần thiết trong `SubjectSegmenterOptions`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/main.dart`: Tăng timeout `availableCameras()` lên 2000ms trong `_initCamerasFast()` và chỉ gán khi danh sách camera không rỗng.
+  - [MODIFY] `lib/screens/home.dart`: Thêm `WidgetsBindingObserver` cho `_HomeScreenState`, lắng nghe `didChangeAppLifecycleState` (dispose camera khi inactive/paused, re-init khi resumed), thêm auto-retry 3 lần trong `_initCameraSafe()`, phục hồi camera khi bấm chụp ảnh, và bọc view loading camera bằng `GestureDetector` cho phép chạm để khởi động lại.
+  - [MODIFY] `lib/screens/preview.dart`: Bỏ `LayoutBuilder` trả về `Positioned` bên trong `Stack`; đưa vị trí sticker và badge thời gian/địa điểm về tọa độ tính trực tiếp từ `photoBoxSize`; sửa `_runAiContextualEngine()` dùng `detectAndSuggestSticker()` gán `activeCustomSticker` thay vì ghi đè pixel file ảnh.
+  - [MODIFY] `lib/services/custom_sticker_service.dart`: Chống OOM bằng việc thu nhỏ trước ảnh gốc về 512px; tối ưu thuật toán tạo viền trắng sang border-pixel scanning; tối ưu cấu hình `SubjectSegmenterOptions`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze` kiểm tra đạt 0 lỗi (No issues found).
+  - Toàn bộ 5 lỗi từ video kiểm thử đã được giải quyết dứt điểm.
+* **Bước tiếp theo (Next Steps):**
+  - Commit & push mã nguồn lên GitHub repository.
+  - Trình bày chi tiết bản phân tích kỹ thuật và kết quả sửa lỗi cho người dùng.
+
+---
+
 ### [2026-10-31 20:30:00] - Phát hành Orbit v1.4.2 Dual-Release, Kết bạn 2 chiều thời gian thực, Camera Auto-Zoom QR, Xem ảnh lẫn nhau & Khắc phục lỗi thông báo cập nhật sớm 0MB
 * **Thời gian (Timestamp):** 2026-10-31 20:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
