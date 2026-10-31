@@ -1266,3 +1266,25 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Hiện trạng (Current State):**
   - `flutter analyze`: **0 issues found** (Không còn bất kỳ lỗi cú pháp, lint hay cảnh báo nào).
   - Trải nghiệm trên cả iOS và Android đều hoạt động mượt mà, đúng chuẩn của từng hệ điều hành.
+
+
+---
+
+### [2026-10-31 18:35:00] - Bổ sung xử lý sự cố Widget Gallery iOS & Khởi tạo mã nguồn OrbitWidget SwiftUI
+* **Thời gian (Timestamp):** 2026-10-31 18:35:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Giải quyết câu hỏi của người dùng: "Nếu tìm kiếm trong Widget Gallery trên iPhone mà vẫn không thấy Orbit thì sao?":
+  1. **Giải thích nguyên nhân chuyên sâu**:
+     - *Nguyên nhân 1 (Target WidgetKit Extension)*: Apple iOS yêu cầu ứng dụng phải có App Extension Target (`.appex`) viết bằng SwiftUI/WidgetKit nằm trong `Runner.app/PlugIns`. Khác với Android (chỉ cần khai báo XML receiver), iOS cần target này để SpringBoard quét thấy trong Widget Gallery.
+     - *Nguyên nhân 2 (Cơ chế Sideloading IPA)*: Khi cài IPA qua AltStore / TrollStore / Scarlet / Sideloadly, iOS SpringBoard chưa tự động kích hoạt dịch vụ tiện ích nếu người dùng chưa mở app ít nhất 1 lần, hoặc tên ứng dụng bị index theo tên bundle cũ (`ICNative` thay vì `Orbit`), hoặc bộ nhớ đệm cache tiện ích chưa được làm mới nếu chưa khởi động lại máy.
+  2. **Tích hợp Hộp xử lý sự cố trực tiếp trên giao diện (`WidgetGuideScreen`)**:
+     - Thêm card màu hổ phách giải thích 3 bước xử lý nhanh: (1) Mở app ít nhất 1 lần; (2) Tìm kiếm cả 2 từ khóa "Orbit" và "ICNative"; (3) Khởi động lại iPhone để làm mới SpringBoard cache.
+  3. **Khởi tạo trọn bộ mã nguồn SwiftUI WidgetKit cho iOS (`ios/OrbitWidget/`)**:
+     - Tạo `ios/OrbitWidget/OrbitWidget.swift`: TimelineProvider đọc dữ liệu `widget_image_path` và `widget_sender_name` từ App Group `group.com.abom.utas.utas`, hỗ trợ `systemSmall` và `systemMedium`, liên kết scheme `icnative://open`.
+     - Tạo `ios/OrbitWidget/Info.plist`: Khai báo extension point `com.apple.widgetkit-extension`.
+     - Cập nhật `ios/Runner/Info.plist`: Khai báo `CFBundleURLTypes` cho scheme `icnative` & `orbit`.
+     - Cập nhật `SyncService.init()`: Gọi `HomeWidget.setAppGroupId('group.com.abom.utas.utas')`.
+* **Hiện trạng (Current State):**
+  - `flutter analyze`: **0 issues found**!

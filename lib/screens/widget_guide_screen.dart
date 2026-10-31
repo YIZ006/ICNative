@@ -399,6 +399,43 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+              // Hộp xử lý sự cố khi chưa thấy Widget trong danh sách tiện ích
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.help_outline_rounded, color: Colors.amber.shade900, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tr('wg_ios_troubleshoot_title'),
+                            style: TextStyle(
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildStepItem(tr('wg_ios_troubleshoot_step_1')),
+                    const SizedBox(height: 8),
+                    _buildStepItem(tr('wg_ios_troubleshoot_step_2')),
+                    const SizedBox(height: 8),
+                    _buildStepItem(tr('wg_ios_troubleshoot_step_3')),
+                  ],
+                ),
+              ),
             ],
 
             const SizedBox(height: 32),

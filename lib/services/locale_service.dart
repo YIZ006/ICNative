@@ -138,6 +138,10 @@ class LocaleService {
     'wg_ios_step_5': '5. Kéo thả widget đến vị trí yêu thích rồi nhấn "Xong" (Done) ở góc trên bên phải.',
     'wg_ios_step_6': '6. Chạm vào Widget bất cứ lúc nào để mở kính ngắm chụp và cập nhật ảnh mới gửi đến bạn bè!',
     'wg_ios_lockscreen_tip': '💡 Mẹo Màn hình khóa (iOS 16+): Nhấn giữ Màn hình khóa > chạm "Tùy chỉnh" > chọn Màn hình khóa > "Thêm tiện ích" > chọn Orbit để luôn thấy khoảnh khắc bạn bè!',
+    'wg_ios_troubleshoot_title': '❓ Chưa thấy Orbit trong danh sách Tiện ích?',
+    'wg_ios_troubleshoot_step_1': '1. Mở ứng dụng Orbit lên ít nhất 1 lần để iOS kích hoạt và nạp dịch vụ tiện ích.',
+    'wg_ios_troubleshoot_step_2': '2. Thử tìm kiếm với cả hai từ khóa: "Orbit" hoặc "ICNative" trong thanh tìm kiếm.',
+    'wg_ios_troubleshoot_step_3': '3. Khởi động lại iPhone (Tắt nguồn rồi bật lại): Với app cài qua file IPA (Sideload / AltStore / TrollStore / Scarlet), iOS SpringBoard cần khởi động lại máy để làm mới bộ nhớ đệm tiện ích.',
 
     // Settings & Profile
     'settings_title': 'Cài Đặt',
@@ -224,6 +228,10 @@ class LocaleService {
     'wg_ios_step_5': '5. Drag the widget to your desired spot and tap "Done" in the top right.',
     'wg_ios_step_6': '6. Tap the widget anytime to open camera and share moments with friends!',
     'wg_ios_lockscreen_tip': '💡 Lock Screen Tip (iOS 16+): Touch & hold Lock Screen > tap Customize > select Lock Screen > Add Widgets > choose Orbit.',
+    'wg_ios_troubleshoot_title': '❓ Cannot find Orbit in Widget Gallery?',
+    'wg_ios_troubleshoot_step_1': '1. Open the Orbit app at least once so iOS can index and load the widget extension.',
+    'wg_ios_troubleshoot_step_2': '2. Try searching for both keywords: "Orbit" or "ICNative" in the search box.',
+    'wg_ios_troubleshoot_step_3': '3. Restart your iPhone (Power off and back on): Sideloaded IPA apps (AltStore / TrollStore / Scarlet) require a reboot to refresh the iOS SpringBoard widget cache.',
 
     // Settings & Profile
     'settings_title': 'Settings',

@@ -25,6 +25,14 @@ class SyncService {
     final list = prefs.getStringList(_prefProcessedPostsKey) ?? [];
     _processedPostIds.addAll(list);
 
+    if (Platform.isIOS) {
+      try {
+        await HomeWidget.setAppGroupId('group.com.abom.utas.utas');
+      } catch (e) {
+        debugPrint('Error setting iOS App Group ID: $e');
+      }
+    }
+
     if (Firebase.apps.isNotEmpty) {
       startListening();
     }
