@@ -17,8 +17,6 @@ class StickerMetadata {
   final StickerCategory category;
   final AnchorPreference preference;
   final ui.Offset bitePoint; // 0.0 to 1.0
-  final ui.Offset? detectedAnchorOffset;
-  final String? detectedLabel;
 
   const StickerMetadata({
     required this.id,
@@ -26,29 +24,7 @@ class StickerMetadata {
     required this.category,
     required this.preference,
     required this.bitePoint,
-    this.detectedAnchorOffset,
-    this.detectedLabel,
   });
-
-  StickerMetadata copyWith({
-    String? id,
-    String? assetPath,
-    StickerCategory? category,
-    AnchorPreference? preference,
-    ui.Offset? bitePoint,
-    ui.Offset? detectedAnchorOffset,
-    String? detectedLabel,
-  }) {
-    return StickerMetadata(
-      id: id ?? this.id,
-      assetPath: assetPath ?? this.assetPath,
-      category: category ?? this.category,
-      preference: preference ?? this.preference,
-      bitePoint: bitePoint ?? this.bitePoint,
-      detectedAnchorOffset: detectedAnchorOffset ?? this.detectedAnchorOffset,
-      detectedLabel: detectedLabel ?? this.detectedLabel,
-    );
-  }
 }
 
 class StickerAnchoringEngine {
@@ -175,93 +151,38 @@ class StickerAnchoringEngine {
     );
   }
 
-  /// 0 VNĐ & 100% Offline: Nhận diện bối cảnh và vị trí đối tượng (ML Kit) để tự động gợi ý Sticker và tọa độ neo
-  /// Trả về metadata của sticker (assetPath, category, detectedAnchorOffset, v.v.) mà KHÔNG can thiệp/phá vỡ ảnh gốc!
+  /// 0 VNĐ & 100% Offline: Nhận diện bối cảnh ảnh (ML Kit) và gợi ý Sticker phù hợp
+  /// Trả về metadata của sticker (assetPath, category, v.v.) mà KHÔNG can thiệp/phá vỡ ảnh gốc!
   static Future<StickerMetadata?> detectAndSuggestSticker(String imagePath) async {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
-
-      // Chạy song song ImageLabeler (phân loại nhãn) và ObjectDetector (xác định vị trí đối tượng)
-      final labelerFuture = _getLabeler().processImage(inputImage);
-      final detectorFuture = _getObjectDetector().processImage(inputImage);
-
-      final results = await Future.wait([
-        labelerFuture.then<dynamic>((v) => v).catchError((_) => <ImageLabel>[]),
-        detectorFuture.then<dynamic>((v) => v).catchError((_) => <DetectedObject>[]),
-      ]);
-
-      final labels = (results[0] as List<ImageLabel>?) ?? [];
-      final detectedObjects = (results[1] as List<DetectedObject>?) ?? [];
+      final labeler = _getLabeler();
+      final labels = await labeler.processImage(inputImage);
 
       StickerCategory category = StickerCategory.scene;
-      String? matchedLabel;
-
       for (final label in labels) {
         final text = label.label.toLowerCase();
         final conf = label.confidence;
         if (text.contains('cat') || text.contains('dog') || text.contains('pet') || text.contains('animal') || text.contains('fur') || text.contains('whiskers') || text.contains('mammal')) {
           category = StickerCategory.animal;
-          matchedLabel = label.label;
           break;
         } else if (text.contains('food') || text.contains('cake') || text.contains('pizza') || text.contains('snack') || text.contains('sandwich') || text.contains('bread')) {
           category = StickerCategory.food;
-          matchedLabel = label.label;
           break;
         } else if (text.contains('drink') || text.contains('cup') || text.contains('bottle') || text.contains('beverage') || text.contains('coffee')) {
           category = StickerCategory.beverage;
-          matchedLabel = label.label;
           break;
         } else if (text.contains('laptop') || text.contains('computer') || text.contains('phone') || text.contains('keyboard') || text.contains('screen')) {
           category = StickerCategory.electronics;
-          matchedLabel = label.label;
           break;
         } else if (text.contains('person') || text.contains('face') || text.contains('human') || text.contains('smile') || text.contains('man') || text.contains('woman')) {
           if (conf > 0.5) {
             category = StickerCategory.person;
-            matchedLabel = label.label;
             break;
           }
         }
       }
-
-      final metadata = pickStickerForCategory(category);
-
-      // Xác định tọa độ neo tự động (Anchor Offset) dựa trên vị trí đối tượng chính
-      ui.Offset? anchorOffset;
-      if (detectedObjects.isNotEmpty) {
-        DetectedObject? mainObject;
-        double maxArea = 0;
-        for (final obj in detectedObjects) {
-          final area = obj.boundingBox.width * obj.boundingBox.height;
-          if (area > maxArea) {
-            maxArea = area;
-            mainObject = obj;
-          }
-        }
-
-        if (mainObject != null) {
-          final bytes = await File(imagePath).readAsBytes();
-          final codec = await ui.instantiateImageCodec(bytes);
-          final frame = await codec.getNextFrame();
-          final double origW = frame.image.width.toDouble();
-          final double origH = frame.image.height.toDouble();
-          frame.image.dispose();
-          codec.dispose();
-
-          if (origW > 0 && origH > 0) {
-            final box = mainObject.boundingBox;
-            // Đặt sticker neo nhẹ lên mép trên đối tượng
-            final double normX = ((box.center.dx - (origW * 0.16)) / origW).clamp(0.06, 0.65);
-            final double normY = ((box.top - (origH * 0.16)) / origH).clamp(0.06, 0.45);
-            anchorOffset = ui.Offset(normX, normY);
-          }
-        }
-      }
-
-      return metadata.copyWith(
-        detectedAnchorOffset: anchorOffset ?? const ui.Offset(0.08, 0.32),
-        detectedLabel: matchedLabel,
-      );
+      return pickStickerForCategory(category);
     } catch (e) {
       debugPrint('detectAndSuggestSticker Error: $e');
       return null;
