@@ -35,7 +35,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static String _currentVersion = '1.4.0';
+  static String _currentVersion = '1.4.1';
   static String get currentVersion => _currentVersion;
   static const String repoOwner = 'YIZ006';
   static const String repoName = 'ICNative';

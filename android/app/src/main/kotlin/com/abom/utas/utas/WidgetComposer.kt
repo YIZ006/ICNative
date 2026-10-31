@@ -8,9 +8,9 @@ import kotlin.math.sin
 object WidgetComposer {
 
     // ==========================================
-    // KIỂU 10: THIÊN HÀ VỆ TINH NỔI (GALAXY ORBIT WIDGET) - ĐẬM NÉT & TƯƠNG PHẢN CAO
+    // THIÊN HÀ VỆ TINH NỔI (GALAXY ORBIT WIDGET) - RỰC SÁNG & CHUYỂN ĐỘNG QUỸ ĐẠO
     // ==========================================
-    fun composeGalaxyWidget(baseBitmap: Bitmap): Bitmap {
+    fun composeGalaxyWidget(baseBitmap: Bitmap, rotationDegrees: Float = 0f): Bitmap {
         val size = 512
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -19,45 +19,63 @@ object WidgetComposer {
         val cx = size / 2f
         val cy = size / 2f
 
-        // Bật đổ bóng phần cứng cho viền để nổi bật trên mọi nền màn hình sáng/trắng
-        paint.setShadowLayer(6f, 0f, 3f, Color.parseColor("#4D000000"))
+        // BƯỚC 1: VẼ CÁC VÒNG QUỸ ĐẠO VÀ VỆ TINH (CÓ XOAY ĐỘNG THEO GÓC rotationDegrees)
+        canvas.save()
+        canvas.rotate(rotationDegrees, cx, cy)
 
-        // 1. Quỹ đạo ngoài cùng (Far Orbit - R = 215) - Nét đứt đậm màu Rêu đậm #283618
+        // 0. Lớp hào quang tỏa sáng (Luminous Golden Aura) - Tách biệt nổi bật trên mọi hình nền tối/sáng
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 14f
+            color = Color.parseColor("#4DFFE082") // Hào quang vàng hoàng kim dịu mắt
+            maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL)
+        }
+        canvas.drawCircle(cx, cy, 215f, glowPaint)
+        canvas.drawCircle(cx, cy, 160f, glowPaint)
+        canvas.drawCircle(cx, cy, 128f, glowPaint)
+
+        // 1. Quỹ đạo ngoài cùng (Far Orbit - R = 215) - Nét đứt Vàng Kim Sáng Rực #FFE082
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 4.5f
-        paint.color = Color.parseColor("#CC283618") // Đậm nét, không mờ nhạt
+        paint.strokeWidth = 5.0f
+        paint.color = Color.parseColor("#FFFFE082") // Vàng kim sáng rực, không mờ nhạt
         paint.pathEffect = DashPathEffect(floatArrayOf(16f, 12f), 0f)
+        paint.setShadowLayer(8f, 0f, 0f, Color.parseColor("#B3FFD54F"))
         canvas.drawCircle(cx, cy, 215f, paint)
 
-        // 2. Quỹ đạo giữa (Outer Orbit - R = 160) - Nét liền đậm màu Đất Nung #BC6C25
-        paint.color = Color.parseColor("#E6BC6C25")
-        paint.strokeWidth = 5.5f
+        // 2. Quỹ đạo giữa (Outer Orbit - R = 160) - Nét liền Hổ Phách Rực Rỡ #FFB74D
+        paint.color = Color.parseColor("#FFFFB74D")
+        paint.strokeWidth = 6.0f
         paint.pathEffect = null
+        paint.setShadowLayer(10f, 0f, 0f, Color.parseColor("#B3FFA726"))
         canvas.drawCircle(cx, cy, 160f, paint)
 
-        // 3. Quỹ đạo phụ trong (Inner Ripple - R = 126) - Nét vàng cát đậm #DDA15E
-        paint.color = Color.parseColor("#CC606C38")
-        paint.strokeWidth = 3.5f
+        // 3. Quỹ đạo trong (Inner Ripple - R = 128) - Nét đứt Vàng Cát Sáng #FFE57F
+        paint.color = Color.parseColor("#FFFFE57F")
+        paint.strokeWidth = 4.0f
         paint.pathEffect = DashPathEffect(floatArrayOf(8f, 8f), 0f)
-        canvas.drawCircle(cx, cy, 126f, paint)
+        paint.setShadowLayer(6f, 0f, 0f, Color.parseColor("#80FFD54F"))
+        canvas.drawCircle(cx, cy, 128f, paint)
         paint.pathEffect = null
 
-        // 4. Các vệ tinh bạn bè quay quanh (Đậm, viền sáng tương phản)
-        drawBoldSatellite(canvas, cx + 160f * 0.85f, cy - 160f * 0.52f, 25f, Color.parseColor("#283618"), "A")
-        drawBoldSatellite(canvas, cx - 160f * 0.70f, cy + 160f * 0.71f, 23f, Color.parseColor("#BC6C25"), "B")
-        drawBoldSatellite(canvas, cx - 215f * 0.35f, cy - 215f * 0.93f, 22f, Color.parseColor("#606C38"), "C")
-        drawBoldSatellite(canvas, cx + 215f * 0.60f, cy + 215f * 0.80f, 22f, Color.parseColor("#283618"), "D")
+        // 4. Các vệ tinh bạn bè quay quanh (Tươi sáng, viền phản quang kép)
+        drawGlowingSatellite(canvas, cx + 160f * 0.85f, cy - 160f * 0.52f, 26f, Color.parseColor("#FF7043"), "A", Color.parseColor("#FFE082"))
+        drawGlowingSatellite(canvas, cx - 160f * 0.70f, cy + 160f * 0.71f, 24f, Color.parseColor("#FFCA28"), "B", Color.parseColor("#FFFFFF"))
+        drawGlowingSatellite(canvas, cx - 215f * 0.35f, cy - 215f * 0.93f, 23f, Color.parseColor("#66BB6A"), "C", Color.parseColor("#FFE082"))
+        drawGlowingSatellite(canvas, cx + 215f * 0.60f, cy + 215f * 0.80f, 23f, Color.parseColor("#4DD0E1"), "D", Color.parseColor("#FFFFFF"))
 
-        // 5. Đổ bóng lõi ống kính trung tâm
+        // Khôi phục góc xoay về 0 để ảnh chụp trung tâm luôn ĐỨNG THẲNG, KHÔNG BỊ NGHIÊNG!
+        canvas.restore()
+
+        // BƯỚC 2: VẼ ẢNH CHỤP VÀ VIỀN ỐNG KÍNH TRUNG TÂM (LUÔN CHÍNH DIỆN)
         val coreRadius = 110f
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            color = Color.parseColor("#33000000")
-            maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+            color = Color.parseColor("#66000000")
+            maskFilter = BlurMaskFilter(16f, BlurMaskFilter.Blur.NORMAL)
         }
-        canvas.drawCircle(cx, cy + 4f, coreRadius, shadowPaint)
+        canvas.drawCircle(cx, cy + 5f, coreRadius, shadowPaint)
 
-        // 6. Lõi ảnh trung tâm
+        // Lõi ảnh trung tâm
         val scaled = Bitmap.createScaledBitmap(baseBitmap, (coreRadius * 2).toInt(), (coreRadius * 2).toInt(), true)
         val shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         val matrix = Matrix()
@@ -70,23 +88,25 @@ object WidgetComposer {
         canvas.drawCircle(cx, cy, coreRadius, paint)
         paint.shader = null
 
-        // 7. Viền kép ống kính đậm sắc nét: Lớp ngoài #283618 dày 8f, lớp trong #DDA15E vàng óng
+        // Viền kép ống kính: Lớp ngoài Vàng hoàng kim sáng chói dày 9f, lớp trong Trắng ngọc trai dày 3.5f
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 8.5f
-        paint.color = Color.parseColor("#283618")
+        paint.strokeWidth = 9.0f
+        paint.color = Color.parseColor("#FFFFD54F")
+        paint.setShadowLayer(10f, 0f, 0f, Color.parseColor("#99FFD54F"))
         canvas.drawCircle(cx, cy, coreRadius, paint)
 
-        paint.strokeWidth = 3f
-        paint.color = Color.parseColor("#FEFAE0")
+        paint.clearShadowLayer()
+        paint.strokeWidth = 3.5f
+        paint.color = Color.parseColor("#FFFFFF")
         canvas.drawCircle(cx, cy, coreRadius - 3.5f, paint)
 
         return output
     }
 
     // ==========================================
-    // KIỂU 3: ĐÁ CUỘI GỢN SÓNG (CONCENTRIC RIPPLE PEBBLE WIDGET) - ĐẬM NÉT & ĐỔ BÓNG NỔI
+    // ĐÁ CUỘI GỢN SÓNG (CONCENTRIC RIPPLE PEBBLE WIDGET) - RỰC SÁNG & ĐỔ BÓNG NỔI
     // ==========================================
-    fun composePebbleWidget(baseBitmap: Bitmap): Bitmap {
+    fun composePebbleWidget(baseBitmap: Bitmap, rotationDegrees: Float = 0f): Bitmap {
         val size = 512
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -95,7 +115,37 @@ object WidgetComposer {
         val cx = size / 2f
         val cy = size / 2f
 
-        // 1. Đường cong viên đá cuội hữu cơ mềm mại (Zen Pebble Blob)
+        canvas.save()
+        canvas.rotate(rotationDegrees, cx, cy)
+
+        // 1. Lớp hào quang gợn sóng lan tỏa
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 14f
+            color = Color.parseColor("#4DFFE082")
+            maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+        }
+        canvas.drawCircle(cx, cy, 230f, glowPaint)
+        canvas.drawCircle(cx, cy, 195f, glowPaint)
+
+        // 2. Gợn sóng ngoài: Vàng Kim Sáng Rực #FFE082
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 5.5f
+        paint.color = Color.parseColor("#FFFFE082")
+        paint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
+        paint.setShadowLayer(8f, 0f, 0f, Color.parseColor("#B3FFD54F"))
+        canvas.drawCircle(cx, cy, 230f, paint)
+
+        // 3. Gợn sóng giữa: Hổ phách sáng #FFB74D
+        paint.strokeWidth = 6.5f
+        paint.color = Color.parseColor("#FFFFB74D")
+        paint.pathEffect = null
+        paint.setShadowLayer(10f, 0f, 0f, Color.parseColor("#B3FFA726"))
+        canvas.drawCircle(cx, cy, 195f, paint)
+
+        canvas.restore()
+
+        // 4. Đường cong viên đá cuội hữu cơ mềm mại (Zen Pebble Blob)
         val pebblePath = Path().apply {
             moveTo(cx, cy - 165f)
             cubicTo(cx + 170f, cy - 160f, cx + 195f, cy + 130f, cx + 20f, cy + 175f)
@@ -104,34 +154,18 @@ object WidgetComposer {
             close()
         }
 
-        // 2. Các gợn sóng đồng tâm lan tỏa (Ripples) - Đậm nét, không mờ nhạt
-        paint.setShadowLayer(6f, 0f, 3f, Color.parseColor("#4D000000"))
-        paint.style = Paint.Style.STROKE
-
-        // Gợn sóng ngoài: Màu Rêu đậm #283618
-        paint.strokeWidth = 5f
-        paint.color = Color.parseColor("#B3283618")
-        paint.pathEffect = DashPathEffect(floatArrayOf(18f, 14f), 0f)
-        canvas.drawCircle(cx, cy, 230f, paint)
-
-        // Gợn sóng giữa: Màu Đất nung #BC6C25
-        paint.strokeWidth = 6f
-        paint.color = Color.parseColor("#E6BC6C25")
-        paint.pathEffect = null
-        canvas.drawCircle(cx, cy, 195f, paint)
-
-        // 3. Đổ bóng hình khối đá cuội
+        // Đổ bóng hình khối đá cuội
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            color = Color.parseColor("#40000000")
-            maskFilter = BlurMaskFilter(14f, BlurMaskFilter.Blur.NORMAL)
+            color = Color.parseColor("#55000000")
+            maskFilter = BlurMaskFilter(16f, BlurMaskFilter.Blur.NORMAL)
         }
         val shadowMatrix = Matrix().apply { postTranslate(0f, 6f) }
         val shadowPath = Path(pebblePath)
         shadowPath.transform(shadowMatrix)
         canvas.drawPath(shadowPath, shadowPaint)
 
-        // 4. Khối đá cuội chứa ảnh
+        // Khối đá cuội chứa ảnh
         val scaled = Bitmap.createScaledBitmap(baseBitmap, size, size, true)
         val shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         paint.clearShadowLayer()
@@ -140,39 +174,57 @@ object WidgetComposer {
         canvas.drawPath(pebblePath, paint)
         paint.shader = null
 
-        // 5. Viền đá cuội kép đậm sắc nét: Viền ngoài #283618 dày 9f, viền trong #FEFAE0
+        // Viền đá cuội kép sáng rực: Lớp ngoài #FFD54F dày 9.5f, lớp trong trắng ngọc #FFFFFF
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 9f
-        paint.color = Color.parseColor("#283618")
+        paint.strokeWidth = 9.5f
+        paint.color = Color.parseColor("#FFFFD54F")
+        paint.setShadowLayer(8f, 0f, 0f, Color.parseColor("#80FFD54F"))
         canvas.drawPath(pebblePath, paint)
 
-        paint.strokeWidth = 3f
-        paint.color = Color.parseColor("#FEFAE0")
+        paint.clearShadowLayer()
+        paint.strokeWidth = 3.5f
+        paint.color = Color.parseColor("#FFFFFF")
         canvas.drawPath(pebblePath, paint)
 
         return output
     }
 
-    private fun drawBoldSatellite(canvas: Canvas, x: Float, y: Float, radius: Float, color: Int, initial: String) {
+    private fun drawGlowingSatellite(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        radius: Float,
+        color: Int,
+        initial: String,
+        borderColor: Int
+    ) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // Đổ bóng vệ tinh
-        paint.setShadowLayer(5f, 0f, 2f, Color.parseColor("#55000000"))
+        // Hào quang vàng tỏa sáng cho từng vệ tinh
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            this.color = Color.parseColor("#66FFE082")
+            maskFilter = BlurMaskFilter(8f, BlurMaskFilter.Blur.NORMAL)
+        }
+        canvas.drawCircle(x, y, radius + 4f, glowPaint)
+
+        // Thân vệ tinh màu tươi sáng
         paint.style = Paint.Style.FILL
         paint.color = color
+        paint.setShadowLayer(6f, 0f, 2f, Color.parseColor("#4D000000"))
         canvas.drawCircle(x, y, radius, paint)
 
-        // Viền kép nổi bật: Viền trắng sáng giúp tách biệt hoàn hảo trên nền sáng lẫn tối
+        // Viền kép sáng bóng
         paint.clearShadowLayer()
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 3f
-        paint.color = Color.parseColor("#FEFAE0")
+        paint.strokeWidth = 3.5f
+        paint.color = borderColor
         canvas.drawCircle(x, y, radius, paint)
 
         // Chữ cái đại diện vệ tinh
         paint.style = Paint.Style.FILL
-        paint.color = Color.parseColor("#FEFAE0")
-        paint.textSize = radius * 0.95f
+        paint.color = Color.parseColor("#FFFFFF")
+        paint.textSize = radius * 1.0f
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         paint.textAlign = Paint.Align.CENTER
 

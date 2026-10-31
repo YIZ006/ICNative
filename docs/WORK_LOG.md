@@ -1139,3 +1139,32 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - Toàn bộ giao diện Thiên Hà Vệ Tinh hiển thị cân đối, không tràn màn hình.
   - Trải nghiệm zoom 2 ngón tay và tương tác meme hoạt động hoàn hảo.
   - Bản build APK sẵn sàng sử dụng.
+
+---
+
+### [2026-10-31 14:45:00] - Nâng cấp v1.4.1: Vòng quỹ đạo phát sáng rực rỡ & Chuyển động xoay nhẹ sống động trên Widget
+* **Thời gian (Timestamp):** 2026-10-31 14:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  1. **Nâng cấp phiên bản lên v1.4.1**: Cập nhật `pubspec.yaml` (`1.4.1+5`) và `UpdateService` (`1.4.1`) để các máy đang cài v1.4.0 lập tức phát hiện bản cập nhật mới trên GitHub và tải về.
+  2. **Vòng quỹ đạo phát sáng rực rỡ (Luminous Golden Glow)**: Xử lý triệt để phản hồi widget bị mờ nhạt trên hình nền tối. Thêm lớp hào quang vàng hoàng kim dịu mắt (`#4DFFE082`, blur mask 10f), quỹ đạo ngoài nét đứt vàng chói lọi (`#FFFFE082`), quỹ đạo giữa nét liền hổ phách (`#FFFFB74D`), quỹ đạo trong vàng cát (`#FFFFE57F`). Viền ảnh trung tâm phủ vàng óng (`#FFFFD54F`) và trắng ngọc trai (`#FFFFFF`). Các vệ tinh mang sắc màu tươi sáng (Coral `#FF7043`, Amber `#FFCA28`, Emerald `#66BB6A`, Cyan `#4DD0E1`) kèm viền phản quang và hào quang riêng.
+  3. **Chuyển động quỹ đạo xoay nhẹ (Dynamic Gentle Orbit Rotation)**: Tách riêng lớp vẽ quỹ đạo và vệ tinh để xoay mượt mà theo góc `rotationDegrees` quanh tâm `(cx, cy)`, trong khi ảnh chụp trung tâm luôn được giữ thẳng đứng 100%. Thiết lập `AlarmManager` và BroadcastReceiver tự động xoay nhẹ góc sau mỗi 30 giây hoặc khi mở màn hình/mở khóa máy.
+* **Chi tiết thay đổi (Changes Made):**
+  - **1. Đồng bộ Version v1.4.1 (`pubspec.yaml`, `update_service.dart`)**:
+    + Nâng `version: 1.4.1+5`.
+    + Đặt `_currentVersion = '1.4.1'`.
+  - **2. Luminous Orbit Rendering (`WidgetComposer.kt`)**:
+    + Thêm hào quang vàng (`glowPaint`) bán kính lớn.
+    + Thay toàn bộ màu xanh/nâu mờ tối bằng bảng màu vàng hoàng kim, hổ phách và kem sáng có đổ bóng phát quang (`setShadowLayer`).
+    + Cập nhật `composeGalaxyWidget` và `composePebbleWidget` hỗ trợ `rotationDegrees`.
+  - **3. Widget Animation & Tick Scheduling (`ICNativeWidgetProvider.kt`, `ICNativePebbleWidgetProvider.kt`, `AndroidManifest.xml`)**:
+    + Thêm receiver `ACTION_ORBIT_TICK`, `ACTION_PEBBLE_TICK`, `ACTION_USER_PRESENT`.
+    + Lên lịch `scheduleNextTick` cập nhật xoay nhẹ quỹ đạo định kỳ 30 giây khi thiết bị hoạt động.
+  - **4. Đóng gói & Kiểm thử**:
+    + `flutter analyze --no-fatal-infos`: 0 issues found!
+    + `flutter build apk --release`: Đóng gói thành công `Orbit-v1.4.1-clean-release.apk` (144.1 MB).
+* **Hiện trạng (Current State):**
+  - Widget trên màn hình chính sáng rực rỡ, rõ nét trên mọi nền màn hình tối/sáng.
+  - Quỹ đạo vệ tinh chuyển động xoay nhẹ sống động.
+  - Sẵn sàng xuất bản Release v1.4.1 lên GitHub.

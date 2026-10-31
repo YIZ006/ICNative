@@ -36,6 +36,8 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="com.abom.utas.utas.ACTION_ORBIT_TICK" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -48,6 +50,8 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="com.abom.utas.utas.ACTION_PEBBLE_TICK" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
