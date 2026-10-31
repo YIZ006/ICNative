@@ -5,6 +5,38 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-10-31 20:30:00] - Phát hành Orbit v1.4.2 Dual-Release, Kết bạn 2 chiều thời gian thực, Camera Auto-Zoom QR, Xem ảnh lẫn nhau & Khắc phục lỗi thông báo cập nhật sớm 0MB
+* **Thời gian (Timestamp):** 2026-10-31 20:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Hoàn tất nâng cấp toàn diện và xuất xưởng chính thức phiên bản **Orbit v1.4.2** lên GitHub Releases theo quy chuẩn bắt buộc Dual-Release (gồm 2 bản APK riêng biệt và gói cài đặt iOS IPA). Giải quyết triệt để 5 vấn đề cốt lõi:
+  1. **Khắc phục lỗi thông báo cập nhật sớm "0MB / 0MB - Lỗi không xác định":** Cơ chế In-App Updater kiểm tra chặt chẽ `draft == false`, tệp APK/IPA hợp lệ và dung lượng `size > 0` trước khi kích hoạt modal thông báo; quy trình đóng gói duy trì trạng thái `draft: true` trong suốt quá trình upload assets lên GitHub và chỉ chuyển `draft: false` khi tất cả các file đã tải lên thành công 100%.
+  2. **Hệ thống kết bạn 2 chiều (Two-Way Mutual Connection):** Quét mã QR giờ đây sẽ tạo `FriendRequest` (pending). Người được quét nhận thông báo/banner tức thì trên màn hình Home và màn hình Bạn bè với 2 nút "Chấp nhận" và "Từ chối". Khi chấp nhận, cả 2 bên lập tức hiển thị avatar vệ tinh bạn bè trên vòng tròn quỹ đạo của nhau theo thời gian thực (Firestore real-time listeners).
+  3. **Xem và chia sẻ ảnh lẫn nhau trên vòng tròn Quỹ đạo (Mutual Photo Sharing):** Loại bỏ câu lệnh gây lỗi thiếu Composite Index trên Firestore; cache ảnh mới nhất nhận được của từng bạn bè; hiển thị biểu tượng camera nhấp nháy trên vệ tinh khi có ảnh mới; chạm vào vệ tinh bạn bè để mở modal toàn màn hình xem ảnh chất lượng cao kèm các nút Ghim vào Widget màn hình chính và Chụp ảnh gửi lại.
+  4. **Hiệu ứng Camera Auto-Zoom & Khung ngắm ôm QR mượt mà:** Khi camera nhận diện mã QR hợp lệ, hệ thống tự động kích hoạt animation thu phóng camera êm ái (`setZoomScale(0.40)` trong 400ms) kết hợp hiệu ứng co khung ngắm (260px -> 215px) với 4 góc viền quang học phát sáng ánh vàng - lục bảo hào quang công nghệ.
+  5. **Tuân thủ Dual-Release & Xuất xưởng v1.4.2:** Build sạch sẽ và đính kèm đầy đủ `Orbit-v1.4.2-clean-release.apk`, `Orbit-v1.4.2-demo-showcase.apk` và `Orbit-v1.4.2.ipa` trên GitHub Release tag `v1.4.2`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/services/update_service.dart`: Chặn draft releases (`data['draft'] == true`), kiểm tra `targetSize > 0` và URL kết thúc bằng `.apk` (Android) hoặc `.ipa` (iOS) trước khi trả về thông tin cập nhật; ngăn chặn mọi khả năng hiển thị 0MB/0MB.
+  - [MODIFY] `lib/screens/update_dialog.dart`: Thêm chốt chặn an toàn `apkSizeBytes <= 0 || !apkDownloadUrl.endsWith('.apk')` chuyển hướng người dùng sang trang web GitHub Releases thay vì thực hiện tải về tệp rỗng.
+  - [MODIFY] `lib/services/friend_service.dart`: Xây dựng model `FriendRequest`, hàm `sendFriendRequestOrConnect()`, `acceptFriendRequest()`, `declineFriendRequest()`, `pendingRequestsNotifier` và real-time listeners trên Firestore collection `friend_requests` và `users/{uid}/friends`.
+  - [MODIFY] `lib/services/sync_service.dart`: Khắc phục lỗi Firestore Composite Index Missing bằng cách loại bỏ `.orderBy('createdAt')` khi truy vấn `.where('receiverIds', arrayContains: myProfile.uid)` và sắp xếp trong bộ nhớ Dart; bổ sung `friendLatestPhotos` cache và `latestReceivedPhotoNotifier`.
+  - [MODIFY] `lib/screens/qr_scanner_screen.dart`: Cài đặt animation tự động zoom camera (`setZoomScale(0.40)`) cùng hiệu ứng co khung ngắm (`_ScannerCornersPainter`), viền quang học vàng - lục rực rỡ và xử lý các kịch bản gửi lời mời kết bạn / kết nối tức thì / đã là bạn bè.
+  - [MODIFY] `lib/screens/friends_screen.dart`: Thêm khu vực "Lời Mời Kết Bạn Đang Chờ" hiển thị danh sách lời mời gửi tới kèm nút Chấp nhận / Từ chối.
+  - [MODIFY] `lib/screens/home.dart`: Thêm badge số lời mời kết bạn trên nút Quản lý bạn bè; thêm banner thông báo lời mời 1 chạm ở đầu màn hình Home; bổ sung badge camera trên vệ tinh bạn bè khi có ảnh mới và modal `_showFriendLatestPhotoModal` xem ảnh trực tiếp từ quỹ đạo.
+  - [BUILD & RELEASE] `Orbit-v1.4.2-clean-release.apk` (151,982,632 bytes, SHA-256: `f08acb2815ba6a0836f8db1f8942a6eb473a9ce8decff9b9160cd4a48df0cf9b`).
+  - [BUILD & RELEASE] `Orbit-v1.4.2-demo-showcase.apk` (151,982,632 bytes, SHA-256: `976360e358ce0696050c0275b89c0a885db58515a8f1ed6d82b4104669c72adb`).
+  - [BUILD & RELEASE] `Orbit-v1.4.2.ipa` (71,003,346 bytes, SHA-256: `2a36f9c3c00daed4a50e1880deddbf7951c64b690822f80757fd6c9c4f551d1f`).
+  - [PUBLISH] GitHub Release `v1.4.2` tại `https://github.com/YIZ006/ICNative/releases/tag/v1.4.2`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Tất cả tính năng và rào cản người dùng phản ánh đã được giải quyết 100%.
+  - Cả 3 file cài đặt cho Android và iOS đã được đính kèm đầy đủ và xuất xưởng thành công.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng tải và trải nghiệm bản phát hành Orbit v1.4.2.
+  2. Thu thập phản hồi từ người dùng thực tế trên cả hai nền tảng Android và iPhone.
+
+---
+
 ### [2026-09-19 16:20:00] - Khởi tạo tài liệu dự án, thiết lập luật Agent và kiến trúc hệ thống
 * **Thời gian (Timestamp):** 2026-09-19 16:20:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
