@@ -182,7 +182,144 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
             ),
 
-            const SizedBox(height: 26),
+            // SECTION: LỜI MỜI KẾT BẠN ĐANG CHỜ (REAL-TIME FRIEND REQUESTS)
+            ValueListenableBuilder<List<FriendRequest>>(
+              valueListenable: FriendService.instance.pendingRequestsNotifier,
+              builder: (context, pendingList, _) {
+                if (pendingList.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          '💌 Lời Mời Kết Bạn Đang Chờ',
+                          style: TextStyle(
+                            color: OrbitColors.deepOlive,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD54F),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${pendingList.length}',
+                            style: const TextStyle(
+                              color: OrbitColors.deepOlive,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: pendingList.length,
+                      separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) {
+                        final req = pendingList[i];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: OrbitColors.surfaceCard,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFFFD54F), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFFD54F).withValues(alpha: 0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: const Color(0xFFFFD54F),
+                                child: Text(
+                                  req.fromName.isNotEmpty
+                                      ? req.fromName.substring(0, 1).toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: OrbitColors.deepOlive,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      req.fromName,
+                                      style: const TextStyle(
+                                        color: OrbitColors.deepOlive,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Muốn kết bạn trên Orbit',
+                                      style: TextStyle(
+                                        color: OrbitColors.deepOlive.withValues(alpha: 0.65),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: OrbitColors.buttonPrimary,
+                                  foregroundColor: OrbitColors.textLight,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                onPressed: () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  final success = await FriendService.instance.acceptFriendRequest(req);
+                                  if (success && mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text('🎉 Đã kết bạn với ${req.fromName}! Cả 2 đã ở trên vòng tròn của nhau.'),
+                                        backgroundColor: OrbitColors.deepOlive,
+                                      ),
+                                    );
+                                    setState(() {});
+                                  }
+                                },
+                                child: const Text('Chấp nhận', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(Icons.close, size: 18, color: OrbitColors.deepOlive.withValues(alpha: 0.5)),
+                                onPressed: () async {
+                                  await FriendService.instance.declineFriendRequest(req);
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              },
+            ),
 
             // Section Header: Connected Friends
             Row(

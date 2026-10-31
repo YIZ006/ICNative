@@ -20,6 +20,14 @@ class SyncService {
   final Set<String> _processedPostIds = {};
   static const _prefProcessedPostsKey = 'iconnative_processed_posts';
 
+  /// Thông báo ảnh mới nhận từ bạn bè để HomeScreen hiển thị banner / toast tức thì
+  final ValueNotifier<Map<String, dynamic>?> latestReceivedPhotoNotifier =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
+  /// Bản đồ lưu ảnh mới nhất của từng người bạn (friendUid -> localFilePath)
+  static final Map<String, String> friendLatestPhotos = {};
+  static final ValueNotifier<int> friendPhotosChangeNotifier = ValueNotifier<int>(0);
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList(_prefProcessedPostsKey) ?? [];
@@ -103,35 +111,37 @@ class SyncService {
     if (myProfile == null || Firebase.apps.isEmpty) return;
 
     _postSubscription?.cancel();
+    // Bỏ .orderBy('createdAt') trong Firestore query để không đòi hỏi composite index thủ công trên Firebase Console
     _postSubscription = FirebaseFirestore.instance
         .collection('posts')
         .where('receiverIds', arrayContains: myProfile.uid)
-        .orderBy('createdAt', descending: true)
-        .limit(10)
         .snapshots()
         .listen(
       (snapshot) async {
-        for (var change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.added) {
-            final data = change.doc.data();
-            if (data == null) continue;
+        final docs = snapshot.docs.toList()
+          ..sort((a, b) {
+            final aTime = (a.data()['createdAt'] as num?)?.toInt() ?? 0;
+            final bTime = (b.data()['createdAt'] as num?)?.toInt() ?? 0;
+            return bTime.compareTo(aTime);
+          });
 
-            final postId = data['id'] as String? ?? change.doc.id;
-            final senderId = data['senderId'] as String? ?? '';
-            final senderName = data['senderName'] as String? ?? 'Bạn bè';
-            final imageUrl = data['imageUrl'] as String? ?? '';
+        for (var doc in docs) {
+          final data = doc.data();
+          final postId = data['id'] as String? ?? doc.id;
+          final senderId = data['senderId'] as String? ?? '';
+          final senderName = data['senderName'] as String? ?? 'Bạn bè';
+          final imageUrl = data['imageUrl'] as String? ?? '';
 
-            // Don't re-download my own posts or already processed posts
-            if (senderId == myProfile.uid || _processedPostIds.contains(postId)) {
-              continue;
-            }
+          // Don't re-download my own posts or already processed posts
+          if (senderId == myProfile.uid || _processedPostIds.contains(postId)) {
+            continue;
+          }
 
-            _processedPostIds.add(postId);
-            _saveProcessedPostIds();
+          _processedPostIds.add(postId);
+          _saveProcessedPostIds();
 
-            if (imageUrl.isNotEmpty) {
-              await _downloadAndApplyToWidget(postId, imageUrl, senderName);
-            }
+          if (imageUrl.isNotEmpty) {
+            await _downloadAndApplyToWidget(postId, imageUrl, senderId, senderName);
           }
         }
       },
@@ -142,7 +152,8 @@ class SyncService {
   }
 
   /// Download friend's photo and immediately update Home Widget & History
-  Future<void> _downloadAndApplyToWidget(String postId, String imageUrl, String senderName) async {
+  Future<void> _downloadAndApplyToWidget(
+      String postId, String imageUrl, String senderId, String senderName) async {
     try {
       final response = await http.get(Uri.parse(imageUrl));
       if (response.statusCode == 200) {
@@ -158,10 +169,24 @@ class SyncService {
         // 2. Save sender metadata
         await savePhotoMetadata(localFile.path, senderName);
 
-        // 3. Immediately update Android / iOS Home Widgets (Kiểu 10 Galaxy & Kiểu 3 Pebble)
+        // 3. Cache latest photo for this friend
+        if (senderId.isNotEmpty) {
+          friendLatestPhotos[senderId] = localFile.path;
+          friendPhotosChangeNotifier.value++;
+        }
+
+        // 4. Immediately update Android / iOS Home Widgets
         await HomeWidget.saveWidgetData<String>('widget_image_path', localFile.path);
         await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName);
         await updateAllHomeWidgets();
+
+        // 5. Broadcast to HomeScreen toast
+        latestReceivedPhotoNotifier.value = {
+          'senderId': senderId,
+          'senderName': senderName,
+          'imagePath': localFile.path,
+          'receivedAt': DateTime.now().millisecondsSinceEpoch,
+        };
 
         debugPrint('✨ Updated Home Widgets with friend photo from $senderName: ${localFile.path}');
       }

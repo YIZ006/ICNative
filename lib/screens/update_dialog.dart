@@ -34,6 +34,13 @@ class _UpdateDialogState extends State<UpdateDialog> {
       return;
     }
 
+    // Nếu link không phải apk hoặc kích thước không hợp lệ, mở trang release trên trình duyệt
+    if (widget.releaseInfo.apkSizeBytes <= 0 || !widget.releaseInfo.apkDownloadUrl.toLowerCase().contains('.apk')) {
+      await UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     setState(() {
       isDownloading = true;
       downloadProgress = 0.0;

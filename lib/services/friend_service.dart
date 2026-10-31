@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -28,9 +29,61 @@ class Friend {
     return Friend(
       uid: map['uid'] as String? ?? '',
       displayName: map['displayName'] as String? ?? 'Bạn bè',
-      addedAt: map['addedAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
+      addedAt: (map['addedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
     );
   }
+}
+
+class FriendRequest {
+  final String id;
+  final String fromUid;
+  final String fromName;
+  final String toUid;
+  final String toName;
+  final String status; // 'pending', 'accepted', 'declined'
+  final int createdAt;
+
+  FriendRequest({
+    required this.id,
+    required this.fromUid,
+    required this.fromName,
+    required this.toUid,
+    required this.toName,
+    required this.status,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'fromUid': fromUid,
+      'fromName': fromName,
+      'toUid': toUid,
+      'toName': toName,
+      'status': status,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory FriendRequest.fromMap(Map<String, dynamic> map, [String? docId]) {
+    return FriendRequest(
+      id: docId ?? (map['id'] as String? ?? ''),
+      fromUid: map['fromUid'] as String? ?? '',
+      fromName: map['fromName'] as String? ?? 'Bạn bè',
+      toUid: map['toUid'] as String? ?? '',
+      toName: map['toName'] as String? ?? '',
+      status: map['status'] as String? ?? 'pending',
+      createdAt: (map['createdAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+}
+
+enum FriendAddResult {
+  requestSent,
+  alreadyFriends,
+  acceptedImmediately,
+  selfError,
+  networkError,
 }
 
 class FriendService {
@@ -43,7 +96,19 @@ class FriendService {
 
   final ValueNotifier<int> friendsCountNotifier = ValueNotifier<int>(0);
 
-  /// Load cached friends on app startup
+  /// Danh sách lời mời kết bạn đang chờ người dùng phản hồi
+  final ValueNotifier<List<FriendRequest>> pendingRequestsNotifier =
+      ValueNotifier<List<FriendRequest>>([]);
+
+  /// Thông báo banner khi lời mời kết bạn được người kia chấp nhận
+  final ValueNotifier<String?> newFriendAcceptedToastNotifier =
+      ValueNotifier<String?>(null);
+
+  StreamSubscription<QuerySnapshot>? _incomingRequestsSub;
+  StreamSubscription<QuerySnapshot>? _outgoingRequestsSub;
+  StreamSubscription<QuerySnapshot>? _friendsRealtimeSub;
+
+  /// Khởi tạo và đồng bộ bạn bè từ cache & Firestore
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_prefFriendsKey);
@@ -60,11 +125,226 @@ class FriendService {
       }
     }
 
-    // Sync with Firestore if available
-    syncFriendsFromFirestore();
+    if (Firebase.apps.isNotEmpty) {
+      startRealtimeSync();
+    }
   }
 
-  /// Sync friend list from Firestore
+  /// Khởi động các luồng lắng nghe thời gian thực (Real-time Firestore Listeners)
+  void startRealtimeSync() {
+    final myUid = AuthService.instance.currentUser?.uid;
+    if (myUid == null || Firebase.apps.isEmpty) return;
+
+    // 1. Lắng nghe danh sách bạn bè 2 chiều (Khi đối phương chấp nhận, bạn bè tự động xuất hiện trên vòng tròn)
+    _friendsRealtimeSub?.cancel();
+    _friendsRealtimeSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(myUid)
+        .collection('friends')
+        .snapshots()
+        .listen(
+      (snapshot) async {
+        final List<Friend> updated = [];
+        for (var doc in snapshot.docs) {
+          updated.add(Friend.fromMap(doc.data()));
+        }
+        _friends.clear();
+        _friends.addAll(updated);
+        friendsCountNotifier.value = _friends.length;
+        await _saveToCache();
+        debugPrint('🪐 Realtime friends updated: ${_friends.length} friends on orbit');
+      },
+      onError: (e) {
+        debugPrint('Realtime friends sync error: $e');
+      },
+    );
+
+    // 2. Lắng nghe lời mời kết bạn gửi ĐẾN tài khoản hiện tại
+    _incomingRequestsSub?.cancel();
+    _incomingRequestsSub = FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('toUid', isEqualTo: myUid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        final List<FriendRequest> pending = [];
+        for (var doc in snapshot.docs) {
+          final req = FriendRequest.fromMap(doc.data(), doc.id);
+          if (req.status == 'pending') {
+            pending.add(req);
+          }
+        }
+        pendingRequestsNotifier.value = pending;
+        debugPrint('💌 Pending incoming friend requests: ${pending.length}');
+      },
+      onError: (e) {
+        debugPrint('Friend requests listen error: $e');
+      },
+    );
+
+    // 3. Lắng nghe lời mời kết bạn DO TÔI GỬI ĐI xem đối phương đã chấp nhận chưa
+    _outgoingRequestsSub?.cancel();
+    _outgoingRequestsSub = FirebaseFirestore.instance
+        .collection('friend_requests')
+        .where('fromUid', isEqualTo: myUid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        for (var change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.modified) {
+            final data = change.doc.data();
+            if (data != null && data['status'] == 'accepted') {
+              final toName = data['toName'] as String? ?? 'Bạn bè';
+              newFriendAcceptedToastNotifier.value = toName;
+              debugPrint('🎉 $toName accepted your friend request!');
+            }
+          }
+        }
+      },
+      onError: (e) {
+        debugPrint('Outgoing request sync error: $e');
+      },
+    );
+  }
+
+  /// Gửi lời mời kết bạn hoặc tự động kết nối nếu đối phương đã gửi trước đó
+  Future<FriendAddResult> sendFriendRequestOrConnect({
+    required String friendUid,
+    required String friendName,
+  }) async {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null) return FriendAddResult.networkError;
+    if (friendUid == myProfile.uid) return FriendAddResult.selfError;
+
+    // 1. Kiểm tra nếu đã là bạn bè từ trước
+    if (_friends.any((f) => f.uid == friendUid)) {
+      return FriendAddResult.alreadyFriends;
+    }
+
+    if (Firebase.apps.isEmpty) {
+      // Offline fallback: Thêm trực tiếp vào danh sách cục bộ
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _friends.add(Friend(uid: friendUid, displayName: friendName, addedAt: now));
+      friendsCountNotifier.value = _friends.length;
+      await _saveToCache();
+      return FriendAddResult.acceptedImmediately;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    try {
+      // 2. Kiểm tra xem người kia đã từng gửi lời mời cho mình chưa
+      final reverseDoc = await firestore
+          .collection('friend_requests')
+          .doc('${friendUid}_${myProfile.uid}')
+          .get();
+
+      if (reverseDoc.exists) {
+        final data = reverseDoc.data()!;
+        if (data['status'] == 'pending') {
+          // Người kia đã gửi lời mời -> Chấp nhận ngay lập tức! Cả hai trở thành bạn bè!
+          final request = FriendRequest.fromMap(data, reverseDoc.id);
+          await acceptFriendRequest(request);
+          return FriendAddResult.acceptedImmediately;
+        }
+      }
+
+      // 3. Gửi lời mời kết bạn mới đến người kia
+      final requestId = '${myProfile.uid}_$friendUid';
+      final requestData = {
+        'id': requestId,
+        'fromUid': myProfile.uid,
+        'fromName': myProfile.displayName,
+        'toUid': friendUid,
+        'toName': friendName,
+        'status': 'pending',
+        'createdAt': now,
+      };
+
+      await firestore
+          .collection('friend_requests')
+          .doc(requestId)
+          .set(requestData, SetOptions(merge: true));
+
+      debugPrint('🚀 Sent friend request to $friendName ($friendUid)');
+      return FriendAddResult.requestSent;
+    } catch (e) {
+      debugPrint('Error sending friend request: $e');
+      return FriendAddResult.networkError;
+    }
+  }
+
+  /// Chấp nhận lời mời kết bạn (Kết nối 2 chiều trên vòng tròn quỹ đạo của cả 2)
+  Future<bool> acceptFriendRequest(FriendRequest req) async {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null) return false;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // 1. Cập nhật trạng thái lời mời thành 'accepted'
+      await firestore.collection('friend_requests').doc(req.id).update({
+        'status': 'accepted',
+        'acceptedAt': now,
+      });
+
+      // 2. Thêm người gửi vào danh sách bạn bè của tôi (Firestore)
+      final friendObj = Friend(
+        uid: req.fromUid,
+        displayName: req.fromName,
+        addedAt: now,
+      );
+      await firestore
+          .collection('users')
+          .doc(myProfile.uid)
+          .collection('friends')
+          .doc(req.fromUid)
+          .set(friendObj.toMap(), SetOptions(merge: true));
+
+      // 3. Thêm tôi vào danh sách bạn bè của người gửi (Firestore)
+      await firestore
+          .collection('users')
+          .doc(req.fromUid)
+          .collection('friends')
+          .doc(myProfile.uid)
+          .set({
+        'uid': myProfile.uid,
+        'displayName': myProfile.displayName,
+        'addedAt': now,
+      }, SetOptions(merge: true));
+
+      // 4. Cập nhật local state
+      if (!_friends.any((f) => f.uid == req.fromUid)) {
+        _friends.add(friendObj);
+        friendsCountNotifier.value = _friends.length;
+        await _saveToCache();
+      }
+
+      debugPrint('🤝 Mutual friend connection established with ${req.fromName}!');
+      return true;
+    } catch (e) {
+      debugPrint('Error accepting friend request: $e');
+      return false;
+    }
+  }
+
+  /// Từ chối lời mời kết bạn
+  Future<void> declineFriendRequest(FriendRequest req) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('friend_requests')
+          .doc(req.id)
+          .update({
+        'status': 'declined',
+      });
+    } catch (e) {
+      debugPrint('Error declining friend request: $e');
+    }
+  }
+
+  /// Đồng bộ thủ công danh sách bạn bè từ Firestore
   Future<void> syncFriendsFromFirestore() async {
     final myUid = AuthService.instance.currentUser?.uid;
     if (myUid == null || Firebase.apps.isEmpty) return;
@@ -79,75 +359,17 @@ class FriendService {
       if (snapshot.docs.isNotEmpty) {
         _friends.clear();
         for (var doc in snapshot.docs) {
-          final data = doc.data();
-          _friends.add(Friend.fromMap(data));
+          _friends.add(Friend.fromMap(doc.data()));
         }
         friendsCountNotifier.value = _friends.length;
-        _saveToCache();
+        await _saveToCache();
       }
     } catch (e) {
       debugPrint('Firestore friend sync: $e');
     }
   }
 
-  /// Add friend from scanned QR code data
-  Future<bool> addFriendFromQr(String friendUid, String friendName) async {
-    final myProfile = AuthService.instance.currentUser;
-    if (myProfile == null) return false;
-    if (friendUid == myProfile.uid) {
-      debugPrint('Cannot add yourself as a friend');
-      return false;
-    }
-
-    // Check if already friends
-    if (_friends.any((f) => f.uid == friendUid)) {
-      return true; // Already connected
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final newFriend = Friend(
-      uid: friendUid,
-      displayName: friendName,
-      addedAt: now,
-    );
-
-    _friends.add(newFriend);
-    friendsCountNotifier.value = _friends.length;
-    await _saveToCache();
-
-    // Mutual friend link in Firestore if Firebase is active
-    if (Firebase.apps.isNotEmpty) {
-      try {
-        final firestore = FirebaseFirestore.instance;
-
-        // 1. Add friend to my list
-        await firestore
-            .collection('users')
-            .doc(myProfile.uid)
-            .collection('friends')
-            .doc(friendUid)
-            .set(newFriend.toMap(), SetOptions(merge: true));
-
-        // 2. Add myself to friend's list (Mutual pairing)
-        await firestore
-            .collection('users')
-            .doc(friendUid)
-            .collection('friends')
-            .doc(myProfile.uid)
-            .set({
-          'uid': myProfile.uid,
-          'displayName': myProfile.displayName,
-          'addedAt': now,
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Firestore mutual friend add: $e');
-      }
-    }
-
-    return true;
-  }
-
-  /// Remove a friend
+  /// Xóa bạn bè
   Future<void> removeFriend(String friendUid) async {
     _friends.removeWhere((f) => f.uid == friendUid);
     friendsCountNotifier.value = _friends.length;
@@ -176,5 +398,11 @@ class FriendService {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = jsonEncode(_friends.map((f) => f.toMap()).toList());
     await prefs.setString(_prefFriendsKey, jsonStr);
+  }
+
+  void dispose() {
+    _incomingRequestsSub?.cancel();
+    _outgoingRequestsSub?.cancel();
+    _friendsRealtimeSub?.cancel();
   }
 }

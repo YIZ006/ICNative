@@ -92,6 +92,13 @@ class UpdateService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Không thông báo cập nhật nếu release đang là bản nháp (draft)
+        if (data['draft'] == true) {
+          debugPrint('Bỏ qua: Release đang ở chế độ draft.');
+          return null;
+        }
+
         final tagName = (data['tag_name'] as String? ?? '').trim();
         final title = (data['name'] as String? ?? tagName).trim();
         final notes = (data['body'] as String? ?? '').trim();
@@ -182,6 +189,21 @@ class UpdateService {
                 }
               }
             }
+          }
+        }
+
+        // CHẶN BÁO CẬP NHẬT SỚM KHI CHƯA HOÀN TẤT ĐÓNG GÓI TRÊN GITHUB:
+        // Nếu file cài đặt chưa upload xong (size <= 0 hoặc url null) thì không làm phiền người dùng
+        if (!Platform.isIOS) {
+          if (targetDownloadUrl == null || targetSize <= 0) {
+            debugPrint('Bỏ qua: Bản build Android chưa tải xong lên GitHub Release.');
+            return null;
+          }
+        } else {
+          // Trên iOS: Nếu kiểm tra tự động mà chưa có file .ipa thì cũng chưa vội báo
+          if (!isManual && (ipaUrl == null || targetSize <= 0)) {
+            debugPrint('Bỏ qua: Bản build iOS IPA chưa tải xong lên GitHub Release.');
+            return null;
           }
         }
 

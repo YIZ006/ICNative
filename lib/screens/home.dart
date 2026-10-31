@@ -16,6 +16,8 @@ import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
 import 'package:icnative/services/locale_service.dart';
+import 'package:icnative/services/sync_service.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/sizes.dart';
@@ -182,6 +184,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _checkAutoUpdate();
     });
 
+    // Lắng nghe thông báo bạn bè chấp nhận kết bạn & ảnh mới nhận từ bạn bè
+    FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
+    SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
+
     if (_isDemoMode) {
       _startDemoReactions();
     }
@@ -293,6 +299,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
+    SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
     _demoReactionTimer?.cancel();
     _orbitTicker.dispose();
@@ -302,6 +310,189 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     controller?.dispose();
     scrollController.dispose();
     super.dispose();
+  }
+
+  void _onNewFriendAccepted() {
+    final friendName = FriendService.instance.newFriendAcceptedToastNotifier.value;
+    if (friendName != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 $friendName đã chấp nhận kết bạn! Cả 2 đã ở trên vòng tròn của nhau.'),
+          backgroundColor: OrbitColors.buttonPrimary,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  void _onLatestPhotoReceived() {
+    final data = SyncService.instance.latestReceivedPhotoNotifier.value;
+    if (data != null && mounted) {
+      final senderName = data['senderName'] as String? ?? 'Bạn bè';
+      final imagePath = data['imagePath'] as String? ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Text('📸', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$senderName vừa gửi ảnh mới lên Widget!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'Xem ngay',
+            textColor: const Color(0xFFFFD54F),
+            onPressed: () {
+              if (imagePath.isNotEmpty) {
+                _showFriendLatestPhotoModal(senderName, imagePath);
+              }
+            },
+          ),
+          backgroundColor: OrbitColors.deepOlive,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  void _showFriendLatestPhotoModal(String friendName, String imagePath) {
+    if (!File(imagePath).existsSync()) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Container(
+          decoration: BoxDecoration(
+            color: OrbitColors.surfaceCard,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFFFD54F), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: OrbitColors.buttonPrimary,
+                      child: Text(
+                        friendName.isNotEmpty ? friendName.substring(0, 1).toUpperCase() : '?',
+                        style: const TextStyle(color: OrbitColors.textLight, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            friendName,
+                            style: const TextStyle(color: OrbitColors.deepOlive, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          Text(
+                            'Khoảnh khắc mới nhất',
+                            style: TextStyle(color: OrbitColors.deepOlive.withValues(alpha: 0.6), fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: OrbitColors.deepOlive),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Image
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
+                  child: Image.file(
+                    File(imagePath),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+
+              // Actions
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: OrbitColors.deepOlive,
+                          side: const BorderSide(color: OrbitColors.buttonPrimary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final nav = Navigator.of(ctx);
+                          await HomeWidget.saveWidgetData<String>('widget_image_path', imagePath);
+                          await HomeWidget.saveWidgetData<String>('widget_sender_name', friendName);
+                          await SyncService.updateAllHomeWidgets();
+                          if (mounted) {
+                            nav.pop();
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('📌 Đã ghim ảnh của bạn bè lên Widget màn hình chính!'),
+                                backgroundColor: OrbitColors.deepOlive,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.push_pin_rounded, size: 18),
+                        label: const Text('Ghim Widget', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: OrbitColors.buttonPrimary,
+                          foregroundColor: OrbitColors.textLight,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            selectedRecipientName = friendName;
+                          });
+                        },
+                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                        label: const Text('Gửi lại ảnh', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _openExpandedLens() {
@@ -484,6 +675,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 // 1. Top Bar (Cao 50dp)
                                 _buildTopBar(),
 
+                                // Banner thông báo lời mời kết bạn 2 chiều (nếu có)
+                                _buildPendingFriendRequestBanner(),
+
                                 // 2. Central Area (Flexible Expanded - Khong bao gio tran man hinh)
                                 Expanded(
                                   child: _buildCentralLensAndOrbits(
@@ -638,49 +832,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             },
           ),
 
-          // 2. Friends Hub Pill
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+          // 2. Friends Hub Pill (Hiển thị số bạn bè & badge lời mời kết bạn nổi bật)
+          ValueListenableBuilder<List<FriendRequest>>(
+            valueListenable: FriendService.instance.pendingRequestsNotifier,
+            builder: (context, pendingList, _) {
+              final int pendingCount = pendingList.length;
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+                  );
+                },
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: OrbitColors.buttonPrimary,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: pendingCount > 0 ? const Color(0xFFFFD54F) : OrbitColors.deepOlive.withValues(alpha: 0.2),
+                      width: pendingCount > 0 ? 1.8 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: pendingCount > 0
+                            ? const Color(0xFFFFD54F).withValues(alpha: 0.4)
+                            : OrbitColors.deepOlive.withValues(alpha: 0.15),
+                        blurRadius: pendingCount > 0 ? 10 : 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        pendingCount > 0 ? Icons.mark_email_unread_rounded : Icons.people_alt_rounded,
+                        color: pendingCount > 0 ? const Color(0xFFFFD54F) : OrbitColors.textLight,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        pendingCount > 0
+                            ? 'Lời mời ($pendingCount)'
+                            : (friendsCount > 0 ? "${tr('friends_title')} ($friendsCount)" : tr('add_friend')),
+                        style: TextStyle(
+                          color: pendingCount > 0 ? const Color(0xFFFFD54F) : OrbitColors.textLight,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: OrbitColors.buttonPrimary,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: OrbitColors.deepOlive.withValues(alpha: 0.2)),
-                boxShadow: [
-                  BoxShadow(
-                    color: OrbitColors.deepOlive.withValues(alpha: 0.15),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.people_alt_rounded,
-                    color: OrbitColors.textLight,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    friendsCount > 0 ? "${tr('friends_title')} ($friendsCount)" : tr('add_friend'),
-                    style: const TextStyle(
-                      color: OrbitColors.textLight,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
 
           // 2.5 Quick Widget Setup Guide Button
@@ -746,6 +954,92 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  /// Banner thông báo lời mời kết bạn 2 chiều đang chờ xử lý
+  Widget _buildPendingFriendRequestBanner() {
+    return ValueListenableBuilder<List<FriendRequest>>(
+      valueListenable: FriendService.instance.pendingRequestsNotifier,
+      builder: (context, requests, _) {
+        if (requests.isEmpty) return const SizedBox.shrink();
+        final req = requests.first;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: OrbitColors.surfaceCard,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFFFD54F), width: 1.6),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFFD54F).withValues(alpha: 0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text('💌', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${req.fromName} muốn kết bạn!',
+                      style: const TextStyle(
+                        color: OrbitColors.deepOlive,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'Cùng chia sẻ ảnh lên Widget Orbit',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive.withValues(alpha: 0.65),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OrbitColors.buttonPrimary,
+                  foregroundColor: OrbitColors.textLight,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: const Size(0, 30),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  await FriendService.instance.acceptFriendRequest(req);
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('🎉 Đã kết bạn với ${req.fromName}! Cả 2 đã ở trên vòng tròn của nhau.'),
+                        backgroundColor: OrbitColors.deepOlive,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Chấp nhận', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.close, size: 16, color: OrbitColors.deepOlive.withValues(alpha: 0.5)),
+                onPressed: () => FriendService.instance.declineFriendRequest(req),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1372,6 +1666,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final bool isSelected = selectedRecipientName == item.name;
     final reactions = _friendReactions[item.id] ?? [];
     const double avatarSize = 44.0;
+    final String? friendPhoto = SyncService.friendLatestPhotos[item.id];
+    final bool hasFriendPhoto = friendPhoto != null && File(friendPhoto).existsSync();
 
     return SizedBox(
       width: avatarSize,
@@ -1391,11 +1687,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 )),
 
-          // Avatar tròn tinh gọn, thoáng đãng - Tuyệt đối không nhãn chữ thừa làm dày đặc giao diện
+          // Avatar tròn tinh gọn, thoáng đãng - Chạm xem ảnh bạn bè mới nhất hoặc chọn người nhận
           GestureDetector(
             onDoubleTap: () {
               if (!item.isAddButton) {
                 _triggerReaction(item.id, '❤️');
+              }
+            },
+            onLongPress: () {
+              if (!item.isAddButton) {
+                setState(() {
+                  selectedRecipientName = isSelected ? null : item.name;
+                });
               }
             },
             onTap: () {
@@ -1404,6 +1707,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   context,
                   MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
                 );
+              } else if (hasFriendPhoto) {
+                _showFriendLatestPhotoModal(item.name, friendPhoto);
               } else {
                 setState(() {
                   selectedRecipientName = isSelected ? null : item.name;
@@ -1424,11 +1729,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ? OrbitColors.terracotta
                       : (item.isAddButton
                           ? OrbitColors.buttonPrimary
-                          : (item.hasGlow ? const Color(0xFFFFD54F) : OrbitColors.khakiGold.withValues(alpha: 0.85))),
-                  width: isSelected ? 3.2 : (item.hasGlow ? 2.6 : 2.0),
+                          : (item.hasGlow || hasFriendPhoto ? const Color(0xFFFFD54F) : OrbitColors.khakiGold.withValues(alpha: 0.85))),
+                  width: isSelected ? 3.2 : (item.hasGlow || hasFriendPhoto ? 2.6 : 2.0),
                 ),
                 boxShadow: [
-                  if (item.hasGlow)
+                  if (item.hasGlow || hasFriendPhoto)
                     BoxShadow(
                       color: const Color(0xFFFFD54F).withValues(alpha: 0.55),
                       blurRadius: 14,
@@ -1456,6 +1761,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // Huy hiệu camera nhỏ báo hiệu bạn bè này vừa gửi ảnh mới
+          if (hasFriendPhoto)
+            Positioned(
+              top: -3,
+              right: -3,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD54F),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: OrbitColors.surfaceCard, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD54F).withValues(alpha: 0.6),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.camera_alt_rounded, size: 10, color: OrbitColors.deepOlive),
+              ),
+            ),
         ],
       ),
     );
