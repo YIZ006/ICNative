@@ -47,7 +47,7 @@ class UpdateService {
   /// Phân định bản build hiện tại (Clean Release vs Demo Showcase)
   static const bool isDemoBuild = bool.fromEnvironment('DEFAULT_DEMO_MODE', defaultValue: false);
 
-  static String _currentVersion = '1.4.1';
+  static String _currentVersion = '1.4.2';
   static String get currentVersion => _currentVersion;
   static const String repoOwner = 'YIZ006';
   static const String repoName = 'ICNative';
