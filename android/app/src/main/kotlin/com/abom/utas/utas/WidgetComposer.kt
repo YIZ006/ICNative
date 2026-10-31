@@ -10,7 +10,7 @@ object WidgetComposer {
     // ==========================================
     // THIÊN HÀ VỆ TINH NỔI (GALAXY ORBIT WIDGET) - RỰC SÁNG & CHUYỂN ĐỘNG QUỸ ĐẠO
     // ==========================================
-    fun composeGalaxyWidget(baseBitmap: Bitmap, rotationDegrees: Float = 0f): Bitmap {
+    fun composeGalaxyWidget(baseBitmap: Bitmap, rotationDegrees: Float = 0f, drawSatellites: Boolean = true): Bitmap {
         val size = 512
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -23,51 +23,39 @@ object WidgetComposer {
         canvas.save()
         canvas.rotate(rotationDegrees, cx, cy)
 
-        // 0. Lớp hào quang tỏa sáng (Luminous Golden Aura) - Tách biệt nổi bật trên mọi hình nền tối/sáng
+        // 0. Lớp hào quang tỏa sáng (Luminous Golden Aura) - Tách biệt nổi bật, nhẹ nhàng dễ nhìn
         val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 14f
+            strokeWidth = 10f
             color = Color.parseColor("#4DFFE082") // Hào quang vàng hoàng kim dịu mắt
-            maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL)
+            maskFilter = BlurMaskFilter(8f, BlurMaskFilter.Blur.NORMAL)
         }
-        canvas.drawCircle(cx, cy, 215f, glowPaint)
-        canvas.drawCircle(cx, cy, 160f, glowPaint)
-        canvas.drawCircle(cx, cy, 128f, glowPaint)
+        val orbitRadius = 180f
+        canvas.drawCircle(cx, cy, orbitRadius, glowPaint)
 
-        // 1. Quỹ đạo ngoài cùng (Far Orbit - R = 215) - Nét đứt Vàng Kim Sáng Rực #FFE082
+        // 1. Quỹ đạo tinh gọn, thanh thoát (Single Crisp Orbit - R = 180) - Nét đứt Vàng Kim Sáng Rực
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 5.0f
-        paint.color = Color.parseColor("#FFFFE082") // Vàng kim sáng rực, không mờ nhạt
+        paint.strokeWidth = 4.5f
+        paint.color = Color.parseColor("#FFFFE082") // Vàng kim sáng rực, thanh thoát
         paint.pathEffect = DashPathEffect(floatArrayOf(16f, 12f), 0f)
         paint.setShadowLayer(8f, 0f, 0f, Color.parseColor("#B3FFD54F"))
-        canvas.drawCircle(cx, cy, 215f, paint)
-
-        // 2. Quỹ đạo giữa (Outer Orbit - R = 160) - Nét liền Hổ Phách Rực Rỡ #FFB74D
-        paint.color = Color.parseColor("#FFFFB74D")
-        paint.strokeWidth = 6.0f
-        paint.pathEffect = null
-        paint.setShadowLayer(10f, 0f, 0f, Color.parseColor("#B3FFA726"))
-        canvas.drawCircle(cx, cy, 160f, paint)
-
-        // 3. Quỹ đạo trong (Inner Ripple - R = 128) - Nét đứt Vàng Cát Sáng #FFE57F
-        paint.color = Color.parseColor("#FFFFE57F")
-        paint.strokeWidth = 4.0f
-        paint.pathEffect = DashPathEffect(floatArrayOf(8f, 8f), 0f)
-        paint.setShadowLayer(6f, 0f, 0f, Color.parseColor("#80FFD54F"))
-        canvas.drawCircle(cx, cy, 128f, paint)
+        canvas.drawCircle(cx, cy, orbitRadius, paint)
         paint.pathEffect = null
 
-        // 4. Các vệ tinh bạn bè quay quanh (Tươi sáng, viền phản quang kép)
-        drawGlowingSatellite(canvas, cx + 160f * 0.85f, cy - 160f * 0.52f, 26f, Color.parseColor("#FF7043"), "A", Color.parseColor("#FFE082"))
-        drawGlowingSatellite(canvas, cx - 160f * 0.70f, cy + 160f * 0.71f, 24f, Color.parseColor("#FFCA28"), "B", Color.parseColor("#FFFFFF"))
-        drawGlowingSatellite(canvas, cx - 215f * 0.35f, cy - 215f * 0.93f, 23f, Color.parseColor("#66BB6A"), "C", Color.parseColor("#FFE082"))
-        drawGlowingSatellite(canvas, cx + 215f * 0.60f, cy + 215f * 0.80f, 23f, Color.parseColor("#4DD0E1"), "D", Color.parseColor("#FFFFFF"))
+        // 2. Vệ tinh bạn bè (Chỉ vẽ khi có dữ liệu bạn bè hoặc ở bản Demo)
+        if (drawSatellites) {
+            val satR = 24f
+            drawGlowingSatellite(canvas, cx + orbitRadius * 0.707f, cy - orbitRadius * 0.707f, satR, Color.parseColor("#FF7043"), "A", Color.parseColor("#FFE082"))
+            drawGlowingSatellite(canvas, cx - orbitRadius * 0.707f, cy - orbitRadius * 0.707f, satR, Color.parseColor("#FFCA28"), "B", Color.parseColor("#FFFFFF"))
+            drawGlowingSatellite(canvas, cx - orbitRadius * 0.707f, cy + orbitRadius * 0.707f, satR, Color.parseColor("#66BB6A"), "C", Color.parseColor("#FFE082"))
+            drawGlowingSatellite(canvas, cx + orbitRadius * 0.707f, cy + orbitRadius * 0.707f, satR, Color.parseColor("#4DD0E1"), "D", Color.parseColor("#FFFFFF"))
+        }
 
         // Khôi phục góc xoay về 0 để ảnh chụp trung tâm luôn ĐỨNG THẲNG, KHÔNG BỊ NGHIÊNG!
         canvas.restore()
 
-        // BƯỚC 2: VẼ ẢNH CHỤP VÀ VIỀN ỐNG KÍNH TRUNG TÂM (LUÔN CHÍNH DIỆN)
-        val coreRadius = 110f
+        // BƯỚC 2: VẼ ẢNH CHỤP VÀ VIỀN ỐNG KÍNH TRUNG TÂM (RỘNG RÃI, THOÁNG ĐÃNG)
+        val coreRadius = 118f
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
             color = Color.parseColor("#66000000")

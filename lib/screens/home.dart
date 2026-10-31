@@ -10,10 +10,13 @@ import 'package:icnative/screens/friends_screen.dart';
 import 'package:icnative/screens/history.dart';
 import 'package:icnative/screens/preview.dart';
 import 'package:icnative/screens/profile_screen.dart';
+import 'package:icnative/screens/update_dialog.dart';
 import 'package:icnative/screens/widget_guide_screen.dart';
 import 'package:icnative/services/auth_service.dart';
+import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
 import 'package:icnative/services/locale_service.dart';
+import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/sizes.dart';
 import 'package:icnative/settings/theme_colors.dart';
@@ -51,65 +54,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _morphController;
   late Animation<double> _morphAnimation;
 
-  // 5. Demo 30 Ban Be Mode (Dieu khien boi isDemoModeNotifier)
+  // Chế độ Trải Nghiệm Mẫu (Demo Showcase Mode)
   bool get _isDemoMode => isDemoModeNotifier.value;
   void _onDemoModeChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_isDemoMode) {
+      _startDemoReactions();
+    } else {
+      _demoReactionTimer?.cancel();
+      _friendReactions.clear();
+    }
+    setState(() {});
   }
 
-  static final List<Friend> _demoFriendsList = [
-    Friend(uid: 'd1', displayName: 'An Nhiên', addedAt: 0),
-    Friend(uid: 'd2', displayName: 'Bảo Long', addedAt: 0),
-    Friend(uid: 'd3', displayName: 'Chi Mai', addedAt: 0),
-    Friend(uid: 'd4', displayName: 'Dương Vũ', addedAt: 0),
-    Friend(uid: 'd5', displayName: 'Em Vy', addedAt: 0),
-    Friend(uid: 'd6', displayName: 'Hà Linh', addedAt: 0),
-    Friend(uid: 'd7', displayName: 'Khánh An', addedAt: 0),
-    Friend(uid: 'd8', displayName: 'Linh Đan', addedAt: 0),
-    Friend(uid: 'd9', displayName: 'Minh Quang', addedAt: 0),
-    Friend(uid: 'd10', displayName: 'Nam Phong', addedAt: 0),
-    Friend(uid: 'd11', displayName: 'Oanh Vũ', addedAt: 0),
-    Friend(uid: 'd12', displayName: 'Phúc Khang', addedAt: 0),
-    Friend(uid: 'd13', displayName: 'Quân Nguyễn', addedAt: 0),
-    Friend(uid: 'd14', displayName: 'Sơn Tùng', addedAt: 0),
-    Friend(uid: 'd15', displayName: 'Thảo My', addedAt: 0),
-    Friend(uid: 'd16', displayName: 'Uyên Phương', addedAt: 0),
-    Friend(uid: 'd17', displayName: 'Việt Anh', addedAt: 0),
-    Friend(uid: 'd18', displayName: 'Xuân Bách', addedAt: 0),
-    Friend(uid: 'd19', displayName: 'Yến Nhi', addedAt: 0),
-    Friend(uid: 'd20', displayName: 'Zinny', addedAt: 0),
-    Friend(uid: 'd21', displayName: 'Bách Khoa', addedAt: 0),
-    Friend(uid: 'd22', displayName: 'Cường Đô', addedAt: 0),
-    Friend(uid: 'd23', displayName: 'Dũng Tiến', addedAt: 0),
-    Friend(uid: 'd24', displayName: 'Giang Còi', addedAt: 0),
-    Friend(uid: 'd25', displayName: 'Huy Hoàng', addedAt: 0),
-    Friend(uid: 'd26', displayName: 'Kiên Cường', addedAt: 0),
-    Friend(uid: 'd27', displayName: 'Long Nhật', addedAt: 0),
-    Friend(uid: 'd28', displayName: 'Mai Anh', addedAt: 0),
-    Friend(uid: 'd29', displayName: 'Nga Xinh', addedAt: 0),
-    Friend(uid: 'd30', displayName: 'Phong Gió', addedAt: 0),
-  ];
+  void _startDemoReactions() {
+    _demoReactionTimer?.cancel();
+    _demoReactionTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted || !_isDemoMode) {
+        timer.cancel();
+        return;
+      }
+      final demoFriends = DemoDataService.instance.demoFriends;
+      if (demoFriends.isEmpty) return;
+      final randomFriend = demoFriends[math.Random().nextInt(demoFriends.length)];
+      final emojis = ['❤️', '🔥', '✨', '😍', '👏'];
+      final randomEmoji = emojis[math.Random().nextInt(emojis.length)];
+      _triggerReaction(randomFriend.uid, randomEmoji);
+    });
+  }
 
-  // 2. Physics & Multi-orbit Rotation Engine (Hỗ trợ 3 tầng cho tối đa 30 bạn)
+  // 2. Physics & Multi-orbit Rotation Engine (Thiết kế tinh gọn, thoáng đãng, dễ nhìn)
   late Ticker _orbitTicker;
   Duration _lastTickTime = Duration.zero;
 
   double _angleInner = 0.0;
   double _angleOuter = 0.0;
-  double _angleFar = 0.0;
 
   // Base ambient rotation speeds (rad/sec)
-  static const double _baseSpeedInner = 0.12;  // Cung chieu kim dong ho
-  static const double _baseSpeedOuter = -0.09; // Nguoc chieu kim dong ho
-  static const double _baseSpeedFar = 0.06;    // Vong ngoai cung quay cham nhe nhang
+  static const double _baseSpeedInner = 0.12;  // Cùng chiều kim đồng hồ
+  static const double _baseSpeedOuter = -0.09; // Ngược chiều kim đồng hồ
 
   double _velocityInner = _baseSpeedInner;
   double _velocityOuter = _baseSpeedOuter;
-  double _velocityFar = _baseSpeedFar;
 
   // Touch gesture interaction tracking
   bool _isDragging = false;
-  int _activeDragRing = 1; // 1 = inner, 2 = outer, 3 = far
+  int _activeDragRing = 1; // 1 = inner, 2 = outer
   double _lastTouchAngle = 0.0;
   DateTime _lastTouchTime = DateTime.now();
 
@@ -187,17 +177,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Khoi tao Physics Ticker cho he quy dao quay theo quan tinh
     _orbitTicker = createTicker(_onOrbitTick)..start();
 
-    // Khoi tao Timer phat bieu cam bay len tren dau dinh ky cho che do Demo
-    _demoReactionTimer = Timer.periodic(const Duration(milliseconds: 3200), (_) {
-      if (!mounted || isLensExpanded || !_isDemoMode) return;
-      final friends = _isDemoMode ? _demoFriendsList : FriendService.instance.friends;
-      if (friends.isEmpty) return;
-      final random = math.Random();
-      final friend = friends[random.nextInt(friends.length)];
-      final emojis = ['❤️', '🔥', '😂', '💖', '✨', '🐾', '🎉'];
-      final emoji = emojis[random.nextInt(emojis.length)];
-      _triggerReaction(friend.uid, emoji);
+    // Tự động kiểm tra bản cập nhật mới trên GitHub sau khi khởi động app
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAutoUpdate();
     });
+
+    if (_isDemoMode) {
+      _startDemoReactions();
+    }
+  }
+
+  Future<void> _checkAutoUpdate() async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (!mounted) return;
+      final release = await UpdateService.instance.checkForUpdate(isManual: false);
+      if (release != null && mounted) {
+        UpdateDialog.show(context, release);
+      }
+    } catch (e) {
+      debugPrint('Auto update check error: $e');
+    }
   }
 
   void _onOrbitTick(Duration elapsed) {
@@ -214,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (dt <= 0 || dt > 0.1) return; // Bo qua frame bat thuong
 
     if (!_isDragging) {
-      // Giam toc theo quan tinh sang trong (Luxurious damping factor 1.15) cho ca 3 vong
+      // Giam toc theo quan tinh sang trong (Luxurious damping factor 1.15)
       if (_velocityInner.abs() > _baseSpeedInner.abs()) {
         _velocityInner *= math.exp(-1.15 * dt);
         if (_velocityInner.abs() < _baseSpeedInner.abs()) {
@@ -233,18 +233,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _velocityOuter = _baseSpeedOuter;
       }
 
-      if (_velocityFar.abs() > _baseSpeedFar.abs()) {
-        _velocityFar *= math.exp(-1.15 * dt);
-        if (_velocityFar.abs() < _baseSpeedFar.abs()) {
-          _velocityFar = _baseSpeedFar;
-        }
-      } else {
-        _velocityFar = _baseSpeedFar;
-      }
-
       _angleInner += _velocityInner * dt;
       _angleOuter += _velocityOuter * dt;
-      _angleFar += _velocityFar * dt;
 
       // Chi cap nhat notifier cho orbit stack, khong rebuild ca HomeScreen tai 120Hz
       _orbitNotifier.value = _angleInner;
@@ -572,7 +562,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // TOP APP BAR (Khong hardcode demo)
   // ==========================================
   Widget _buildTopBar() {
-    final friendsCount = _isDemoMode ? _demoFriendsList.length : FriendService.instance.friends.length;
+    final friendsCount = _isDemoMode
+        ? DemoDataService.instance.demoFriends.length
+        : FriendService.instance.friends.length;
 
     return Container(
       height: 50,
@@ -763,64 +755,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildCentralLensAndOrbits({required double availW, required double availH}) {
     final double maxDimension = math.min(availW, availH);
 
-    // Kích thước ống kính tròn & Bán kính an toàn tuyệt đối
-    final double lensDiameter = (maxDimension * 0.36).clamp(130.0, 155.0);
+    // Kích thước ống kính tròn & Bán kính quỹ đạo thoáng đãng, dễ nhìn
+    final double lensDiameter = (maxDimension * 0.42).clamp(150.0, 195.0);
     final double lensRadius = lensDiameter / 2;
     final double boxSize = (math.min(availW - 28, availH - 20)).clamp(220.0, 380.0);
 
-    // Danh sách bạn bè (Demo hoặc bạn bè thật)
-    final List<Friend> friends = _isDemoMode
-        ? _demoFriendsList
-        : FriendService.instance.friends;
+    // Khoảng cách quỹ đạo thông thoáng, rộng rãi, không bao giờ dày đặc
+    final double rInner = lensRadius + 44.0;
+    final double rOuter = rInner + 46.0;
 
-    // Bán kính an toàn tối đa cho vòng ngoài cùng (Tầng 3):
-    // Đảm bảo toàn bộ 3 vòng quỹ đạo nằm gọn hoàn hảo bên trong khung hình (360px max)
-    // Tuyệt đối không bao giờ tràn ra ngoài màn hình và không đè lên Top bar hay Bottom toolbar!
-    final double maxSafeRadius = (availW / 2 - 28.0).clamp(142.0, 180.0);
-
-    // Bán kính 3 tầng quỹ đạo thông minh (Smart Dynamic Proximity):
-    // Tầng 1: Cận tâm - tương tác gần nhất (3-5 bạn thân nhất, vừa gửi ảnh, nhắn tin trong 24-48h)
-    // Tầng 2: Tầm trung - tương tác thường xuyên
-    // Tầng 3: Vòng ngoài - lâu không tương tác
-    final double rInner = lensRadius + (maxSafeRadius - lensRadius) * 0.35;
-    final double rOuter = lensRadius + (maxSafeRadius - lensRadius) * 0.68;
-    final double rFar = maxSafeRadius;
-
-    // Tinh toan gia tri bien hinh cuc muot tu Tron sang Vuong
+    // Tính toán giá trị biến hình cực mượt từ Tròn sang Vuông
     final double morphT = _morphAnimation.value;
     final double currentSize = ui.lerpDouble(lensDiameter, boxSize, morphT)!;
-    final double currentRadius = ui.lerpDouble(lensDiameter / 2, 28.0, morphT)!;
+    final double currentRadius = ui.lerpDouble(lensRadius, 28.0, morphT)!;
     final double orbitOpacity = (1.0 - morphT * 1.5).clamp(0.0, 1.0);
     final double expandedControlsOpacity = ((morphT - 0.40) / 0.60).clamp(0.0, 1.0);
     final double badgeOpacity = (1.0 - morphT * 2.0).clamp(0.0, 1.0);
 
-    // Phân tầng bạn bè theo mức độ tương tác gần nhất
+    // Danh sách bạn bè tương ứng theo chế độ
+    final List<Friend> friends = _isDemoMode
+        ? DemoDataService.instance.demoFriends.map((d) => d.toFriend()).toList()
+        : FriendService.instance.friends;
+
+    // Phân bổ tối đa 4-5 người mỗi vòng để giao diện luôn tinh gọn, thanh thoát
     final List<_SatelliteItem> innerSatellites = [];
     final List<_SatelliteItem> outerSatellites = [];
-    final List<_SatelliteItem> farSatellites = [];
 
-    if (friends.isEmpty) {
-      // Chưa có bạn bè: 1 nút [+] Thêm bạn ở Tầng 1
-      innerSatellites.add(_SatelliteItem(
-        id: 'add_friend',
-        name: 'Thêm',
-        initial: '+',
-        isAddButton: true,
-        ringIndex: 1,
-      ));
-    } else if (friends.length <= 4) {
-      // 3-4 bạn thân nhất: Đều ở Tầng 1 với chỉ số tương tác cao
-      final demoReactions = [28, 21, 17, 14];
-      for (int i = 0; i < friends.length; i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+    if (_isDemoMode) {
+      // BẢN TRẢI NGHIỆM (DEMO SHOWCASE): Hiển thị bạn bè mẫu phân tầng rõ nét
+      final demoFriends = DemoDataService.instance.demoFriends;
+
+      // Tầng 1 (Cận tâm - 3 bạn thân nhất tương tác 24h-48h): Viền vàng hào quang phát sáng
+      for (final f in demoFriends.where((d) => d.tier == 1)) {
         innerSatellites.add(_SatelliteItem(
           id: f.uid,
           name: f.displayName,
-          initial: initial,
-          ringIndex: 1,
-          reactionCount: demoReactions[i % demoReactions.length],
-          lastActive: 'vừa xong',
+          initial: f.initial,
+          hasGlow: true,
+          color: f.avatarColor,
         ));
       }
       innerSatellites.add(_SatelliteItem(
@@ -828,99 +800,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         name: 'Thêm',
         initial: '+',
         isAddButton: true,
-        ringIndex: 1,
       ));
-    } else if (friends.length <= 11) {
-      // Tầng 1 (Cận tâm): 4 bạn thân nhất (vừa tương tác 24-48h)
-      final demoReactionsTier1 = [28, 21, 17, 14];
-      for (int i = 0; i < 4; i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        innerSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: initial,
-          ringIndex: 1,
-          reactionCount: demoReactionsTier1[i % demoReactionsTier1.length],
-          lastActive: i == 0 ? 'vừa xong' : '${(i + 1) * 2}h trước',
-        ));
-      }
-      // Tầng 2 (Tầm trung): Các bạn còn lại
-      final demoReactionsTier2 = [8, 6, 5, 4, 3, 3, 2];
-      for (int i = 4; i < friends.length; i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+
+      // Tầng 2 & 3 (Tầm trung & Xa): Vòng ngoài
+      for (final f in demoFriends.where((d) => d.tier > 1)) {
         outerSatellites.add(_SatelliteItem(
           id: f.uid,
           name: f.displayName,
-          initial: initial,
-          ringIndex: 2,
-          reactionCount: demoReactionsTier2[(i - 4) % demoReactionsTier2.length],
-          lastActive: 'hôm qua',
+          initial: f.initial,
+          hasGlow: false,
+          color: f.avatarColor,
         ));
       }
-      outerSatellites.add(_SatelliteItem(
-        id: 'add_friend',
-        name: 'Thêm',
-        initial: '+',
-        isAddButton: true,
-        ringIndex: 2,
-      ));
     } else {
-      // >= 12 bạn: Hệ thiên hà 3 tầng hoàn chỉnh
-      // Tầng 1 (Cận tâm - Tương tác gần nhất): 4 bạn thân nhất
-      final demoReactionsTier1 = [28, 21, 17, 14];
-      for (int i = 0; i < 4; i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+      // BẢN CHUẨN SẠCH (CLEAN RELEASE): Chỉ hiển thị bạn bè thật của người dùng
+      final realFriends = friends;
+
+      if (realFriends.isEmpty) {
+        // Chưa có bạn bè: Duy nhất 1 nút [+] Thêm bạn ở vòng trong, tuyệt đối không tạo bạn giả
         innerSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: initial,
-          ringIndex: 1,
-          reactionCount: demoReactionsTier1[i % demoReactionsTier1.length],
-          lastActive: i == 0 ? 'vừa xong' : '${(i + 1) * 2}h trước',
+          id: 'add_friend',
+          name: 'Thêm',
+          initial: '+',
+          isAddButton: true,
         ));
-      }
-      // Tầng 2 (Tầm trung): 8 bạn thường xuyên tương tác
-      final demoReactionsTier2 = [8, 7, 6, 5, 5, 4, 3, 3];
-      for (int i = 4; i < math.min(friends.length, 12); i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+      } else if (realFriends.length <= 4) {
+        // 1-4 bạn: Tất cả nằm trên 1 vòng quỹ đạo duy nhất cùng nút [+]
+        for (final f in realFriends) {
+          final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+          innerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: initial,
+          ));
+        }
+        innerSatellites.add(_SatelliteItem(
+          id: 'add_friend',
+          name: 'Thêm',
+          initial: '+',
+          isAddButton: true,
+        ));
+      } else {
+        // Nhiều hơn 4 bạn: 4 bạn đầu vòng trong, các bạn tiếp theo ở vòng ngoài
+        for (int i = 0; i < 4; i++) {
+          final f = realFriends[i];
+          final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+          innerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: initial,
+          ));
+        }
+        for (int i = 4; i < math.min(realFriends.length, 8); i++) {
+          final f = realFriends[i];
+          final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+          outerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: initial,
+          ));
+        }
         outerSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: initial,
-          ringIndex: 2,
-          reactionCount: demoReactionsTier2[(i - 4) % demoReactionsTier2.length],
-          lastActive: 'hôm qua',
+          id: 'add_friend',
+          name: 'Thêm',
+          initial: '+',
+          isAddButton: true,
         ));
       }
-      // Tầng 3 (Vòng ngoài): Các bạn lâu không tương tác
-      for (int i = 12; i < math.min(friends.length, 25); i++) {
-        final f = friends[i];
-        final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
-        farSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: initial,
-          ringIndex: 3,
-          reactionCount: (i % 3 == 0) ? 1 : 0,
-          lastActive: '1 tuần trước',
-        ));
-      }
-      farSatellites.add(_SatelliteItem(
-        id: 'add_friend',
-        name: 'Thêm',
-        initial: '+',
-        isAddButton: true,
-        ringIndex: 3,
-      ));
     }
 
     final bool hasOuterOrbit = outerSatellites.isNotEmpty;
-    final bool hasFarOrbit = farSatellites.isNotEmpty;
-    final double totalContainerSize = (rFar * 2 + 70.0).clamp(260.0, availW);
+    final double totalContainerSize = hasOuterOrbit
+        ? (rOuter * 2 + 60.0).clamp(260.0, availW)
+        : (rInner * 2 + 60.0).clamp(260.0, availW);
 
     return Center(
       child: GestureDetector(
@@ -946,15 +898,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             _isDragging = true;
             final d1 = (dist - rInner).abs();
             final d2 = hasOuterOrbit ? (dist - rOuter).abs() : double.infinity;
-            final d3 = hasFarOrbit ? (dist - rFar).abs() : double.infinity;
-
-            if (d3 < d2 && d3 < d1) {
-              _activeDragRing = 3;
-            } else if (d2 < d1) {
-              _activeDragRing = 2;
-            } else {
-              _activeDragRing = 1;
-            }
+            _activeDragRing = d2 < d1 ? 2 : 1;
 
             _lastTouchAngle = math.atan2(dy, dx);
             _lastTouchTime = DateTime.now();
@@ -980,12 +924,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             final cx = availW / 2;
             final cy = availH / 2;
 
-            // 2D Elastic Universe Panning: Di chuyển sang trái/phải/lên/xuống/chéo
+            // 2D Elastic Universe Panning
             final double currentDist = _universePanOffset.distance;
             final double resistance = 1.0 / (1.0 + currentDist / 220.0);
             _universePanOffset += details.focalPointDelta * (0.82 * resistance);
 
-            // Đồng thời quay vòng quỹ đạo theo góc ngón tay
+            // Xoay vòng quỹ đạo theo ngón tay
             final currentAngle = math.atan2(local.dy - cy, local.dx - cx);
             double delta = currentAngle - _lastTouchAngle;
             if (delta > math.pi) delta -= 2 * math.pi;
@@ -1000,17 +944,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 final instantV = (delta / dt).clamp(-16.0, 16.0);
                 _velocityInner = _velocityInner * 0.3 + instantV * 0.7;
               }
-            } else if (_activeDragRing == 2) {
+            } else {
               _angleOuter += delta;
               if (dt > 0.003) {
                 final instantV = (delta / dt).clamp(-16.0, 16.0);
                 _velocityOuter = _velocityOuter * 0.3 + instantV * 0.7;
-              }
-            } else {
-              _angleFar += delta;
-              if (dt > 0.003) {
-                final instantV = (delta / dt).clamp(-16.0, 16.0);
-                _velocityFar = _velocityFar * 0.3 + instantV * 0.7;
               }
             }
 
@@ -1054,36 +992,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           alignment: Alignment.center,
                           clipBehavior: Clip.none,
                           children: [
-                            // Far Orbit Ring (Tầng 3 cho tối đa 30 bạn)
-                            if (hasFarOrbit) ...[
-                              RepaintBoundary(
-                                child: CustomPaint(
-                                  size: Size(rFar * 2, rFar * 2),
-                                  painter: _DashedOrbitPainter(
-                                    color: OrbitColors.buttonPrimary.withValues(alpha: 0.20),
-                                    strokeWidth: 1.2,
-                                    dashCount: 48,
-                                  ),
-                                ),
-                              ),
-                              ..._buildSatellitesOnRing(
-                                satellites: farSatellites,
-                                radius: rFar,
-                                baseAngle: _angleFar,
-                                centerSize: math.min(availW, totalContainerSize),
-                                ringIndex: 3,
-                              ),
-                            ],
-
-                            // Outer Orbit Ring (Tầng 2)
+                            // Outer Orbit Ring (Nếu có > 4 bạn bè)
                             if (hasOuterOrbit) ...[
                               RepaintBoundary(
                                 child: CustomPaint(
                                   size: Size(rOuter * 2, rOuter * 2),
                                   painter: _DashedOrbitPainter(
-                                    color: OrbitColors.buttonPrimary.withValues(alpha: 0.28),
+                                    color: OrbitColors.buttonPrimary.withValues(alpha: 0.22),
                                     strokeWidth: 1.5,
-                                    dashCount: 40,
+                                    dashCount: 38,
                                   ),
                                 ),
                               ),
@@ -1092,17 +1009,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 radius: rOuter,
                                 baseAngle: _angleOuter,
                                 centerSize: math.min(availW, totalContainerSize),
-                                ringIndex: 2,
                               ),
                             ],
 
-                            // Inner Orbit Ring (Tầng 1)
+                            // Inner Orbit Ring (Quỹ đạo chính)
                             RepaintBoundary(
                               child: CustomPaint(
                                 size: Size(rInner * 2, rInner * 2),
                                 painter: _DashedOrbitPainter(
-                                  color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                                  strokeWidth: 2.0,
+                                  color: OrbitColors.buttonPrimary.withValues(alpha: 0.32),
+                                  strokeWidth: 1.8,
                                   dashCount: 32,
                                 ),
                               ),
@@ -1112,7 +1028,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               radius: rInner,
                               baseAngle: _angleInner,
                               centerSize: math.min(availW, totalContainerSize),
-                              ringIndex: 1,
                             ),
                           ],
                         ),
@@ -1300,9 +1215,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onTap: () {
         if (selectedRecipientName != null) {
           setState(() => selectedRecipientName = null);
-        } else {
-          // Toggle Demo 30 Ban / Ban be that
-          isDemoModeNotifier.value = !isDemoModeNotifier.value;
+        } else if (friends.isEmpty) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+          );
         }
       },
       child: Container(
@@ -1329,22 +1246,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: _isDemoMode ? OrbitColors.terracotta : OrbitColors.textLight,
+                color: selectedRecipientName != null ? OrbitColors.terracotta : OrbitColors.textLight,
                 shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: 7),
             Text(
               selectedRecipientName != null
-                  ? '$selectedRecipientName ✕'
+                  ? 'Gửi tới: $selectedRecipientName ✕'
                   : (_isDemoMode
-                      ? '🌌 Demo 30 Bạn (Chạm đổi chế độ)'
+                      ? 'Bạn bè thân thiết (${friends.length})'
                       : (friends.isEmpty
                           ? 'Nhấn "+" trên quỹ đạo để thêm bạn bè'
                           : 'Tất cả bạn bè (${friends.length})')),
               style: const TextStyle(
                 color: OrbitColors.textLight,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -1426,7 +1343,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     required double radius,
     required double baseAngle,
     required double centerSize,
-    required int ringIndex,
   }) {
     final List<Widget> widgets = [];
     final int count = satellites.length;
@@ -1445,216 +1361,102 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       widgets.add(
         Transform.translate(
           offset: Offset(x, y),
-          child: _buildSatelliteWidget(item, ringIndex: ringIndex),
+          child: _buildSatelliteWidget(item),
         ),
       );
     }
     return widgets;
   }
 
-  Widget _buildSatelliteWidget(_SatelliteItem item, {required int ringIndex}) {
+  Widget _buildSatelliteWidget(_SatelliteItem item) {
     final bool isSelected = selectedRecipientName == item.name;
     final reactions = _friendReactions[item.id] ?? [];
+    const double avatarSize = 44.0;
 
-    // Tầng 1 (Cận tâm): 52px (lớn nhất, sắc nét, có hào quang ánh kim, kèm badge số lần thả tim)
-    // Tầng 2 (Tầm trung): 40px (vừa vặn, viền olive đặc trưng)
-    // Tầng 3 (Vòng ngoài): 32px (nhỏ hơn, mờ nhẹ 0.80 tạo chiều sâu không gian)
-    final double avatarSize = ringIndex == 1 ? 52.0 : (ringIndex == 2 ? 40.0 : 32.0);
-    final double labelTop = avatarSize + 3.0;
-    final double labelMaxWidth = ringIndex == 1 ? 68.0 : (ringIndex == 2 ? 58.0 : 50.0);
-    final double labelFontSize = ringIndex == 1 ? 10.0 : (ringIndex == 2 ? 9.0 : 8.2);
-    final double initialFontSize = ringIndex == 1
-        ? (item.isAddButton ? 24.0 : 17.0)
-        : (ringIndex == 2 ? (item.isAddButton ? 20.0 : 14.0) : (item.isAddButton ? 16.0 : 11.5));
-    final double ringOpacity = ringIndex == 3 ? 0.80 : 1.0;
-
-    return Opacity(
-      opacity: ringOpacity,
-      child: SizedBox(
-        width: avatarSize,
-        height: avatarSize,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            // 0. BIỂU TƯỢNG CẢM XÚC BAY LÊN TRÊN ĐẦU (Floating Reaction Emitter)
-            if (reactions.isNotEmpty)
-              ...reactions.map((r) => Positioned(
-                    top: -12,
-                    child: _FloatingReactionBubble(
-                      key: ValueKey(r.id),
-                      emoji: r.emoji,
-                      onComplete: () => _removeReaction(item.id, r.id),
-                    ),
-                  )),
-
-            // 1. Avatar Tròn với Hiệu ứng Viền & Hào Quang riêng biệt cho từng tầng
-            GestureDetector(
-              onPanDown: (_) {
-                // Khóa chính xác vòng quay khi chạm trực tiếp vào avatar trên vòng đó
-                _activeDragRing = ringIndex;
-              },
-              onDoubleTap: () {
-                if (!item.isAddButton) {
-                  // Nhấp đúp thả tim / biểu tượng cảm xúc bay lên trên đầu
-                  _triggerReaction(item.id, '❤️');
-                }
-              },
-              onTap: () {
-                if (item.isAddButton) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
-                  );
-                } else {
-                  setState(() {
-                    selectedRecipientName = isSelected ? null : item.name;
-                  });
-                }
-              },
-              child: Container(
-                width: avatarSize,
-                height: avatarSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: item.isAddButton ? OrbitColors.surfaceCard : OrbitColors.buttonPrimary,
-                  border: Border.all(
-                    color: isSelected
-                        ? OrbitColors.terracotta
-                        : (item.isAddButton
-                            ? OrbitColors.buttonPrimary
-                            : (ringIndex == 1 ? OrbitColors.khakiGold : OrbitColors.background)),
-                    width: isSelected
-                        ? 3.5
-                        : (ringIndex == 1 ? 2.6 : (ringIndex == 2 ? 2.0 : 1.4)),
+    return SizedBox(
+      width: avatarSize,
+      height: avatarSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          // Biểu tượng cảm xúc bay lên khi chạm đúp thả tim
+          if (reactions.isNotEmpty)
+            ...reactions.map((r) => Positioned(
+                  top: -12,
+                  child: _FloatingReactionBubble(
+                    key: ValueKey(r.id),
+                    emoji: r.emoji,
+                    onComplete: () => _removeReaction(item.id, r.id),
                   ),
-                  boxShadow: ringIndex == 1
-                      ? [
-                          // Hào quang tỏa sáng Tầng 1 (Cận tâm - Tương tác gần nhất)
-                          BoxShadow(
-                            color: isSelected
-                                ? OrbitColors.terracotta.withValues(alpha: 0.65)
-                                : OrbitColors.khakiGold.withValues(alpha: 0.55),
-                            blurRadius: isSelected ? 16 : 13,
-                            spreadRadius: isSelected ? 2.5 : 1.8,
-                          ),
-                          BoxShadow(
-                            color: OrbitColors.deepOlive.withValues(alpha: 0.25),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : [
-                          BoxShadow(
-                            color: isSelected
-                                ? OrbitColors.terracotta.withValues(alpha: 0.5)
-                                : OrbitColors.deepOlive.withValues(alpha: ringIndex == 2 ? 0.22 : 0.14),
-                            blurRadius: isSelected ? 12 : (ringIndex == 2 ? 7 : 4),
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                )),
+
+          // Avatar tròn tinh gọn, thoáng đãng - Tuyệt đối không nhãn chữ thừa làm dày đặc giao diện
+          GestureDetector(
+            onDoubleTap: () {
+              if (!item.isAddButton) {
+                _triggerReaction(item.id, '❤️');
+              }
+            },
+            onTap: () {
+              if (item.isAddButton) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
+                );
+              } else {
+                setState(() {
+                  selectedRecipientName = isSelected ? null : item.name;
+                });
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: item.isAddButton
+                    ? OrbitColors.surfaceCard
+                    : (item.color ?? OrbitColors.buttonPrimary),
+                border: Border.all(
+                  color: isSelected
+                      ? OrbitColors.terracotta
+                      : (item.isAddButton
+                          ? OrbitColors.buttonPrimary
+                          : (item.hasGlow ? const Color(0xFFFFD54F) : OrbitColors.khakiGold.withValues(alpha: 0.85))),
+                  width: isSelected ? 3.2 : (item.hasGlow ? 2.6 : 2.0),
                 ),
-                child: Center(
-                  child: Text(
-                    item.initial,
-                    style: TextStyle(
-                      color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
-                      fontWeight: FontWeight.bold,
-                      fontSize: initialFontSize,
+                boxShadow: [
+                  if (item.hasGlow)
+                    BoxShadow(
+                      color: const Color(0xFFFFD54F).withValues(alpha: 0.55),
+                      blurRadius: 14,
+                      spreadRadius: 2.0,
                     ),
+                  BoxShadow(
+                    color: isSelected
+                        ? OrbitColors.terracotta.withValues(alpha: 0.55)
+                        : OrbitColors.deepOlive.withValues(alpha: 0.20),
+                    blurRadius: isSelected ? 14 : 6,
+                    spreadRadius: isSelected ? 2.0 : 0.5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  item.initial,
+                  style: TextStyle(
+                    color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
+                    fontWeight: FontWeight.bold,
+                    fontSize: item.isAddButton ? 22.0 : 16.0,
                   ),
                 ),
               ),
             ),
-
-            // 2. BADGE SỐ LẦN THẢ TYM / BIỂU CẢM (Tầng 1 cận tâm & Tầng 2 tầm trung)
-            if (!item.isAddButton && item.reactionCount > 0)
-              Positioned(
-                top: ringIndex == 1 ? -6 : -4,
-                right: ringIndex == 1 ? -6 : -4,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ringIndex == 1 ? 5.5 : 4.0,
-                    vertical: ringIndex == 1 ? 1.5 : 1.0,
-                  ),
-                  decoration: BoxDecoration(
-                    color: OrbitColors.deepOlive,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: ringIndex == 1 ? OrbitColors.khakiGold : OrbitColors.buttonPrimary,
-                      width: ringIndex == 1 ? 1.2 : 0.8,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('❤️', style: TextStyle(fontSize: 8.5)),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${item.reactionCount}',
-                        style: TextStyle(
-                          color: OrbitColors.textLight,
-                          fontSize: ringIndex == 1 ? 8.5 : 7.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // 3. Tên bạn bè bên dưới avatar (Nếu dài quá tự động để dấu ...)
-            if (!item.isAddButton)
-              Positioned(
-                top: labelTop,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedRecipientName = isSelected ? null : item.name;
-                    });
-                  },
-                  child: Container(
-                    constraints: BoxConstraints(maxWidth: labelMaxWidth),
-                    padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.2),
-                    decoration: BoxDecoration(
-                      color: OrbitColors.background.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(7),
-                      border: Border.all(
-                        color: isSelected
-                            ? OrbitColors.terracotta
-                            : OrbitColors.buttonPrimary.withValues(alpha: 0.3),
-                        width: 0.8,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isSelected ? OrbitColors.terracotta : OrbitColors.deepOlive,
-                        fontSize: labelFontSize,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1858,18 +1660,16 @@ class _SatelliteItem {
   final String name;
   final String initial;
   final bool isAddButton;
-  final int ringIndex; // 1: Cận tâm (gần nhất), 2: Tầm trung, 3: Vòng ngoài
-  final int reactionCount; // Số lần thả tym/biểu cảm
-  final String? lastActive;
+  final bool hasGlow;
+  final Color? color;
 
   _SatelliteItem({
     required this.id,
     required this.name,
     required this.initial,
     this.isAddButton = false,
-    this.ringIndex = 1,
-    this.reactionCount = 0,
-    this.lastActive,
+    this.hasGlow = false,
+    this.color,
   });
 }
 

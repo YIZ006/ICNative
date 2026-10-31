@@ -136,8 +136,12 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
                             e.printStackTrace()
                         }
 
+                        val isDemoMode = widgetData.getBoolean("flutter.is_demo_mode", false)
+                        val friendCount = widgetData.getInt("flutter.friend_count", 0)
+                        val shouldDrawSatellites = isDemoMode || friendCount > 0
+
                         // 3. Render Thiên Hà Vệ Tinh Nổi với chuyển động xoay nhẹ và vòng sáng rực rỡ
-                        val composed = WidgetComposer.composeGalaxyWidget(bitmap, effectiveAngle)
+                        val composed = WidgetComposer.composeGalaxyWidget(bitmap, effectiveAngle, shouldDrawSatellites)
                         setImageViewBitmap(R.id.widget_image, composed)
                         setViewVisibility(R.id.widget_empty_text, View.GONE)
 

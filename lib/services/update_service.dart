@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -34,6 +35,9 @@ class GitHubReleaseInfo {
 class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
+
+  /// Phân định bản build hiện tại (Clean Release vs Demo Showcase)
+  static const bool isDemoBuild = bool.fromEnvironment('DEFAULT_DEMO_MODE', defaultValue: false);
 
   static String _currentVersion = '1.4.1';
   static String get currentVersion => _currentVersion;
@@ -69,13 +73,8 @@ class UpdateService {
     } catch (_) {}
   }
 
-  /// Kiểm tra phiên bản mới nhất từ GitHub Releases (chỉ thực hiện khi người dùng bấm thủ công)
+  /// Kiểm tra phiên bản mới nhất từ GitHub Releases (Hỗ trợ tự động khi mở app và bấm thủ công)
   Future<GitHubReleaseInfo?> checkForUpdate({bool isManual = false}) async {
-    // Tuyệt đối KHÔNG tự động kiểm tra ngầm hoặc hiển thị popup tự động làm phiền người dùng
-    if (!isManual) {
-      return null;
-    }
-
     try {
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
       final response = await http.get(url, headers: {
@@ -90,32 +89,77 @@ class UpdateService {
         final notes = (data['body'] as String? ?? '').trim();
         final publishedAt = (data['published_at'] as String? ?? '').trim();
 
+        // Nếu kiểm tra tự động khi mở app: Chỉ hoãn nếu người dùng đã bấm "Để sau" cho chính phiên bản này trong 24h
+        if (!isManual) {
+          final prefs = await SharedPreferences.getInstance();
+          final dismissedTag = prefs.getString('dismissed_update_tag');
+          final dismissedTime = prefs.getInt('dismissed_update_time') ?? 0;
+          final elapsed = DateTime.now().millisecondsSinceEpoch - dismissedTime;
+          if (dismissedTag == tagName && elapsed < 24 * 60 * 60 * 1000) {
+            return null;
+          }
+        }
+
         final assets = (data['assets'] as List<dynamic>? ?? []);
         String? apkUrl;
         int apkSize = 0;
 
-        // Ưu tiên tệp clean-release.apk nếu có
-        for (final asset in assets) {
-          final assetName = (asset['name'] as String? ?? '').toLowerCase();
-          if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
-            apkUrl = asset['browser_download_url'] as String?;
-            apkSize = asset['size'] as int? ?? 0;
-            break;
-          }
-        }
-        if (apkUrl == null) {
+        // QUY TẮC CHỐNG TẢI NHẦM BẢN (ANTI-MISMATCH ASSET MATCHING)
+        if (!isDemoBuild) {
+          // 1. Bản Chuẩn (Clean Release): Tuyệt đối KHÔNG BAO GIỜ tải bản demo
           for (final asset in assets) {
             final assetName = (asset['name'] as String? ?? '').toLowerCase();
-            if (assetName.endsWith('.apk')) {
+            if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
               apkUrl = asset['browser_download_url'] as String?;
               apkSize = asset['size'] as int? ?? 0;
               break;
             }
           }
+          if (apkUrl == null) {
+            for (final asset in assets) {
+              final assetName = (asset['name'] as String? ?? '').toLowerCase();
+              if (assetName.endsWith('.apk') && !assetName.contains('demo')) {
+                apkUrl = asset['browser_download_url'] as String?;
+                apkSize = asset['size'] as int? ?? 0;
+                break;
+              }
+            }
+          }
+        } else {
+          // 2. Bản Trải Nghiệm (Demo Showcase): Ưu tiên tải bản demo
+          for (final asset in assets) {
+            final assetName = (asset['name'] as String? ?? '').toLowerCase();
+            if (assetName.contains('demo-showcase') && assetName.endsWith('.apk')) {
+              apkUrl = asset['browser_download_url'] as String?;
+              apkSize = asset['size'] as int? ?? 0;
+              break;
+            }
+          }
+          if (apkUrl == null) {
+            for (final asset in assets) {
+              final assetName = (asset['name'] as String? ?? '').toLowerCase();
+              if (assetName.contains('demo') && assetName.endsWith('.apk')) {
+                apkUrl = asset['browser_download_url'] as String?;
+                apkSize = asset['size'] as int? ?? 0;
+                break;
+              }
+            }
+          }
+          if (apkUrl == null) {
+            // Fallback nếu GitHub chưa có demo build
+            for (final asset in assets) {
+              final assetName = (asset['name'] as String? ?? '').toLowerCase();
+              if (assetName.endsWith('.apk')) {
+                apkUrl = asset['browser_download_url'] as String?;
+                apkSize = asset['size'] as int? ?? 0;
+                break;
+              }
+            }
+          }
         }
 
         final currentVer = await getInstalledVersion();
-        // So sánh phiên bản
+        // So sánh phiên bản chuẩn semantic version
         if (_isNewerVersion(tagName, currentVer)) {
           return GitHubReleaseInfo(
             tagName: tagName,
@@ -133,7 +177,7 @@ class UpdateService {
     return null;
   }
 
-  /// Mở trình duyệt web trực tiếp đến trang GitHub Releases để người dùng tải nhanh, minh bạch
+  /// Mở trình duyệt web trực tiếp đến trang GitHub Releases để người dùng xem thông tin phát hành
   Future<bool> openReleasePage([String? url]) async {
     final targetUrl = url ?? 'https://github.com/$repoOwner/$repoName/releases/latest';
     try {
@@ -212,21 +256,23 @@ class UpdateService {
     }
   }
 
-  /// So sánh hai chuỗi version (ví dụ: v1.4.0 vs 1.3.0)
+  /// So sánh hai chuỗi version (ví dụ: v1.4.1 vs 1.4.0)
   bool _isNewerVersion(String remoteTag, String currentVer) {
     try {
-      final cleanRemote = remoteTag.replaceAll(RegExp(r'[^0-9.]'), '');
-      final cleanCurrent = currentVer.replaceAll(RegExp(r'[^0-9.]'), '');
+      // Tách bỏ build number (+5) và build suffix (-beta) trước khi so sánh
+      final semVerRemote = remoteTag.split('+').first.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+      final semVerCurrent = currentVer.split('+').first.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
 
-      // Nếu 2 chuỗi version bằng nhau tuyệt đối (ví dụ: 1.4.0 == 1.4.0) -> Tuyệt đối KHÔNG phải bản mới
-      if (cleanRemote == cleanCurrent) {
+      // Nếu 2 chuỗi version bằng nhau tuyệt đối -> Không phải bản mới
+      if (semVerRemote == semVerCurrent) {
         return false;
       }
 
-      final rParts = cleanRemote.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      final cParts = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final rParts = semVerRemote.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final cParts = semVerCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
-      for (int i = 0; i < 3; i++) {
+      final maxLen = math.max(rParts.length, cParts.length);
+      for (int i = 0; i < maxLen; i++) {
         final r = i < rParts.length ? rParts[i] : 0;
         final c = i < cParts.length ? cParts[i] : 0;
         if (r > c) return true;

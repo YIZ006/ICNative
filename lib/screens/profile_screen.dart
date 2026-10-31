@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/update_service.dart';
 import 'qr_scanner_screen.dart';
+import 'update_dialog.dart';
 import 'widget_guide_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -265,15 +266,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 16),
 
-                // GitHub Releases & Update Card
+                // Thẻ: Kiểm tra cập nhật tự động & cài đặt trực tiếp
                 _buildActionCard(
                   icon: Icons.system_update_alt_rounded,
                   iconColor: OrbitColors.buttonPrimary,
                   title: 'Phiên Bản & Bản Cập Nhật',
-                  subtitle: 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Mở trực tiếp trang phát hành GitHub để tải APK/IPA mới.',
-                  buttonText: 'Mở GitHub Releases 🌐',
+                  subtitle: 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Tự động tải và cập nhật trực tiếp trong app.',
+                  buttonText: 'Kiểm Tra Cập Nhật 🚀',
                   onTap: () async {
-                    await UpdateService.instance.openReleasePage();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Đang kiểm tra bản cập nhật mới trên GitHub...'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    final release = await UpdateService.instance.checkForUpdate(isManual: true);
+                    if (!context.mounted) return;
+                    if (release != null) {
+                      UpdateDialog.show(context, release);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Bạn đang sử dụng phiên bản mới nhất (Orbit v${UpdateService.currentVersion}) ✨'),
+                          backgroundColor: OrbitColors.deepOlive,
+                        ),
+                      );
+                    }
                   },
                 ),
 
@@ -319,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 16),
 
-                // Card: Chế độ Trải Nghiệm Mẫu (30 Bạn Bè)
+                // Card: Chế độ Bạn Bè Mẫu (Trải Nghiệm Trực Quan)
                 ValueListenableBuilder<bool>(
                   valueListenable: isDemoModeNotifier,
                   builder: (context, isDemo, _) {
@@ -328,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       iconColor: isDemo ? OrbitColors.terracotta : OrbitColors.deepOlive,
                       title: tr('demo_mode_title'),
                       subtitle: tr('demo_mode_subtitle'),
-                      buttonText: isDemo ? 'Đang Bật (Chạm để Tắt Demo)' : 'Đang Tắt (Chạm để Bật Demo 30 Bạn)',
+                      buttonText: isDemo ? 'Đang Bật (Chạm để Tắt Bạn Mẫu)' : 'Đang Tắt (Chạm để Bật Bạn Mẫu)',
                       onTap: () {
                         isDemoModeNotifier.value = !isDemo;
                       },

@@ -1168,3 +1168,68 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - Widget trên màn hình chính sáng rực rỡ, rõ nét trên mọi nền màn hình tối/sáng.
   - Quỹ đạo vệ tinh chuyển động xoay nhẹ sống động.
   - Sẵn sàng xuất bản Release v1.4.1 lên GitHub.
+
+
+---
+
+### [2026-10-31 15:15:00] - Tối giản toàn diện: Loại bỏ triệt để tình trạng dày đặc, làm sạch quỹ đạo & giao diện thoáng đãng
+* **Thời gian (Timestamp):** 2026-10-31 15:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục dứt điểm khiếu nại về việc "quá nhiều người lại làm dầy đặc giao diện":
+  1. **Thu gọn số lượng bạn bè hiển thị**: Loại bỏ danh sách 30 người mô phỏng; chế độ Demo và trải nghiệm mặc định chỉ hiển thị 4 bạn thân thiết nhất (An Nhiên, Bảo Long, Chi Mai, Dương Vũ) cùng nút `[+]` kết nối, bố trí đều trên 1 vòng quỹ đạo duy nhất với khoảng cách rộng rãi, thông thoáng.
+  2. **Bỏ hoàn toàn nhãn chữ và hộp tên bên dưới avatar**: Xóa toàn bộ các thẻ chữ hình chữ nhật bên dưới mỗi vệ tinh, trả lại vẻ đẹp hình tròn thuần khiết và thanh lịch cho các vệ tinh bạn bè. Khi chạm chọn bạn bè, tên người nhận sẽ hiển thị rõ nét tại thanh huy hiệu ở đáy ống kính (`Gửi tới: An Nhiên ✕`).
+  3. **Gỡ bỏ biểu tượng cảm xúc spam và badge số tim**: Xóa bỏ các badge `❤️ xx` gắn trên góc avatar và hủy bỏ Timer tự động bắn biểu cảm định kỳ 3.2 giây gây rối mắt; chỉ giữ tương tác thả tim thủ công khi người dùng chạm đúp có chủ đích.
+  4. **Tối ưu hóa bán kính và cấu trúc vòng quỹ đạo (Spacious & Clean)**: Mở rộng đường kính ống kính trung tâm lên 42% màn hình (`lensDiameter` 150 - 195px); loại bỏ Tầng 3 (Far Orbit) gây chật chội; chỉ duy trì 1 vòng chính (`rInner = lensRadius + 44px`) và tối đa 1 vòng phụ nếu bạn bè thực tế nhiều hơn 4 người.
+  5. **Làm sạch Widget màn hình chính (`WidgetComposer.kt`)**: Tinh gọn hệ thống quỹ đạo thành 1 vòng nét đứt vàng kim thanh thoát ở bán kính 180px, bố trí 4 vệ tinh bạn bè đối xứng 90 độ thoáng đãng; mở rộng khung ảnh trung tâm lên bán kính 118px rõ nét.
+* **Chi tiết thay đổi (Changes Made):**
+  - **1. Tinh giản vệ tinh và xóa bỏ nhãn chữ (`lib/screens/home.dart`)**:
+    + Rút gọn `_demoFriendsList` về 4 người thân thiết.
+    + Xóa bỏ hơn 300 dòng code liên quan đến tầng 3 (`_angleFar`, `_velocityFar`, `farSatellites`), badge thả tim và text box tên dưới avatar.
+    + Đưa kích thước avatar về chuẩn 44px tinh xảo, viền sáng vàng/đất nung nổi bật, khoảng cách thoáng đãng.
+    + Cập nhật `_buildRecipientBadge`: Hiển thị `Gửi tới: [Tên] ✕` khi chọn hoặc `Bạn bè thân thiết (4)` khi không chọn.
+  - **2. Đồng bộ giao diện Cài đặt & Ngôn ngữ (`profile_screen.dart`, `locale_service.dart`)**:
+    + Đổi tên từ "Chế độ Trải Nghiệm Mẫu (30 Bạn Bè)" thành "Chế độ Bạn Bè Mẫu (Trải Nghiệm Trực Quan)".
+  - **3. Tinh gọn bố cục Widget (`WidgetComposer.kt`)**:
+    + Giảm từ 3 vòng dày đặc xuống 1 vòng quỹ đạo vàng kim thanh thoát R = 180px, 4 vệ tinh cách đều 90 độ và tăng diện tích ảnh chụp trung tâm (R = 118px).
+* **Hiện trạng (Current State):**
+  - Giao diện sạch sẽ, thoáng đãng, tinh tế, không còn bất kỳ chi tiết rườm rà hay dày đặc nào.
+  - `flutter analyze --no-fatal-infos`: 0 issues found!
+
+
+---
+
+### [2026-10-31 16:10:00] - Triển khai Dual-Release (Clean & Demo), Anti-Mismatch Updater & Làm giàu dữ liệu mẫu tương tác
+* **Thời gian (Timestamp):** 2026-10-31 16:10:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  1. **Ban hành luật bắt buộc Dual-Release vào `AGENTS.md` & `agent.md`**: Mọi đợt phát hành mới bắt buộc phải build và upload đủ cả 2 bản APK:
+     - `Orbit-vX.X.X-clean-release.apk`: Bản Chuẩn / Sạch - 100% không dữ liệu mẫu, không mock friends, không mock photos, widget sạch, dành cho người dùng thực tế hàng ngày.
+     - `Orbit-vX.X.X-demo-showcase.apk`: Bản Trải Nghiệm Mẫu - Chứa full dữ liệu mẫu sinh động để trải nghiệm tương tác trực quan ngay sau khi cài mà không cần kết bạn qua 2 máy.
+  2. **Quy tắc chống tải nhầm bản (Anti-Mismatch In-App Update)**:
+     - Cơ chế `UpdateService` tự động nhận biết bản build đang chạy qua flag `DEFAULT_DEMO_MODE`.
+     - Bản Clean chỉ tìm và tải file asset có chứa `clean-release` hoặc `release`, tuyệt đối bỏ qua tệp có chứa từ khóa `demo`. Bản demo sẽ tải bản demo tương ứng. Không bao giờ để bản Clean tự tải nhầm bản Demo.
+  3. **Làm giàu dữ liệu mẫu tương tác cho Bản Demo (`DemoDataService`)**:
+     - Thêm 8 bạn bè mẫu phân tầng rõ nét: Tầng 1 (Cận tâm - An Nhiên, Bảo Long, Chi Mai) có viền vàng hào quang phát sáng, Tầng 2 (Tầm trung) và Tầng 3 (Vòng ngoài).
+     - Hiệu ứng tương tác trực tiếp: các bong bóng biểu cảm (❤️, 🔥, ✨, 😍) tự động bay lên định kỳ từ các vệ tinh bạn bè.
+     - Feed ảnh bạn bè chụp mẫu phong phú trong mục Lịch sử (`HistoryScreen`): hiển thị ảnh bạn bè kèm caption, địa điểm (Hà Nội, Đà Lạt, TP.HCM), thời gian, thanh thả cảm xúc tương tác có đếm số lượng, và meme sticker. Hỗ trợ 1-chạm ghim thẳng ảnh mẫu lên Widget Android thật.
+  4. **Tự động nhận diện cập nhật và cài đặt trực tiếp trong app**:
+     - Khôi phục tính năng tự kiểm tra cập nhật khi mở app (`home.dart`), hiển thị hộp thoại `UpdateDialog`.
+     - Bấm "Cập nhật ngay 🚀" sẽ tải APK kèm thanh tiến trình trực tiếp (MB/%) và tự kích hoạt trình cài đặt hệ thống của Android, không bắt người dùng phải mở trình duyệt web.
+     - Sửa lỗi font chữ release notes trên GitHub (100% tiếng Việt chuẩn UTF-8).
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `AGENTS.md` & `agent.md` - Thêm quy định bắt buộc Dual-Release và chống tải nhầm bản.
+  - [NEW] `lib/services/demo_data_service.dart` - Service quản lý dữ liệu bạn bè mẫu 3 tầng, feed ảnh chụp mẫu, caption, địa điểm, reaction, meme sticker.
+  - [MODIFY] `lib/services/update_service.dart` - Thêm `isDemoBuild`, lọc asset chống tải nhầm bản, tối ưu bộ so sánh semver, hỗ trợ auto-check khi mở app.
+  - [MODIFY] `lib/settings/global.dart` - Thêm flag `isDefaultDemoMode` đọc từ `--dart-define=DEFAULT_DEMO_MODE`.
+  - [MODIFY] `lib/screens/home.dart` - Tích hợp `DemoDataService`, phân bổ vệ tinh theo tầng, bong bóng biểu cảm bay định kỳ trong Demo Mode, tự động kiểm tra cập nhật khi vào app.
+  - [MODIFY] `lib/screens/history.dart` - Tích hợp xem ảnh mẫu sinh động, xem toàn màn hình kèm sticker meme, thả biểu cảm tương tác, ghim ảnh mẫu lên Widget màn hình chính.
+  - [MODIFY] `android/app/src/main/kotlin/.../WidgetComposer.kt` & `ICNativeWidgetProvider.kt` - Chỉ vẽ vệ tinh khi có bạn bè hoặc ở Demo Mode; ở bản Clean không tự sinh vệ tinh giả nếu người dùng chưa kết bạn.
+  - [BUILD & UPLOAD] Đóng gói và upload thành công cả 2 file APK lên GitHub Release `v1.4.1` (ID `429794472`):
+    + `Orbit-v1.4.1-clean-release.apk` (151,244,664 bytes, Asset ID `694883900`)
+    + `Orbit-v1.4.1-demo-showcase.apk` (151,534,065 bytes, Asset ID `694888950`)
+* **Hiện trạng (Current State):**
+  - Toàn bộ yêu cầu của người dùng đã hoàn thành trọn vẹn và đã được đưa lên GitHub Releases.
+  - Không có bất kỳ lỗi nào (`flutter analyze`: 0 issues found).
