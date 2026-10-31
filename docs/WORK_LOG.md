@@ -19,7 +19,8 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Chi tiết thay đổi (Changes Made):**
   - [MODIFY] `lib/main.dart`: Tăng timeout `availableCameras()` lên 2000ms trong `_initCamerasFast()` và chỉ gán khi danh sách camera không rỗng.
   - [MODIFY] `lib/screens/home.dart`: Thêm `WidgetsBindingObserver` cho `_HomeScreenState`, lắng nghe `didChangeAppLifecycleState` (dispose camera khi inactive/paused, re-init khi resumed), thêm auto-retry 3 lần trong `_initCameraSafe()`, phục hồi camera khi bấm chụp ảnh, và bọc view loading camera bằng `GestureDetector` cho phép chạm để khởi động lại.
-  - [MODIFY] `lib/screens/preview.dart`: Bỏ `LayoutBuilder` trả về `Positioned` bên trong `Stack`; đưa vị trí sticker và badge thời gian/địa điểm về tọa độ tính trực tiếp từ `photoBoxSize`; sửa `_runAiContextualEngine()` dùng `detectAndSuggestSticker()` gán `activeCustomSticker` thay vì ghi đè pixel file ảnh.
+  - [MODIFY] `lib/screens/preview.dart`: Bỏ `LayoutBuilder` trả về `Positioned` bên trong `Stack`; đưa vị trí sticker và badge thời gian/địa điểm về tọa độ tính trực tiếp từ `photoBoxSize`; sửa `_runAiContextualEngine()` dùng `detectAndSuggestSticker()` gán `activeCustomSticker` tự động bám theo `detectedAnchorOffset` thay vì ghi đè pixel file ảnh.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Bổ sung `detectedAnchorOffset` vào `StickerMetadata`; nâng cấp `detectAndSuggestSticker()` chạy song song `ImageLabeler` và `ObjectDetector` để vừa phân loại bối cảnh vừa phát hiện tọa độ chủ thể (bounding box) trong ảnh để tự động neo sticker chuẩn xác.
   - [MODIFY] `lib/services/custom_sticker_service.dart`: Chống OOM bằng việc thu nhỏ trước ảnh gốc về 512px; tối ưu thuật toán tạo viền trắng sang border-pixel scanning; tối ưu cấu hình `SubjectSegmenterOptions`.
 * **Hiện trạng & Rào cản (Current State & Blockers):**
   - `flutter analyze` kiểm tra đạt 0 lỗi (No issues found).
