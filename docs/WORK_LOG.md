@@ -1314,3 +1314,32 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Hiện trạng (Current State):**
   - `flutter analyze`: **0 issues found**.
   - Quy trình chụp ảnh trở lại nguyên bản: Chụp -> AI tự động nhận diện và ghép thẳng meme -> Bấm gửi lên Widget bạn bè.
+
+
+---
+
+### [2026-10-31 19:25:00] - Chuẩn hóa luồng Meme tự động & Tự tạo Custom Sticker từ Thư viện máy dán thêm vào ảnh
+* **Thời gian (Timestamp):** 2026-10-31 19:25:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Phân định rõ ràng và rành mạch 2 luồng tính năng theo đúng thiết kế gốc ban đầu:
+  1. **Ảnh chụp từ camera Orbit**:
+     - 100% tự động chạy AI On-Device (`StickerAnchoringEngine.processAndMerge`), nhận diện bối cảnh (mèo, cún, đồ ăn, đồ uống, con người...) và tự động ghép meme tương ứng vào ảnh theo tọa độ neo.
+     - Tuyệt đối **KHÔNG** lấy ảnh vừa chụp từ camera mang đi cắt xén.
+  2. **Custom Sticker tự tạo từ Thư viện máy (Gallery)**:
+     - Dành riêng cho nhu cầu khi người dùng thích chèn thêm sticker cá nhân: bấm `+ Tự tạo từ thư viện máy` (hoặc ô `+ Thư viện` trong khay sticker).
+     - Cho phép chọn ảnh có sẵn từ Thư viện máy (Gallery), tạo thành sticker viền/tách nền die-cut, và **dán THÊM lên bức ảnh chụp**.
+     - Sticker dán thêm có thể tự do di chuyển, xoay, phóng to thu nhỏ mà không ảnh hưởng tới ảnh chụp gốc đã có meme tự động.
+  3. **Ngăn chặn lỗi màn trắng trên iOS**:
+     - Bổ sung `if (!Platform.isIOS)` trước `_getSegmenter().processImage()` trong `custom_sticker_service.dart` và `sticker_anchoring_engine.dart` để tránh gọi plugin không hỗ trợ trên iOS gây văng hoặc treo màn hình trắng.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/screens/preview.dart`:
+    + Giữ nguyên logic tự động ghép meme theo ngữ cảnh vào ảnh chụp (`_runAiContextualEngine`).
+    + Bổ sung nút `+ Tự tạo từ thư viện máy` và ô `+ Thư viện` trong khay sticker để mở `StickerGeneratorSheet` cho phép chọn ảnh từ Thư viện máy.
+  - [MODIFY] `lib/screens/sticker_generator_sheet.dart`: Cập nhật tiêu đề rõ ràng thành "CHỌN ẢNH TỪ MÁY ĐỂ TẠO STICKER DÁN THÊM".
+  - [MODIFY] `lib/services/custom_sticker_service.dart`: Chặn gọi `SubjectSegmenter` trên iOS, fallback sang Object Detection / Oval Die-Cut Badge để chạy mượt mà không crash.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Bỏ qua segmentation trên iOS trong `processAndMerge`, bảo đảm tốc độ và độ ổn định cao.
+* **Hiện trạng (Current State):**
+  - `flutter analyze`: **0 issues found**.
+  - Đúng chuẩn 100% như tài liệu thiết kế ban đầu.

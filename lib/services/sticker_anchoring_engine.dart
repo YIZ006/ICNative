@@ -208,8 +208,10 @@ class StickerAnchoringEngine {
       double maxArea = 0;
       List<double>? subjectMask;
 
-      // Run Subject Segmentation and Image Labeling in PARALLEL for maximum speed
-      final segmenterFuture = _getSegmenter().processImage(inputImage);
+      // Run Subject Segmentation (Android) and Image Labeling in PARALLEL for maximum speed
+      final segmenterFuture = Platform.isIOS
+          ? Future<SubjectSegmentationResult?>.value(null)
+          : _getSegmenter().processImage(inputImage);
       final labelerFuture = _getLabeler().processImage(inputImage);
 
       SubjectSegmentationResult? segResult;

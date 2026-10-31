@@ -50,7 +50,7 @@ class StickerGeneratorSheet extends StatefulWidget {
                   ),
                 ),
                 const Text(
-                  'CHỌN ẢNH ĐỂ CẮT STICKER MEME',
+                  'CHỌN ẢNH TỪ MÁY ĐỂ TẠO STICKER DÁN THÊM',
                   style: TextStyle(
                     color: OrbitColors.deepOlive,
                     fontSize: 13,

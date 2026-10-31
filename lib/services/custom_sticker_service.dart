@@ -218,26 +218,28 @@ class CustomStickerService {
       return baseImage;
     }
 
-    // 2. Thu dung Google ML Kit Subject Segmentation on-device
-    try {
-      final inputImage = InputImage.fromFilePath(localPath);
-      final segResult = await _getSegmenter().processImage(inputImage);
+    // 2. Thu dung Google ML Kit Subject Segmentation on-device (Ho tro Android)
+    if (!Platform.isIOS) {
+      try {
+        final inputImage = InputImage.fromFilePath(localPath);
+        final segResult = await _getSegmenter().processImage(inputImage);
 
-      if (segResult.foregroundBitmap != null && segResult.foregroundBitmap!.isNotEmpty) {
-        final decoded = img.decodeImage(segResult.foregroundBitmap!);
-        if (decoded != null && _hasTransparency(decoded)) {
-          return decoded;
+        if (segResult.foregroundBitmap != null && segResult.foregroundBitmap!.isNotEmpty) {
+          final decoded = img.decodeImage(segResult.foregroundBitmap!);
+          if (decoded != null && _hasTransparency(decoded)) {
+            return decoded;
+          }
         }
-      }
 
-      if (segResult.subjects.isNotEmpty && segResult.subjects.first.bitmap != null) {
-        final decoded = img.decodeImage(segResult.subjects.first.bitmap!);
-        if (decoded != null) {
-          return decoded;
+        if (segResult.subjects.isNotEmpty && segResult.subjects.first.bitmap != null) {
+          final decoded = img.decodeImage(segResult.subjects.first.bitmap!);
+          if (decoded != null) {
+            return decoded;
+          }
         }
+      } catch (e) {
+        debugPrint('SubjectSegmenter info: $e');
       }
-    } catch (e) {
-      debugPrint('SubjectSegmenter info: $e');
     }
 
     // 3. Fallback thong minh: Phat hien vat the (Object Detection) & cat vien die-cut

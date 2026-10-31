@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:icnative/screens/sticker_generator_sheet.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
 import 'package:icnative/services/location_service.dart';
@@ -114,6 +115,19 @@ class _ImagePreviewState extends State<ImagePreview> {
   void dispose() {
     _captionController.dispose();
     super.dispose();
+  }
+
+  /// Mở công cụ chọn ảnh từ Thư viện máy (Gallery) để tạo sticker cá nhân và dán thêm lên ảnh
+  void _openCustomStickerFromGallery() async {
+    final newSticker = await StickerGeneratorSheet.show(context);
+    if (newSticker != null && mounted) {
+      setState(() {
+        activeCustomSticker = newSticker;
+        stickerPosition = const Offset(0.50, 0.20);
+        stickerScale = 1.0;
+        stickerRotation = 0.0;
+      });
+    }
   }
 
   /// Khắc Custom Sticker và Caption trực tiếp vào Bitmap trước khi gửi Widget
@@ -917,29 +931,100 @@ class _ImagePreviewState extends State<ImagePreview> {
                 ),
                 const SizedBox(height: 12),
 
-                // Sticker Selection Tray (Khay sticker & nut tao custom meme)
+                // Sticker Selection Tray (Khay sticker & nut tao custom meme tu thu vien may)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Chọn đổi Meme khác:',
-                      style: TextStyle(
-                        color: OrbitColors.deepOlive,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Meme & Sticker dán kèm:',
+                          style: TextStyle(
+                            color: OrbitColors.deepOlive,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _openCustomStickerFromGallery,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: OrbitColors.buttonPrimary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.25)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_photo_alternate_rounded, size: 15, color: OrbitColors.buttonPrimary),
+                                SizedBox(width: 4),
+                                Text(
+                                  '+ Tự tạo từ thư viện máy',
+                                  style: TextStyle(
+                                    color: OrbitColors.buttonPrimary,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
 
-                    // Horizontal List of Stickers (115 meme gốc phân loại)
+                    // Horizontal List of Stickers (Nút thêm từ Thư viện + 115 meme gốc phân loại)
                     SizedBox(
                       height: 56,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: stickerList.length,
+                        itemCount: stickerList.length + 1,
                         separatorBuilder: (_, __) => const SizedBox(width: 8),
                         itemBuilder: (context, index) {
-                          final item = stickerList[index];
+                          // Nút đầu tiên: Cho phép chọn ảnh từ Thư viện của máy để tạo sticker dán thêm
+                          if (index == 0) {
+                            return GestureDetector(
+                              onTap: _openCustomStickerFromGallery,
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: OrbitColors.surfaceCream,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: OrbitColors.buttonPrimary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_photo_alternate_rounded,
+                                      color: OrbitColors.buttonPrimary,
+                                      size: 20,
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      '+ Thư viện',
+                                      style: TextStyle(
+                                        color: OrbitColors.deepOlive,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          final item = stickerList[index - 1];
                           final isSelected = activeCustomSticker?.id == item.id;
 
                           return GestureDetector(
