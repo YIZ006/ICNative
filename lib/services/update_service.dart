@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class GitHubReleaseInfo {
   final String tagName;
@@ -15,6 +16,9 @@ class GitHubReleaseInfo {
   final String apkDownloadUrl;
   final int apkSizeBytes;
   final String publishedAt;
+  final String? ipaDownloadUrl;
+  final String releasePageUrl;
+  final bool isIos;
 
   GitHubReleaseInfo({
     required this.tagName,
@@ -23,10 +27,14 @@ class GitHubReleaseInfo {
     required this.apkDownloadUrl,
     required this.apkSizeBytes,
     required this.publishedAt,
-  });
+    this.ipaDownloadUrl,
+    String? releasePageUrl,
+    this.isIos = false,
+  }) : releasePageUrl = releasePageUrl ??
+            'https://github.com/${UpdateService.repoOwner}/${UpdateService.repoName}/releases/tag/$tagName';
 
   String get formattedSize {
-    if (apkSizeBytes <= 0) return '';
+    if (apkSizeBytes <= 0) return isIos ? 'Bản Cập Nhật iOS' : '';
     final mb = apkSizeBytes / (1024 * 1024);
     return '${mb.toStringAsFixed(1)} MB';
   }
@@ -45,7 +53,7 @@ class UpdateService {
   static const String repoName = 'ICNative';
   static const MethodChannel _channel = MethodChannel('com.abom.utas.utas/app_updater');
 
-  /// Lấy phiên bản thực tế đã cài đặt trên thiết bị từ Android PackageManager
+  /// Lấy phiên bản thực tế đã cài đặt trên thiết bị từ Android PackageManager hoặc iOS Bundle
   Future<String> getInstalledVersion() async {
     try {
       final String? ver = await _channel.invokeMethod<String>('getAppVersion');
@@ -101,58 +109,77 @@ class UpdateService {
         }
 
         final assets = (data['assets'] as List<dynamic>? ?? []);
-        String? apkUrl;
-        int apkSize = 0;
+        final htmlUrl = (data['html_url'] as String? ??
+                'https://github.com/$repoOwner/$repoName/releases/tag/$tagName')
+            .trim();
+        String? targetDownloadUrl;
+        String? ipaUrl;
+        int targetSize = 0;
 
-        // QUY TẮC CHỐNG TẢI NHẦM BẢN (ANTI-MISMATCH ASSET MATCHING)
-        if (!isDemoBuild) {
-          // 1. Bản Chuẩn (Clean Release): Tuyệt đối KHÔNG BAO GIỜ tải bản demo
+        if (Platform.isIOS) {
+          // iOS asset matching: tìm kiếm tệp cài đặt .ipa
           for (final asset in assets) {
             final assetName = (asset['name'] as String? ?? '').toLowerCase();
-            if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
-              apkUrl = asset['browser_download_url'] as String?;
-              apkSize = asset['size'] as int? ?? 0;
+            if (assetName.endsWith('.ipa')) {
+              ipaUrl = asset['browser_download_url'] as String?;
+              targetDownloadUrl = ipaUrl;
+              targetSize = asset['size'] as int? ?? 0;
               break;
             }
           }
-          if (apkUrl == null) {
-            for (final asset in assets) {
-              final assetName = (asset['name'] as String? ?? '').toLowerCase();
-              if (assetName.endsWith('.apk') && !assetName.contains('demo')) {
-                apkUrl = asset['browser_download_url'] as String?;
-                apkSize = asset['size'] as int? ?? 0;
-                break;
-              }
-            }
-          }
+          // Fallback về URL trang release trên GitHub nếu chưa tìm thấy link ipa trực tiếp
+          targetDownloadUrl ??= htmlUrl;
         } else {
-          // 2. Bản Trải Nghiệm (Demo Showcase): Ưu tiên tải bản demo
-          for (final asset in assets) {
-            final assetName = (asset['name'] as String? ?? '').toLowerCase();
-            if (assetName.contains('demo-showcase') && assetName.endsWith('.apk')) {
-              apkUrl = asset['browser_download_url'] as String?;
-              apkSize = asset['size'] as int? ?? 0;
-              break;
-            }
-          }
-          if (apkUrl == null) {
+          // QUY TẮC CHỐNG TẢI NHẦM BẢN (ANTI-MISMATCH ASSET MATCHING CHO ANDROID)
+          if (!isDemoBuild) {
+            // 1. Bản Chuẩn (Clean Release): Tuyệt đối KHÔNG BAO GIỜ tải bản demo
             for (final asset in assets) {
               final assetName = (asset['name'] as String? ?? '').toLowerCase();
-              if (assetName.contains('demo') && assetName.endsWith('.apk')) {
-                apkUrl = asset['browser_download_url'] as String?;
-                apkSize = asset['size'] as int? ?? 0;
+              if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
+                targetDownloadUrl = asset['browser_download_url'] as String?;
+                targetSize = asset['size'] as int? ?? 0;
                 break;
               }
             }
-          }
-          if (apkUrl == null) {
-            // Fallback nếu GitHub chưa có demo build
+            if (targetDownloadUrl == null) {
+              for (final asset in assets) {
+                final assetName = (asset['name'] as String? ?? '').toLowerCase();
+                if (assetName.endsWith('.apk') && !assetName.contains('demo')) {
+                  targetDownloadUrl = asset['browser_download_url'] as String?;
+                  targetSize = asset['size'] as int? ?? 0;
+                  break;
+                }
+              }
+            }
+          } else {
+            // 2. Bản Trải Nghiệm (Demo Showcase): Ưu tiên tải bản demo
             for (final asset in assets) {
               final assetName = (asset['name'] as String? ?? '').toLowerCase();
-              if (assetName.endsWith('.apk')) {
-                apkUrl = asset['browser_download_url'] as String?;
-                apkSize = asset['size'] as int? ?? 0;
+              if (assetName.contains('demo-showcase') && assetName.endsWith('.apk')) {
+                targetDownloadUrl = asset['browser_download_url'] as String?;
+                targetSize = asset['size'] as int? ?? 0;
                 break;
+              }
+            }
+            if (targetDownloadUrl == null) {
+              for (final asset in assets) {
+                final assetName = (asset['name'] as String? ?? '').toLowerCase();
+                if (assetName.contains('demo') && assetName.endsWith('.apk')) {
+                  targetDownloadUrl = asset['browser_download_url'] as String?;
+                  targetSize = asset['size'] as int? ?? 0;
+                  break;
+                }
+              }
+            }
+            if (targetDownloadUrl == null) {
+              // Fallback nếu GitHub chưa có demo build
+              for (final asset in assets) {
+                final assetName = (asset['name'] as String? ?? '').toLowerCase();
+                if (assetName.endsWith('.apk')) {
+                  targetDownloadUrl = asset['browser_download_url'] as String?;
+                  targetSize = asset['size'] as int? ?? 0;
+                  break;
+                }
               }
             }
           }
@@ -165,9 +192,12 @@ class UpdateService {
             tagName: tagName,
             title: title,
             notes: notes,
-            apkDownloadUrl: apkUrl ?? 'https://github.com/$repoOwner/$repoName/releases/latest',
-            apkSizeBytes: apkSize,
+            apkDownloadUrl: targetDownloadUrl ?? htmlUrl,
+            apkSizeBytes: targetSize,
             publishedAt: publishedAt,
+            ipaDownloadUrl: ipaUrl,
+            releasePageUrl: htmlUrl,
+            isIos: Platform.isIOS,
           );
         }
       }
@@ -177,9 +207,21 @@ class UpdateService {
     return null;
   }
 
-  /// Mở trình duyệt web trực tiếp đến trang GitHub Releases để người dùng xem thông tin phát hành
+  /// Mở trình duyệt web trực tiếp đến trang GitHub Releases hoặc link tải (Hỗ trợ Safari trên iOS và Chrome/mặc định trên Android)
   Future<bool> openReleasePage([String? url]) async {
     final targetUrl = url ?? 'https://github.com/$repoOwner/$repoName/releases/latest';
+
+    // 1. Thử mở bằng package url_launcher chuẩn hoá đa nền tảng
+    try {
+      final uri = Uri.parse(targetUrl);
+      if (await canLaunchUrl(uri)) {
+        return await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('url_launcher attempt error: $e');
+    }
+
+    // 2. Dự phòng bằng Native MethodChannel nếu url_launcher chưa sẵn sàng
     try {
       final bool? result = await _channel.invokeMethod<bool>('openUrl', {
         'url': targetUrl,
@@ -188,14 +230,21 @@ class UpdateService {
     } on PlatformException catch (e) {
       debugPrint('PlatformException during openUrl: ${e.message}');
       return false;
+    } catch (_) {
+      return false;
     }
   }
 
-  /// Tải tệp APK từ GitHub với thanh tiến trình trực tiếp và kích hoạt cài đặt tức thì
+  /// Tải tệp cài đặt với thanh tiến trình trực tiếp (Android) hoặc mở Safari (iOS)
   Future<bool> downloadAndInstallApk({
     required String downloadUrl,
     required void Function(double progress, int downloadedBytes, int totalBytes) onProgress,
   }) async {
+    // Trên iOS, Apple không cho phép tự cài APK/IPA nội bộ; chuyển tiếp trực tiếp sang trình duyệt Safari
+    if (Platform.isIOS) {
+      return await openReleasePage(downloadUrl);
+    }
+
     try {
       final client = http.Client();
       final request = http.Request('GET', Uri.parse(downloadUrl));
@@ -245,6 +294,7 @@ class UpdateService {
 
   /// Gọi Android Package Installer hệ thống bằng MethodChannel (Zero dependency)
   Future<bool> installDownloadedApk(String filePath) async {
+    if (Platform.isIOS) return false;
     try {
       final bool? result = await _channel.invokeMethod<bool>('installApk', {
         'filePath': filePath,

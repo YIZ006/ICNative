@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:icnative/services/locale_service.dart';
@@ -13,10 +14,36 @@ class WidgetGuideScreen extends StatefulWidget {
 class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
   static const MethodChannel _pinChannel = MethodChannel('com.abom.utas.utas/widget_pin');
 
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _manualGuideKey = GlobalKey();
+
   bool _isPinning = false;
   String? _statusMessage;
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToManualGuide() {
+    final context = _manualGuideKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
+
   Future<void> _pinWidget(String widgetType) async {
+    // Trên iOS, Apple WidgetKit không cho phép ghim trực tiếp từ app
+    if (Platform.isIOS) {
+      _scrollToManualGuide();
+      return;
+    }
+
     setState(() {
       _isPinning = true;
       _statusMessage = null;
@@ -71,6 +98,8 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isIOS = Platform.isIOS;
+
     return Scaffold(
       backgroundColor: OrbitColors.background,
       appBar: AppBar(
@@ -91,6 +120,7 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
         centerTitle: true,
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
@@ -119,8 +149,8 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
                       color: OrbitColors.buttonPrimary.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.widgets_rounded,
+                    child: Icon(
+                      isIOS ? Icons.apple_rounded : Icons.widgets_rounded,
                       color: OrbitColors.buttonPrimary,
                       size: 28,
                     ),
@@ -130,9 +160,9 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Orbit Widgets',
-                          style: TextStyle(
+                        Text(
+                          isIOS ? 'Orbit Widgets (iOS)' : 'Orbit Widgets',
+                          style: const TextStyle(
                             color: OrbitColors.deepOlive,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -154,11 +184,55 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
 
-            // SECTION 1: 1-Tap Quick Pinning
+            // Thông báo cơ chế iOS WidgetKit
+            if (isIOS) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: OrbitColors.buttonPrimary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: OrbitColors.buttonPrimary, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr('wg_ios_notice_title'),
+                            style: const TextStyle(
+                              color: OrbitColors.deepOlive,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tr('wg_ios_notice_desc'),
+                            style: TextStyle(
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // SECTION 1: Widget Styles / Quick Pinning
             Text(
-              tr('wg_quick_pin_section'),
+              isIOS ? tr('wg_ios_styles_section') : tr('wg_quick_pin_section'),
               style: const TextStyle(
                 color: OrbitColors.deepOlive,
                 fontWeight: FontWeight.bold,
@@ -171,11 +245,12 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
             _buildWidgetActionCard(
               title: 'Thiên Hà Vệ Tinh',
               subtitle: 'Lõi ảnh trung tâm sắc nét cùng các vệ tinh bạn bè quay quanh, tương phản cao trên nền sáng.',
-              tag: 'Phổ biến nhất',
+              tag: isIOS ? 'Phổ biến nhất' : 'Phổ biến nhất',
               icon: Icons.flare_rounded,
               color: OrbitColors.deepOlive,
+              isIOS: isIOS,
               onPin: () => _pinWidget('galaxy'),
-              btnLabel: tr('wg_pin_galaxy_btn'),
+              btnLabel: isIOS ? '📱 Xem Các Bước Thêm Trên iPhone' : tr('wg_pin_galaxy_btn'),
             ),
 
             const SizedBox(height: 16),
@@ -187,68 +262,72 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
               tag: 'Tối giản & Nghệ thuật',
               icon: Icons.water_drop_rounded,
               color: OrbitColors.terracotta,
+              isIOS: isIOS,
               onPin: () => _pinWidget('pebble'),
-              btnLabel: tr('wg_pin_pebble_btn'),
+              btnLabel: isIOS ? '📱 Xem Các Bước Thêm Trên iPhone' : tr('wg_pin_pebble_btn'),
             ),
 
-            // Mẹo chạm giữ kéo thả widget
-            Container(
-              margin: const EdgeInsets.only(top: 14),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: OrbitColors.surfaceCream,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.touch_app_rounded, color: OrbitColors.buttonPrimary, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '💡 Mẹo di chuyển: Khi bấm nút Ghim, trong hộp thoại xác nhận của điện thoại bạn có thể chạm và giữ ngón tay vào ô widget để kéo thả trực tiếp ra vị trí mong muốn ngoài màn hình!',
-                      style: TextStyle(
-                        color: OrbitColors.deepOlive.withValues(alpha: 0.85),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            if (_statusMessage != null) ...[
-              const SizedBox(height: 14),
+            if (!isIOS) ...[
+              // Mẹo chạm giữ kéo thả widget trên Android
               Container(
+                margin: const EdgeInsets.only(top: 14),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.amber.shade700),
+                  color: OrbitColors.surfaceCream,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.3)),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 20),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.touch_app_rounded, color: OrbitColors.buttonPrimary, size: 20),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _statusMessage!,
-                        style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+                        '💡 Mẹo di chuyển: Khi bấm nút Ghim, trong hộp thoại xác nhận của điện thoại bạn có thể chạm và giữ ngón tay vào ô widget để kéo thả trực tiếp ra vị trí mong muốn ngoài màn hình!',
+                        style: TextStyle(
+                          color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+
+              if (_statusMessage != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade700),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _statusMessage!,
+                          style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
 
             const SizedBox(height: 28),
 
             // SECTION 2: Manual Guide
             Text(
-              tr('wg_manual_guide_title'),
+              isIOS ? tr('wg_ios_manual_guide_title') : tr('wg_manual_guide_title'),
+              key: _manualGuideKey,
               style: const TextStyle(
                 color: OrbitColors.deepOlive,
                 fontWeight: FontWeight.bold,
@@ -266,17 +345,61 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStepItem(tr('wg_step_1')),
-                  const SizedBox(height: 10),
-                  _buildStepItem(tr('wg_step_2')),
-                  const SizedBox(height: 10),
-                  _buildStepItem(tr('wg_step_3')),
-                  const SizedBox(height: 10),
-                  _buildStepItem(tr('wg_step_4')),
-                ],
+                children: isIOS
+                    ? [
+                        _buildStepItem(tr('wg_ios_step_1')),
+                        const SizedBox(height: 12),
+                        _buildStepItem(tr('wg_ios_step_2')),
+                        const SizedBox(height: 12),
+                        _buildStepItem(tr('wg_ios_step_3')),
+                        const SizedBox(height: 12),
+                        _buildStepItem(tr('wg_ios_step_4')),
+                        const SizedBox(height: 12),
+                        _buildStepItem(tr('wg_ios_step_5')),
+                        const SizedBox(height: 12),
+                        _buildStepItem(tr('wg_ios_step_6')),
+                      ]
+                    : [
+                        _buildStepItem(tr('wg_step_1')),
+                        const SizedBox(height: 10),
+                        _buildStepItem(tr('wg_step_2')),
+                        const SizedBox(height: 10),
+                        _buildStepItem(tr('wg_step_3')),
+                        const SizedBox(height: 10),
+                        _buildStepItem(tr('wg_step_4')),
+                      ],
               ),
             ),
+
+            if (isIOS) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: OrbitColors.surfaceCream,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: OrbitColors.terracotta.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.lock_clock_rounded, color: OrbitColors.terracotta, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tr('wg_ios_lockscreen_tip'),
+                        style: TextStyle(
+                          color: OrbitColors.deepOlive.withValues(alpha: 0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 32),
           ],
@@ -291,6 +414,7 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
     required String tag,
     required IconData icon,
     required Color color,
+    required bool isIOS,
     required VoidCallback onPin,
     required String btnLabel,
   }) {
@@ -358,24 +482,64 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
               height: 1.35,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
+          // iOS tag & sizes
+          if (isIOS) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.aspect_ratio_rounded, color: color, size: 15),
+                  const SizedBox(width: 6),
+                  Text(
+                    tr('wg_ios_supported_sizes'),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             width: double.infinity,
             height: 44,
-            child: ElevatedButton.icon(
-              onPressed: _isPinning ? null : onPin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: OrbitColors.textLight,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 2,
-              ),
-              icon: const Icon(Icons.touch_app_rounded, size: 18),
-              label: Text(
-                btnLabel,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-            ),
+            child: isIOS
+                ? OutlinedButton.icon(
+                    onPressed: onPin,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: color,
+                      side: BorderSide(color: color, width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+                    label: Text(
+                      btnLabel,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    onPressed: _isPinning ? null : onPin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: OrbitColors.textLight,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 2,
+                    ),
+                    icon: const Icon(Icons.touch_app_rounded, size: 18),
+                    label: Text(
+                      btnLabel,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -386,7 +550,10 @@ class _WidgetGuideScreenState extends State<WidgetGuideScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.check_circle_outline_rounded, size: 16, color: OrbitColors.buttonPrimary),
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Icon(Icons.check_circle_outline_rounded, size: 16, color: OrbitColors.buttonPrimary),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(

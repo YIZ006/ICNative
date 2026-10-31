@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/theme_colors.dart';
@@ -26,6 +27,13 @@ class _UpdateDialogState extends State<UpdateDialog> {
   String? errorMessage;
 
   Future<void> _startUpdate() async {
+    // Trên iOS, chuyển hướng trực tiếp sang Safari thay vì tải gói APK nội bộ
+    if (Platform.isIOS) {
+      await UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     setState(() {
       isDownloading = true;
       downloadProgress = 0.0;
@@ -58,6 +66,8 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isIOS = Platform.isIOS;
+
     return Dialog(
       backgroundColor: OrbitColors.background,
       shape: RoundedRectangleBorder(
@@ -86,8 +96,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(Icons.rocket_launch_rounded, color: OrbitColors.textLight, size: 32),
+                child: Center(
+                  child: Icon(
+                    isIOS ? Icons.apple_rounded : Icons.rocket_launch_rounded,
+                    color: OrbitColors.textLight,
+                    size: 32,
+                  ),
                 ),
               ),
             ),
@@ -115,7 +129,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   border: Border.all(color: OrbitColors.deepOlive.withValues(alpha: 0.2)),
                 ),
                 child: Text(
-                  '${widget.releaseInfo.tagName} • ${widget.releaseInfo.formattedSize}',
+                  widget.releaseInfo.formattedSize.isNotEmpty
+                      ? '${widget.releaseInfo.tagName} • ${widget.releaseInfo.formattedSize}'
+                      : widget.releaseInfo.tagName,
                   style: const TextStyle(
                     color: OrbitColors.deepOlive,
                     fontSize: 12,
@@ -162,7 +178,37 @@ class _UpdateDialogState extends State<UpdateDialog> {
               const SizedBox(height: 16),
             ],
 
-            // Progress or Error
+            // Thông báo phương thức cập nhật dành cho thiết bị iOS
+            if (isIOS) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: OrbitColors.buttonPrimary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: OrbitColors.buttonPrimary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Trên thiết bị iOS (iPhone), vui lòng mở trang GitHub Releases để cập nhật gói cài đặt .IPA mới nhất.',
+                        style: TextStyle(
+                          color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Progress or Error (Chủ yếu Android)
             if (isDownloading) ...[
               LinearProgressIndicator(
                 value: downloadProgress > 0 ? downloadProgress : null,
@@ -199,43 +245,88 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
             // Action Buttons
             if (!isDownloading) ...[
-              ElevatedButton.icon(
-                onPressed: () {
-                  UpdateService.instance.openReleasePage();
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: OrbitColors.buttonPrimary,
-                  foregroundColor: OrbitColors.textLight,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              if (isIOS) ...[
+                // CÁC NÚT DÀNH CHO NỀN TẢNG IOS
+                ElevatedButton.icon(
+                  onPressed: () {
+                    UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OrbitColors.buttonPrimary,
+                    foregroundColor: OrbitColors.textLight,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.open_in_browser_rounded, size: 20),
+                  label: const Text(
+                    '🌐 Mở Trang Tải GitHub Releases',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                icon: const Icon(Icons.open_in_browser_rounded, size: 20),
-                label: const Text(
-                  '🌐 Mở Trang Tải GitHub Releases',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                if (widget.releaseInfo.ipaDownloadUrl != null) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      UpdateService.instance.openReleasePage(widget.releaseInfo.ipaDownloadUrl);
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OrbitColors.deepOlive,
+                      side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: Text(
+                      '📥 Tải Tệp .IPA (${widget.releaseInfo.formattedSize})',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ] else ...[
+                // CÁC NÚT DÀNH CHO NỀN TẢNG ANDROID
+                ElevatedButton.icon(
+                  onPressed: _startUpdate,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OrbitColors.buttonPrimary,
+                    foregroundColor: OrbitColors.textLight,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.bolt_rounded, size: 20),
+                  label: const Text(
+                    '⚡ Tải & Cập Nhật Tức Thì',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _startUpdate,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: OrbitColors.deepOlive,
-                  side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
+                    Navigator.pop(context);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: OrbitColors.deepOlive,
+                    side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                  label: const Text(
+                    '🌐 Mở Trang Tải GitHub Releases',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                icon: const Icon(Icons.download_rounded, size: 18),
-                label: const Text(
-                  'Tải trực tiếp trong app',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
+              ],
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  await UpdateService.instance.dismissUpdate(widget.releaseInfo.tagName);
+                  if (context.mounted) Navigator.pop(context);
+                },
                 child: Text(
-                  'Đóng',
+                  'Để sau',
                   style: TextStyle(
                     color: OrbitColors.deepOlive.withValues(alpha: 0.7),
                     fontWeight: FontWeight.bold,

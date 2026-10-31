@@ -271,7 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.system_update_alt_rounded,
                   iconColor: OrbitColors.buttonPrimary,
                   title: 'Phiên Bản & Bản Cập Nhật',
-                  subtitle: 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Tự động tải và cập nhật trực tiếp trong app.',
+                  subtitle: Platform.isIOS
+                      ? 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Cập nhật phiên bản mới nhất qua GitHub Releases.'
+                      : 'Phiên bản hiện tại: Orbit v${UpdateService.currentVersion}. Tự động tải và cập nhật trực tiếp trong app.',
                   buttonText: 'Kiểm Tra Cập Nhật 🚀',
                   onTap: () async {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +305,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   iconColor: OrbitColors.buttonPrimary,
                   title: tr('wg_title'),
                   subtitle: tr('wg_subtitle'),
-                  buttonText: 'Xem & Ghim Nhanh 1-Chạm 📌',
+                  buttonText: Platform.isIOS ? 'Xem Hướng Dẫn Thêm Widget 📱' : 'Xem & Ghim Nhanh 1-Chạm 📌',
                   onTap: () {
                     Navigator.push(
                       context,

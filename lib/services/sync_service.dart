@@ -164,8 +164,14 @@ class SyncService {
 
   static Future<void> updateAllHomeWidgets() async {
     try {
-      await HomeWidget.updateWidget(name: 'ICNativeWidgetProvider');
-      await HomeWidget.updateWidget(name: 'ICNativePebbleWidgetProvider');
+      await HomeWidget.updateWidget(
+        name: 'ICNativeWidgetProvider',
+        iOSName: 'OrbitWidget',
+      );
+      await HomeWidget.updateWidget(
+        name: 'ICNativePebbleWidgetProvider',
+        iOSName: 'OrbitWidget',
+      );
     } catch (e) {
       debugPrint('Error updating home widgets: $e');
     }

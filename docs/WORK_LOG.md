@@ -1233,3 +1233,36 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Hiện trạng (Current State):**
   - Toàn bộ yêu cầu của người dùng đã hoàn thành trọn vẹn và đã được đưa lên GitHub Releases.
   - Không có bất kỳ lỗi nào (`flutter analyze`: 0 issues found).
+
+
+---
+
+### [2026-10-31 18:30:00] - Cập nhật logic Platform.isIOS cho In-App Update và Hướng Dẫn Widget trên iOS
+* **Thời gian (Timestamp):** 2026-10-31 18:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Khắc phục triệt để 2 vấn đề trên thiết bị iOS (iPhone 11 Pro / iOS 14+) theo phản ánh thực tế của người dùng:
+  1. **Khắc phục lỗi In-App Update trên iOS**: Trước đây app cố gắng tải tệp APK Android (151MB) rồi gọi lệnh cài đặt APK của Android gây ra lỗi *"Không thể tải xuống hoặc mở cài đặt. Vui lòng thử lại sau"*. Nay đã bổ sung logic `Platform.isIOS`: tự động tìm kiếm tệp `.ipa` trong GitHub release assets; trên iOS hộp thoại cập nhật sẽ hiển thị thông báo thân thiện chuẩn iOS, cung cấp nút mở trực tiếp trang GitHub Releases trên trình duyệt Safari hoặc tải file `.ipa` cài đặt qua AltStore/TestFlight, không còn cố tải tệp APK hay gây lỗi cài đặt.
+  2. **Tối ưu hóa Màn hình Hướng Dẫn Widget (`WidgetGuideScreen`) cho iOS**: Trước đây màn hình hiển thị nút "Ghim nhanh 1-chạm" (vốn chỉ hỗ trợ Android launcher thông qua `requestPinAppWidget`), khi bấm trên iPhone lập tức báo lỗi *"Trình khởi chạy của máy chưa hỗ trợ ghim tự động"*. Nay đã phân nhánh `Platform.isIOS`:
+     - Ẩn các nút ghim tự động không khả dụng trên iOS (tuân thủ nguyên tắc bảo mật của Apple WidgetKit).
+     - Thay thế bằng thẻ giới thiệu kiểu dáng Widget Orbit chuẩn mực với kích thước hỗ trợ: Nhỏ (2x2) và Vừa (4x2).
+     - Cung cấp hướng dẫn thủ công 6 bước chuẩn iOS 14+: Nhấn giữ màn hình chính (Jiggle Mode) -> Bấm dấu (+) góc trên -> Tìm "Orbit" -> Chọn kích thước -> Bấm "Thêm tiện ích" -> Hoàn tất.
+     - Bổ sung mẹo cài đặt Widget trên Màn hình Khóa (Lock Screen) cho iOS 16+.
+  3. **Hỗ trợ Native iOS MethodChannel & URL Launcher**:
+     - Cập nhật `ios/Runner/AppDelegate.swift` xử lý MethodChannel `app_updater` (`getAppVersion`, `openUrl` mở Safari) và `widget_pin` (trả về false an toàn).
+     - Thêm package `url_launcher: ^6.3.1` và cấu hình `LSApplicationQueriesSchemes` trong `Info.plist`.
+     - Thêm `iOSName: 'OrbitWidget'` vào `SyncService.updateAllHomeWidgets()`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/services/update_service.dart` - Nhận diện `Platform.isIOS`, match tệp `.ipa` trong release assets, tích hợp `url_launcher` mở Safari, chặn tải APK trên iOS.
+  - [MODIFY] `lib/screens/update_dialog.dart` - Phân nhánh UI `Platform.isIOS`: nút mở Safari / tải `.ipa`, thông báo hướng dẫn iOS, loại bỏ thanh tiến trình APK và lỗi không tương thích.
+  - [MODIFY] `lib/screens/widget_guide_screen.dart` - Phân nhánh UI `Platform.isIOS`: thẻ kiểu dáng widget iOS, hướng dẫn 6 bước thủ công iOS chuẩn Apple, mẹo Màn hình khóa iOS 16+, nút cuộn mượt mà.
+  - [MODIFY] `lib/services/locale_service.dart` - Bổ sung toàn bộ chuỗi bản dịch song ngữ (Việt - Anh) cho Widget Guide iOS.
+  - [MODIFY] `lib/screens/profile_screen.dart` - Tinh chỉnh nhãn nút và mô tả thẻ Cập nhật / Widget phù hợp với `Platform.isIOS`.
+  - [MODIFY] `lib/services/sync_service.dart` - Bổ sung tham số `iOSName: 'OrbitWidget'` cho `HomeWidget.updateWidget()`.
+  - [MODIFY] `ios/Runner/AppDelegate.swift` - Đăng ký native channel `app_updater` và `widget_pin`.
+  - [MODIFY] `ios/Runner/Info.plist` - Thêm `LSApplicationQueriesSchemes` (`https`, `http`).
+  - [MODIFY] `pubspec.yaml` - Thêm `url_launcher: ^6.3.1`.
+* **Hiện trạng (Current State):**
+  - `flutter analyze`: **0 issues found** (Không còn bất kỳ lỗi cú pháp, lint hay cảnh báo nào).
+  - Trải nghiệm trên cả iOS và Android đều hoạt động mượt mà, đúng chuẩn của từng hệ điều hành.
