@@ -7,6 +7,7 @@ import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:google_mlkit_subject_segmentation/google_mlkit_subject_segmentation.dart';
 import 'package:image/image.dart' as img;
+import 'package:icnative/services/anchor_math.dart';
 
 enum StickerCategory { food, beverage, general, scene, person, animal, electronics }
 enum AnchorPreference { topEdge, bottomEdge, center, bottomScene }
@@ -17,7 +18,12 @@ class StickerMetadata {
   final StickerCategory category;
   final AnchorPreference preference;
   final ui.Offset bitePoint; // 0.0 to 1.0
-  final ui.Offset? detectedAnchorOffset;
+
+  /// Hình học vật thể trong ảnh gốc (Bước 1-2). null khi không có vật thể rõ ràng.
+  final ObjectAnchor? anchor;
+
+  /// Kích thước pixel của file PNG sticker (để tính contain-fit cho bitePoint).
+  final ui.Size? stickerPixelSize;
 
   const StickerMetadata({
     required this.id,
@@ -25,8 +31,22 @@ class StickerMetadata {
     required this.category,
     required this.preference,
     required this.bitePoint,
-    this.detectedAnchorOffset,
+    this.anchor,
+    this.stickerPixelSize,
   });
+
+  /// Chế độ neo tương ứng cho solver (Bước 3).
+  AnchorMode get anchorMode {
+    switch (preference) {
+      case AnchorPreference.topEdge:
+        return AnchorMode.topEdge;
+      case AnchorPreference.center:
+        return AnchorMode.hug;
+      case AnchorPreference.bottomEdge:
+      case AnchorPreference.bottomScene:
+        return AnchorMode.scene;
+    }
+  }
 
   StickerMetadata copyWith({
     String? id,
@@ -34,7 +54,8 @@ class StickerMetadata {
     StickerCategory? category,
     AnchorPreference? preference,
     ui.Offset? bitePoint,
-    ui.Offset? detectedAnchorOffset,
+    ObjectAnchor? anchor,
+    ui.Size? stickerPixelSize,
   }) {
     return StickerMetadata(
       id: id ?? this.id,
@@ -42,7 +63,8 @@ class StickerMetadata {
       category: category ?? this.category,
       preference: preference ?? this.preference,
       bitePoint: bitePoint ?? this.bitePoint,
-      detectedAnchorOffset: detectedAnchorOffset ?? this.detectedAnchorOffset,
+      anchor: anchor ?? this.anchor,
+      stickerPixelSize: stickerPixelSize ?? this.stickerPixelSize,
     );
   }
 }
@@ -205,6 +227,16 @@ class StickerAnchoringEngine {
       final detectorFuture = _getObjectDetector().processImage(inputImage);
       final labelerFuture = _getLabeler().processImage(inputImage);
 
+      // Tách chủ thể (chỉ Android) chạy song song để lấy đường viền thật cho
+      // Bước 2. Có timeout để không bao giờ giữ màn hình "AI đang nhận diện".
+      final Future<SubjectSegmentationResult?> segmenterFuture = Platform.isIOS
+          ? Future<SubjectSegmentationResult?>.value(null)
+          : _getSegmenter()
+              .processImage(inputImage)
+              .then<SubjectSegmentationResult?>((v) => v)
+              .timeout(const Duration(seconds: 4), onTimeout: () => null)
+              .catchError((_) => null);
+
       final results = await Future.wait([
         detectorFuture.then<dynamic>((v) => v).catchError((_) => <DetectedObject>[]),
         labelerFuture.then<dynamic>((v) => v).catchError((_) => <ImageLabel>[]),
@@ -275,19 +307,104 @@ class StickerAnchoringEngine {
 
       final metadata = pickStickerForCategory(category);
 
-      // 4. Nếu có vật thể rõ ràng, tính toán tọa độ neo tự động bám theo đỉnh vật thể
-      ui.Offset? anchorOffset;
+      // 4. Bước 2 của đặc tả: lấy đỉnh + tiếp tuyến mép trên từ đường viền thật
+      //    (mặt nạ tách chủ thể). Không có mặt nạ thì dùng bbox (đỉnh = giữa cạnh trên).
+      ObjectAnchor? anchor;
       if (hasClearObject && origW > 0 && origH > 0) {
-        final double normX = ((targetRect.center.dx - (origW * 0.16)) / origW).clamp(0.06, 0.65);
-        final double normY = ((targetRect.top - (origH * 0.16)) / origH).clamp(0.06, 0.45);
-        anchorOffset = ui.Offset(normX, normY);
+        anchor = await _buildAnchor(
+          imageSize: ui.Size(origW, origH),
+          detectedBounds: targetRect,
+          segmenterFuture: segmenterFuture,
+        );
       }
 
       return metadata.copyWith(
-        detectedAnchorOffset: anchorOffset ?? const ui.Offset(0.08, 0.35),
+        anchor: anchor,
+        stickerPixelSize: await loadStickerPixelSize(metadata.assetPath),
       );
     } catch (e) {
       debugPrint('detectAndSuggestSticker Error: $e');
+      return null;
+    }
+  }
+
+  /// Dựng [ObjectAnchor] cho vật thể mà ObjectDetector tìm thấy.
+  /// Trả null (-> chế độ cảnh) nếu toạ độ ML Kit không khớp không gian ảnh
+  /// (ví dụ lệch hướng EXIF), vì neo sai còn tệ hơn không neo.
+  static Future<ObjectAnchor?> _buildAnchor({
+    required ui.Size imageSize,
+    required Rect detectedBounds,
+    required Future<SubjectSegmentationResult?> segmenterFuture,
+  }) async {
+    const tolerance = 1.05;
+    if (detectedBounds.right > imageSize.width * tolerance ||
+        detectedBounds.bottom > imageSize.height * tolerance) {
+      debugPrint('Anchor skipped: bbox $detectedBounds vượt ảnh $imageSize');
+      return null;
+    }
+
+    final bounds = detectedBounds.intersect(
+      Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
+    );
+
+    try {
+      final seg = await segmenterFuture;
+      final subjects = seg?.subjects ?? const [];
+      if (subjects.isNotEmpty) {
+        final rects = [
+          for (final s in subjects)
+            Rect.fromLTWH(
+              s.startX.toDouble(),
+              s.startY.toDouble(),
+              s.width.toDouble(),
+              s.height.toDouble(),
+            ),
+        ];
+        final idx = AnchorMath.bestOverlapIndex(bounds, rects);
+        if (idx >= 0) {
+          final s = subjects[idx];
+          final confidence = s.confidenceMask;
+          if (confidence != null &&
+              s.width > 0 &&
+              s.height > 0 &&
+              confidence.length == s.width * s.height) {
+            return AnchorMath.anchorFromMask(
+              imageSize: imageSize,
+              bounds: rects[idx],
+              mask: BinaryMask.fromConfidence(confidence, s.width, s.height),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Subject mask unavailable, dùng bbox: $e');
+    }
+
+    return ObjectAnchor.fromBounds(imageSize, bounds);
+  }
+
+  static final Map<String, ui.Size> _stickerSizeCache = {};
+
+  /// Kích thước pixel của PNG sticker, chỉ đọc header (không decode ảnh).
+  static Future<ui.Size?> loadStickerPixelSize(String assetPath) async {
+    final cached = _stickerSizeCache[assetPath];
+    if (cached != null) return cached;
+    try {
+      final data = await rootBundle.load(assetPath);
+      final buffer = await ui.ImmutableBuffer.fromUint8List(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+      try {
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        final size = ui.Size(descriptor.width.toDouble(), descriptor.height.toDouble());
+        descriptor.dispose();
+        _stickerSizeCache[assetPath] = size;
+        return size;
+      } finally {
+        buffer.dispose();
+      }
+    } catch (e) {
+      debugPrint('loadStickerPixelSize($assetPath) failed: $e');
       return null;
     }
   }

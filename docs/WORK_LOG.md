@@ -5,6 +5,41 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-04 15:55:00] - Mở rộng & Triển khai Toàn diện Thuật toán Neo Sticker (Anchoring Math Engine 3-Step Pipeline)
+* **Thời gian (Timestamp):** 2026-11-04 15:55:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Triển khai trọn vẹn và mở rộng đặc tả toán học `docs/ANCHORING_ENGINE.md` vào dự án với 3 bước tính toán hoàn chỉnh (100% On-Device, 0 VNĐ):
+  1. **Bước 1 - Vision & Subject Segmentation song song (`StickerAnchoringEngine`):**
+     - Chạy song song `ObjectDetector`, `ImageLabeler` và `SubjectSegmenter` (với timeout an toàn 4s).
+     - Đối sánh IoU (`AnchorMath.bestOverlapIndex`) giữa `boundingBox` của vật thể chính và danh sách `Subject` để trích xuất mặt nạ nhị phân `BinaryMask` chính xác ở cấp độ điểm ảnh.
+     - Đọc kích thước thực của file PNG sticker bằng `ui.ImageDescriptor.encoded` (chỉ đọc header < 1ms kèm cache `_stickerSizeCache`).
+  2. **Bước 2 - Trích xuất Đỉnh Cực Trị ($P_{\text{apex}}$), Góc Tiếp Tuyến Theil–Sen ($\theta$) & Pháp Tuyến ($\vec{N}$):**
+     - Xây dựng module toán học độc lập `lib/services/anchor_math.dart`.
+     - Lọc nhiễu muối (`minRowPixels`) để tìm đỉnh thực tế $P_{\text{apex}} = (x_0, y_{\min})$ trên đường bao vật thể.
+     - Loại bỏ vách đứng của vật thể hình hộp (`maxLocalSlope = 1.2`) và ước lượng góc tiếp tuyến $\theta = \arctan2(dy, dx)$ bằng bộ ước lượng trung vị **Theil–Sen** bền vững với nhiễu, kẹp trong $[-0.61, +0.61]\text{ rad}$, cùng vector pháp tuyến hướng ra ngoài $\vec{N} = (\sin\theta, -\cos\theta)$.
+  3. **Bước 3 - Biến đổi Affine bù Tâm Xoay & Đồng bộ Preview - Burn (`StickerPlacementSolver`, `CoverMapping`, `StickerGeometry`):**
+     - Ánh xạ chính xác tọa độ giữa ảnh gốc và khung vuông `BoxFit.cover` qua `CoverMapping`.
+     - Tính tỷ lệ co giãn động (`0.45 * bboxWidth` cho neo mép, `0.65 * bboxWidth` cho ôm tâm, kẹp trong `[22%, 36%]` khung hình) có bù trừ tỷ lệ khung hình thực của PNG (`BoxFit.contain` + `innerPadding = 4px`).
+     - Giải phương trình Affine với tâm xoay tại giữa widget (`Transform.rotate` center pivot): $\vec{C}_{\text{world}} = P_{\text{target}} - R(\theta)\cdot(\vec{B}_{\text{local}} - \vec{C}_{\text{local}})$, đảm bảo điểm `bitePoint` đáp chính xác tuyệt đối lên $P_{\text{target}}$ sau khi xoay góc $\theta$.
+     - Bổ sung cơ chế fallback góc thông minh (`_cornerFallback`) khi vật thể chạm sát mép trên khung ảnh và đồng bộ 1:1 giữa màn hình xem trước (`PreviewScreen`) với hàm xuất ảnh (`_burnStickerAndCaptionToImage`).
+  4. **Kiểm thử tự động toàn diện (`test/anchor_math_test.dart`):**
+     - Viết 28 unit tests & widget tests kiểm chứng trực tiếp bằng `RenderBox.localToGlobal` của Flutter (sai số `< 1e-3 px`). Tất cả 28/28 tests đều PASS, `flutter analyze` đạt 0 lỗi.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `lib/services/anchor_math.dart`: Cài đặt `BinaryMask`, `TopEdge`, `ObjectAnchor`, `CoverMapping`, `StickerGeometry`, `AnchorMath`, `StickerPlacementSolver`.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Mở rộng `StickerMetadata` (`anchor`, `stickerPixelSize`, `anchorMode`), chạy song song `SubjectSegmenter` + IoU matching trong `detectAndSuggestSticker`, thêm `loadStickerPixelSize`.
+  - [MODIFY] `lib/screens/preview.dart`: Tích hợp `StickerPlacementSolver.solve`, `StickerGeometry` và `CoverMapping` cho cả khung preview tương tác lẫn bước ghi ảnh `_burnStickerAndCaptionToImage`.
+  - [NEW] `test/anchor_math_test.dart`: Bộ 28 unit & widget tests kiểm tra toàn diện 3 bước của thuật toán.
+  - [MODIFY] `docs/ANCHORING_ENGINE.md`: Cập nhật tài liệu đặc tả kỹ thuật chi tiết theo kiến trúc mở rộng đã triển khai.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - 28/28 bài test trong `test/anchor_math_test.dart` PASS 100%.
+  - `flutter analyze --no-pub` đạt 0 lỗi (No issues found).
+* **Bước tiếp theo (Next Steps):**
+  - Trình bày chi tiết bản triển khai và kết quả kiểm chứng cho người dùng.
+
+---
+
 ### [2026-11-04 15:30:00] - Nâng cấp an toàn các thư viện phụ thuộc (Safe Dependency Upgrade)
 * **Thời gian (Timestamp):** 2026-11-04 15:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

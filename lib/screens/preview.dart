@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:icnative/screens/sticker_generator_sheet.dart';
+import 'package:icnative/services/anchor_math.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
 import 'package:icnative/services/location_service.dart';
@@ -104,11 +105,26 @@ class _ImagePreviewState extends State<ImagePreview> {
     CustomStickerService.instance.initialize();
   }
 
+  /// Cạnh ô ảnh preview vuông. Dùng chung cho build() và bước neo sticker.
+  static double _boxSizeFor(double screenWidth) => (screenWidth - 36).clamp(240.0, 380.0);
+
   /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gắn sticker meme thông minh (0 VNĐ, Offline)
   Future<void> _runAiContextualEngine() async {
     try {
       final suggested = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
       if (suggested != null && mounted) {
+        // Bước 3 của đặc tả: neo bitePoint của sticker vào đỉnh/tâm vật thể,
+        // xoay theo tiếp tuyến mép. Không đủ dữ liệu thì dùng vị trí an toàn cũ.
+        final stickerPx = suggested.stickerPixelSize;
+        final placement = stickerPx == null
+            ? null
+            : StickerPlacementSolver.solve(
+                mode: suggested.anchorMode,
+                anchor: suggested.anchor,
+                bitePoint: suggested.bitePoint,
+                stickerPixelSize: stickerPx,
+                photoBoxSize: _boxSizeFor(MediaQuery.of(context).size.width),
+              );
         setState(() {
           activeCustomSticker = CustomStickerItem(
             id: suggested.id,
@@ -116,10 +132,9 @@ class _ImagePreviewState extends State<ImagePreview> {
             title: suggested.id,
             isAsset: true,
           );
-          // Tự động neo sticker theo tọa độ vật thể phát hiện được (hoặc vị trí an toàn)
-          stickerPosition = suggested.detectedAnchorOffset ?? const Offset(0.08, 0.35);
-          stickerScale = 1.0;
-          stickerRotation = 0.04;
+          stickerPosition = placement?.position ?? const Offset(0.08, 0.35);
+          stickerScale = placement?.scale ?? 1.0;
+          stickerRotation = placement?.rotation ?? 0.04;
         });
       }
     } catch (e) {
@@ -154,6 +169,7 @@ class _ImagePreviewState extends State<ImagePreview> {
   Future<String> _burnStickerAndCaptionToImage({
     required String imagePath,
     required String caption,
+    required double previewBoxSize,
     CustomStickerItem? sticker,
   }) async {
     try {
@@ -185,19 +201,37 @@ class _ImagePreviewState extends State<ImagePreview> {
         final stickerFrame = await stickerCodec.getNextFrame();
         final ui.Image stickerImg = stickerFrame.image;
 
-        final double targetStickerW = (imgW * 0.32) * stickerScale;
-        final double targetStickerH = (targetStickerW / stickerImg.width) * stickerImg.height;
-
-        final double posX = stickerPosition.dx * (imgW - targetStickerW);
-        final double posY = stickerPosition.dy * (imgH - targetStickerH);
+        // Cùng hình học với preview (StickerGeometry): ô vuông + padding + BoxFit.contain,
+        // còn ảnh gốc được cắt vuông giữa giống BoxFit.cover. `k` quy đổi px khung preview -> px ảnh,
+        // nhờ vậy sticker neo vào vật thể trong preview sẽ nằm đúng chỗ trên ảnh gửi đi.
+        final geo = StickerGeometry(photoBoxSize: previewBoxSize, scale: stickerScale);
+        final cover = CoverMapping(
+          imageSize: ui.Size(imgW, imgH),
+          frameSide: StickerGeometry.frameSide(previewBoxSize),
+        );
+        final double k = 1 / cover.scale;
+        final Offset boxTopLeft = geo.topLeftFor(stickerPosition);
+        final double boxSide = geo.size * k;
+        final double posX = cover.cropOrigin.dx + boxTopLeft.dx * k;
+        final double posY = cover.cropOrigin.dy + boxTopLeft.dy * k;
+        final double targetStickerW = boxSide;
+        final double targetStickerH = boxSide;
 
         canvas.save();
-        canvas.translate(posX + targetStickerW / 2, posY + targetStickerH / 2);
+        canvas.translate(posX + boxSide / 2, posY + boxSide / 2);
         canvas.rotate(stickerRotation);
-        canvas.translate(-targetStickerW / 2, -targetStickerH / 2);
+        canvas.translate(-boxSide / 2, -boxSide / 2);
 
+        final localImageRect = geo.imageRectInBox(
+          ui.Size(stickerImg.width.toDouble(), stickerImg.height.toDouble()),
+        );
         final srcRect = Rect.fromLTWH(0, 0, stickerImg.width.toDouble(), stickerImg.height.toDouble());
-        final dstRect = Rect.fromLTWH(0, 0, targetStickerW, targetStickerH);
+        final dstRect = Rect.fromLTWH(
+          localImageRect.left * k,
+          localImageRect.top * k,
+          localImageRect.width * k,
+          localImageRect.height * k,
+        );
         canvas.drawImageRect(stickerImg, srcRect, dstRect, ui.Paint()..filterQuality = ui.FilterQuality.high);
 
         // Khắc kèm nhãn Meme Caption nếu sticker có caption
@@ -398,7 +432,7 @@ class _ImagePreviewState extends State<ImagePreview> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final photoBoxSize = (screenWidth - 36).clamp(240.0, 380.0);
+    final photoBoxSize = _boxSizeFor(screenWidth);
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final stickerList = CustomStickerService.instance.stickers;
 
@@ -532,12 +566,14 @@ class _ImagePreviewState extends State<ImagePreview> {
 
                         // 3. Interactive Custom Sticker Overlay (Draggable, Scalable, Rotatable)
                         if (activeCustomSticker != null) () {
-                          final double stickerPixelSize = 135.0 * stickerScale;
-                          final double maxLeft = photoBoxSize - stickerPixelSize;
-                          // Giới hạn biên dưới để sticker không đè lên thanh nhập ghi chú
-                          final double maxTop = photoBoxSize - stickerPixelSize - 65;
-                          final double left = (stickerPosition.dx * (maxLeft > 0 ? maxLeft : 1)).clamp(0.0, maxLeft > 0 ? maxLeft : 0.0);
-                          final double top = (stickerPosition.dy * (maxTop > 0 ? maxTop : 1)).clamp(0.0, maxTop > 0 ? maxTop : 0.0);
+                          // Hình học dùng chung với bước khắc ảnh để preview và ảnh gửi đi không lệch nhau
+                          final geo = StickerGeometry(photoBoxSize: photoBoxSize, scale: stickerScale);
+                          final double stickerPixelSize = geo.size;
+                          final double maxLeft = geo.maxLeft;
+                          final double maxTop = geo.maxTop;
+                          final Offset stickerTopLeft = geo.topLeftFor(stickerPosition);
+                          final double left = stickerTopLeft.dx;
+                          final double top = stickerTopLeft.dy;
 
                           return Positioned(
                             left: left,
@@ -1115,6 +1151,7 @@ class _ImagePreviewState extends State<ImagePreview> {
                               final finalImagePath = await _burnStickerAndCaptionToImage(
                                 imagePath: currentImagePath,
                                 caption: _captionController.text,
+                                previewBoxSize: photoBoxSize,
                                 sticker: activeCustomSticker,
                               );
 
