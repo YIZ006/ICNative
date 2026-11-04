@@ -31,10 +31,14 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - [MODIFY] `lib/screens/preview.dart`, `lib/screens/home.dart`: Đồng bộ mở Sticker Studio kèm ảnh vừa chụp và bảo vệ vòng đời Camera.
   - [MODIFY] `android/app/build.gradle`: Tắt `minifyEnabled` và `shrinkResources` trong release build.
   - [MODIFY] `pubspec.yaml`, `lib/services/update_service.dart`, `ios/Runner/AppDelegate.swift`: Nâng phiên bản lên `1.4.4+8`.
+  - [BUILD & RELEASE] `Orbit-v1.4.4-clean-release.apk` (162,151,303 bytes, SHA-256: `bba5ed1db3cbbabb04ba93b5bfd49aa4a290cd55df75ff2b48c23f4dcddf83f3`).
+  - [BUILD & RELEASE] `Orbit-v1.4.4-demo-showcase.apk` (162,151,303 bytes, SHA-256: `b97ec824ccec9e8f1d6bbf3784506da4cb3dc1eb0349a5abd7be911abc92dc41`).
+  - [PUBLISH] GitHub Release `v1.4.4` tại `https://github.com/YIZ006/ICNative/releases/tag/v1.4.4`.
 * **Hiện trạng & Rào cản (Current State & Blockers):**
   - `flutter analyze --no-pub` đạt 0 lỗi, 28/28 unit tests PASS.
+  - Bản phát hành `v1.4.4` đã lên sóng công khai trên GitHub Releases với đủ 2 tệp APK chuẩn Dual-Release.
 * **Bước tiếp theo (Next Steps):**
-  - Đóng gói và phát hành bản cập nhật Dual-Release **Orbit v1.4.4** lên GitHub Releases.
+  - Báo cáo kết quả và gửi link tải bản `v1.4.4` cho người dùng.
 
 ---
 
