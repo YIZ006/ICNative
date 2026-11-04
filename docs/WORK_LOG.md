@@ -5,6 +5,28 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-04 15:30:00] - Nâng cấp an toàn các thư viện phụ thuộc (Safe Dependency Upgrade)
+* **Thời gian (Timestamp):** 2026-11-04 15:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Triển khai phương án nâng cấp an toàn (Safe Upgrade) theo yêu cầu của người dùng:
+  1. **Nâng cấp thư viện trực tiếp tương thích 100%:**
+     - `image`: từ `4.10.1` lên `^4.12.0` (tối ưu hiệu năng xử lý, decode và nén ảnh, tăng tốc encode PNG/JPG).
+     - `mobile_scanner`: từ `7.4.2` lên `^7.5.0` (tối ưu hóa quét mã QR và sửa các lỗi tương thích camera).
+  2. **Bảo toàn tính ổn định camera:** Giữ nguyên `camera: ^0.10.5+7` để tránh các breaking change lớn của CameraX (v0.12.x).
+  3. **Cập nhật 16 gói transitive dependencies:** Chạy `flutter pub upgrade` cập nhật các bản vá lỗi minor của `archive (4.6.0)`, `shared_preferences_android (2.5.4)`, `crypto (3.0.8)`, `vector_math (2.4.4)`, `jni (1.1.2)`...
+  4. **Kiểm tra tương thích toàn diện:** `flutter analyze` đạt 0 lỗi (No issues found).
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `pubspec.yaml`: Nâng cấp `image: ^4.12.0` và `mobile_scanner: ^7.5.0`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Mọi thư viện sau khi nâng cấp đều biên dịch và phân tích sạch lỗi 100%.
+* **Bước tiếp theo (Next Steps):**
+  - Commit và đẩy mã nguồn lên nhánh `main` GitHub.
+  - Báo cáo kết quả chi tiết tới người dùng.
+
+---
+
 ### [2026-10-31 21:50:00] - Khôi phục toàn diện logic phân tích tình huống On-Device AI và phân biệt rõ ràng vật thể vs phong cảnh
 * **Thời gian (Timestamp):** 2026-10-31 21:50:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
