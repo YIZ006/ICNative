@@ -102,7 +102,9 @@ class _ImagePreviewState extends State<ImagePreview> {
     super.initState();
     currentImagePath = widget.imagePath;
     _runAiContextualEngine();
-    CustomStickerService.instance.initialize();
+    CustomStickerService.instance.initialize().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   /// Cạnh ô ảnh preview vuông. Dùng chung cho build() và bước neo sticker.
@@ -152,9 +154,12 @@ class _ImagePreviewState extends State<ImagePreview> {
     super.dispose();
   }
 
-  /// Mở công cụ chọn ảnh từ Thư viện máy (Gallery) để tạo sticker cá nhân và dán thêm lên ảnh
+  /// Mở Sticker Studio toàn màn hình (chứa sẵn kho ảnh trong app + ảnh vừa chụp + thư viện máy)
   void _openCustomStickerFromGallery() async {
-    final newSticker = await StickerGeneratorSheet.show(context);
+    final newSticker = await StickerGeneratorSheet.show(
+      context,
+      capturedPhotoPath: currentImagePath,
+    );
     if (newSticker != null && mounted) {
       setState(() {
         activeCustomSticker = newSticker;

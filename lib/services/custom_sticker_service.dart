@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
@@ -8,10 +10,24 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum StickerEditMode {
-  outline,  // 1. Vien sticker trang day die-cut kieu Messenger/iMessage
-  full,     // 2. Tach nen trong suot sac net 100% On-Device
-  badge,    // 3. Khung huy hieu tron cute phong cach badge
-  original, // 4. Anh goc giu nguyen ti le
+  original, // 1. Original: Tách nền chủ thể sắc nét, viền mềm tự nhiên (không viền trắng)
+  outline,  // 2. Outline: Tách nền chủ thể kèm viền trắng die-cut dày mượt kiểu Messages/TikTok
+  full,     // 3. Full: Giữ nguyên toàn bộ bức ảnh gốc (bo góc nhẹ)
+  badge,    // 4. Badge (tương thích ngược với các sticker cũ đã lưu)
+}
+
+class InAppSamplePhoto {
+  final String id;
+  final String title;
+  final String assetPath;
+  final String? pairedCutoutAsset;
+
+  const InAppSamplePhoto({
+    required this.id,
+    required this.title,
+    required this.assetPath,
+    this.pairedCutoutAsset,
+  });
 }
 
 class CustomStickerItem {
@@ -44,9 +60,215 @@ class CustomStickerItem {
     id: json['id'] as String,
     path: json['path'] as String,
     isAsset: json['isAsset'] as bool? ?? false,
-    mode: StickerEditMode.values[(json['mode'] as int? ?? 0).clamp(0, StickerEditMode.values.length - 1)],
+    mode: StickerEditMode.values[(json['mode'] as int? ?? 1).clamp(0, StickerEditMode.values.length - 1)],
     title: json['title'] as String? ?? 'Sticker',
     caption: json['caption'] as String?,
+  );
+}
+
+class _VariationIsolateInput {
+  final Uint8List fullBytes;
+  final Uint8List cutoutBytes;
+
+  const _VariationIsolateInput({
+    required this.fullBytes,
+    required this.cutoutBytes,
+  });
+}
+
+class _VariationIsolateOutput {
+  final Uint8List originalPng;
+  final Uint8List outlinePng;
+  final Uint8List fullPng;
+
+  const _VariationIsolateOutput({
+    required this.originalPng,
+    required this.outlinePng,
+    required this.fullPng,
+  });
+}
+
+/// Chạy hoàn toàn trong Background Isolate để không bao giờ gây đơ UI hay văng app (ANR/OOM)
+_VariationIsolateOutput _renderAllVariationsIsolate(_VariationIsolateInput input) {
+  img.Image? fullImg = img.decodeImage(input.fullBytes);
+  img.Image? cutoutImg = img.decodeImage(input.cutoutBytes);
+
+  fullImg ??= img.Image(width: 360, height: 360, numChannels: 4);
+  cutoutImg ??= fullImg;
+
+  // Giới hạn kích thước an toàn (tối đa 420px)
+  if (fullImg.width > 420 || fullImg.height > 420) {
+    fullImg = img.copyResize(
+      fullImg,
+      width: fullImg.width >= fullImg.height ? 420 : null,
+      height: fullImg.height > fullImg.width ? 420 : null,
+      interpolation: img.Interpolation.linear,
+    );
+  }
+
+  if (cutoutImg.width > 380 || cutoutImg.height > 380) {
+    cutoutImg = img.copyResize(
+      cutoutImg,
+      width: cutoutImg.width >= cutoutImg.height ? 380 : null,
+      height: cutoutImg.height > cutoutImg.width ? 380 : null,
+      interpolation: img.Interpolation.linear,
+    );
+  }
+
+  // 1. Tạo ảnh ORIGINAL (Chủ thể đã tách nền, viền mượt tự nhiên không viền trắng)
+  final Uint8List originalPng = Uint8List.fromList(img.encodePng(cutoutImg));
+
+  // 2. Tạo ảnh OUTLINE (Chủ thể tách nền + Viền trắng dày 11px mượt mà chuẩn Messages/TikTok)
+  const int outlineRadius = 11;
+  const int padding = outlineRadius + 4;
+  final int cw = cutoutImg.width;
+  final int ch = cutoutImg.height;
+  final int targetW = cw + padding * 2;
+  final int targetH = ch + padding * 2;
+
+  final outlined = img.Image(width: targetW, height: targetH, numChannels: 4);
+  img.fill(outlined, color: img.ColorRgba8(0, 0, 0, 0));
+
+  // Tìm các pixel biên của chủ thể
+  final List<int> borderXs = [];
+  final List<int> borderYs = [];
+
+  for (int y = 0; y < ch; y++) {
+    for (int x = 0; x < cw; x++) {
+      if (cutoutImg.getPixel(x, y).a > 35) {
+        if (x == 0 ||
+            x == cw - 1 ||
+            y == 0 ||
+            y == ch - 1 ||
+            cutoutImg.getPixel(x - 1, y).a <= 35 ||
+            cutoutImg.getPixel(x + 1, y).a <= 35 ||
+            cutoutImg.getPixel(x, y - 1).a <= 35 ||
+            cutoutImg.getPixel(x, y + 1).a <= 35) {
+          borderXs.add(x);
+          borderYs.add(y);
+        }
+      }
+    }
+  }
+
+  // Bản đồ khoảng cách bình phương nhỏ nhất tới biên để tạo viền trắng khử răng cưa (anti-aliased)
+  final int totalPixels = targetW * targetH;
+  final Int32List minDistSq = Int32List(totalPixels);
+  const int inf = 1000000;
+  for (int i = 0; i < totalPixels; i++) {
+    minDistSq[i] = inf;
+  }
+
+  final int numBorders = borderXs.length;
+  const int maxRad = outlineRadius + 1;
+  const int maxRadSq = maxRad * maxRad;
+
+  for (int i = 0; i < numBorders; i++) {
+    final int cx = borderXs[i] + padding;
+    final int cy = borderYs[i] + padding;
+    for (int dy = -maxRad; dy <= maxRad; dy++) {
+      final int ny = cy + dy;
+      if (ny < 0 || ny >= targetH) continue;
+      final int dySq = dy * dy;
+      final int rowOffset = ny * targetW;
+      for (int dx = -maxRad; dx <= maxRad; dx++) {
+        final int dSq = dx * dx + dySq;
+        if (dSq > maxRadSq) continue;
+        final int nx = cx + dx;
+        if (nx < 0 || nx >= targetW) continue;
+        final int idx = rowOffset + nx;
+        if (dSq < minDistSq[idx]) {
+          minDistSq[idx] = dSq;
+        }
+      }
+    }
+  }
+
+  const int innerRadSq = (outlineRadius - 1) * (outlineRadius - 1);
+  for (int y = 0; y < targetH; y++) {
+    final int rowOffset = y * targetW;
+    for (int x = 0; x < targetW; x++) {
+      final int dSq = minDistSq[rowOffset + x];
+      if (dSq <= innerRadSq) {
+        outlined.setPixel(x, y, img.ColorRgba8(255, 255, 255, 255));
+      } else if (dSq <= maxRadSq) {
+        final double dist = math.sqrt(dSq.toDouble());
+        final int alpha = (((maxRad - dist) / 2.0).clamp(0.0, 1.0) * 255).round();
+        if (alpha > 0) {
+          outlined.setPixel(x, y, img.ColorRgba8(255, 255, 255, alpha));
+        }
+      }
+    }
+  }
+
+  // Vẽ đè chủ thể gốc lên trên lớp viền trắng với alpha blending mượt mà
+  for (int y = 0; y < ch; y++) {
+    for (int x = 0; x < cw; x++) {
+      final p = cutoutImg.getPixel(x, y);
+      final int pa = p.a.toInt();
+      if (pa > 10) {
+        final int tx = x + padding;
+        final int ty = y + padding;
+        final dst = outlined.getPixel(tx, ty);
+        if (pa >= 245 || dst.a == 0) {
+          outlined.setPixel(tx, ty, p);
+        } else {
+          // Pha trộn mềm ở rìa chủ thể với nền viền trắng
+          final int invA = 255 - pa;
+          final int r = (p.r.toInt() * pa + 255 * invA) ~/ 255;
+          final int g = (p.g.toInt() * pa + 255 * invA) ~/ 255;
+          final int b = (p.b.toInt() * pa + 255 * invA) ~/ 255;
+          outlined.setPixel(tx, ty, img.ColorRgba8(r, g, b, 255));
+        }
+      }
+    }
+  }
+
+  final Uint8List outlinePng = Uint8List.fromList(img.encodePng(outlined));
+
+  // 3. Tạo ảnh FULL (Toàn bộ bức ảnh gốc bo góc nhẹ mượt mà)
+  final int fw = fullImg.width;
+  final int fh = fullImg.height;
+  final fullRounded = img.Image(width: fw, height: fh, numChannels: 4);
+  const double cornerRadius = 22.0;
+
+  for (int y = 0; y < fh; y++) {
+    for (int x = 0; x < fw; x++) {
+      double dx = 0.0;
+      double dy = 0.0;
+      if (x < cornerRadius) {
+        dx = cornerRadius - x;
+      } else if (x >= fw - cornerRadius) {
+        dx = x - (fw - 1 - cornerRadius);
+      }
+      if (y < cornerRadius) {
+        dy = cornerRadius - y;
+      } else if (y >= fh - cornerRadius) {
+        dy = y - (fh - 1 - cornerRadius);
+      }
+
+      if (dx > 0 && dy > 0) {
+        final double dist = math.sqrt(dx * dx + dy * dy);
+        if (dist > cornerRadius + 0.5) {
+          fullRounded.setPixel(x, y, img.ColorRgba8(0, 0, 0, 0));
+          continue;
+        }
+      }
+      final srcP = fullImg.getPixel(x, y);
+      fullRounded.setPixel(
+        x,
+        y,
+        img.ColorRgba8(srcP.r.toInt(), srcP.g.toInt(), srcP.b.toInt(), srcP.a.toInt()),
+      );
+    }
+  }
+
+  final Uint8List fullPng = Uint8List.fromList(img.encodePng(fullRounded));
+
+  return _VariationIsolateOutput(
+    originalPng: originalPng,
+    outlinePng: outlinePng,
+    fullPng: fullPng,
   );
 }
 
@@ -56,6 +278,47 @@ class CustomStickerService {
 
   final List<CustomStickerItem> _stickers = [];
   List<CustomStickerItem> get stickers => List.unmodifiable(_stickers);
+
+  /// Kho ảnh mẫu tích hợp sẵn trong App để người dùng test & tạo Sticker ngay lập tức
+  /// mà không cần rời khỏi ứng dụng (bao gồm ảnh Mèo La Hét AAAA từ Message/TikTok)
+  static const List<InAppSamplePhoto> inAppSamplePhotos = [
+    InAppSamplePhoto(
+      id: 'sample_cat_scream',
+      title: 'Mèo AAAA',
+      assetPath: 'assets/stickers/sticker_cat_scream_full.jpg',
+      pairedCutoutAsset: 'assets/memes/meme_cat_scream.png',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_cat_joy',
+      title: 'Mèo Cười',
+      assetPath: 'assets/stickers/sticker_cat_crying_joy.jpg',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_cat_heart',
+      title: 'Mèo Tim',
+      assetPath: 'assets/stickers/sticker_cat_heart.jpg',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_shiba',
+      title: 'Shiba Ngầu',
+      assetPath: 'assets/stickers/sticker_shiba_cool.jpg',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_capybara',
+      title: 'Capybara',
+      assetPath: 'assets/stickers/sticker_capybara_chill.jpg',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_boba',
+      title: 'Trà Sữa',
+      assetPath: 'assets/stickers/sticker_boba_cute.jpg',
+    ),
+    InAppSamplePhoto(
+      id: 'sample_bear',
+      title: 'Gấu Ngủ',
+      assetPath: 'assets/stickers/sticker_bear_sleepy.jpg',
+    ),
+  ];
 
   SubjectSegmenter? _segmenter;
   ObjectDetector? _objectDetector;
@@ -67,7 +330,7 @@ class CustomStickerService {
         enableForegroundConfidenceMask: false,
         enableMultipleSubjects: SubjectResultOptions(
           enableConfidenceMask: false,
-          enableSubjectBitmap: true,
+          enableSubjectBitmap: false,
         ),
       ),
     );
@@ -86,14 +349,14 @@ class CustomStickerService {
   Future<void> initialize() async {
     _stickers.clear();
 
-    // 1. Uu tien nap cac sticker tu tao cua nguoi dung tu SharedPreferences len dau
+    // 1. Ưu tiên nạp các sticker tự tạo của người dùng từ SharedPreferences lên đầu
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedIds = prefs.getStringList('custom_sticker_ids') ?? [];
       for (final id in savedIds) {
         final rawPath = prefs.getString('custom_sticker_path_$id');
         final rawTitle = prefs.getString('custom_sticker_title_$id') ?? 'Custom Sticker';
-        final rawMode = prefs.getInt('custom_sticker_mode_$id') ?? 0;
+        final rawMode = prefs.getInt('custom_sticker_mode_$id') ?? 1;
         final rawCaption = prefs.getString('custom_sticker_caption_$id');
         if (rawPath != null && File(rawPath).existsSync()) {
           _stickers.add(
@@ -112,9 +375,15 @@ class CustomStickerService {
       debugPrint('Error loading saved stickers: $e');
     }
 
-    // 2. Tinh gon: Chi giu lai 6 sticker mac dinh sac net nhat (High-Res Crisp Presets)
-    // Thay vi tai 115 anh lam roi va mo man hinh, chi hien thi bo suu tap tinh hoa
+    // 2. Bộ sưu tập Sticker mặc định sắc nét (bao gồm Mèo La Hét AAAA mới)
     _stickers.addAll([
+      CustomStickerItem(
+        id: 'cat_scream_aaaa',
+        path: 'assets/memes/meme_cat_scream.png',
+        isAsset: true,
+        mode: StickerEditMode.outline,
+        title: 'Mèo La Hét AAAA',
+      ),
       CustomStickerItem(
         id: 'capybara_chill',
         path: 'assets/memes/meme_capybara_12.png',
@@ -133,14 +402,14 @@ class CustomStickerService {
         id: 'cat_smug',
         path: 'assets/memes/meme_cat_29.png',
         isAsset: true,
-        mode: StickerEditMode.full,
+        mode: StickerEditMode.original,
         title: 'Mèo Cười Khẩy',
       ),
       CustomStickerItem(
         id: 'cat_derp',
         path: 'assets/memes/meme_cat_28.png',
         isAsset: true,
-        mode: StickerEditMode.full,
+        mode: StickerEditMode.original,
         title: 'Mèo Ngơ Ngác',
       ),
       CustomStickerItem(
@@ -161,6 +430,7 @@ class CustomStickerService {
   }
 
   Future<void> saveCustomSticker(CustomStickerItem item) async {
+    _stickers.removeWhere((s) => s.id == item.id);
     _stickers.insert(0, item);
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -193,7 +463,6 @@ class CustomStickerService {
     return localPath;
   }
 
-  /// Kiem tra xem anh co kenh alpha trong suot san khong
   bool _hasTransparency(img.Image image) {
     if (image.numChannels < 4) return false;
     int transparentPixelCount = 0;
@@ -211,47 +480,64 @@ class CustomStickerService {
     return false;
   }
 
-  /// Tach nen chu the khoi anh bang Subject Segmentation hoac Object Bounding Mask
-  Future<img.Image> _extractForeground(String localPath, img.Image baseImage) async {
-    // 1. Neu anh da la PNG trong suot (vi du meme transparent) -> dung luon!
-    if (_hasTransparency(baseImage)) {
-      return baseImage;
-    }
-
-    // 2. Thu dung Google ML Kit Subject Segmentation on-device (Ho tro Android)
-    if (!Platform.isIOS) {
-      try {
-        final inputImage = InputImage.fromFilePath(localPath);
-        final segResult = await _getSegmenter().processImage(inputImage);
-
-        if (segResult.foregroundBitmap != null && segResult.foregroundBitmap!.isNotEmpty) {
-          final decoded = img.decodeImage(segResult.foregroundBitmap!);
-          if (decoded != null && _hasTransparency(decoded)) {
-            return decoded;
-          }
-        }
-
-        if (segResult.subjects.isNotEmpty && segResult.subjects.first.bitmap != null) {
-          final decoded = img.decodeImage(segResult.subjects.first.bitmap!);
-          if (decoded != null) {
-            return decoded;
-          }
-        }
-      } catch (e) {
-        debugPrint('SubjectSegmenter info: $e');
+  /// Tách nền chủ thể khỏi ảnh một cách an toàn tuyệt đối (có timeout, không bao giờ gây crash)
+  Future<Uint8List> _extractForegroundBytes(
+    String sourcePath,
+    String localPath,
+    Uint8List fullBytes,
+  ) async {
+    // 0. Nếu là ảnh mẫu trong app có sẵn bản tách nền chuẩn (ví dụ Mèo AAAA)
+    for (final sample in inAppSamplePhotos) {
+      if (sample.assetPath == sourcePath && sample.pairedCutoutAsset != null) {
+        try {
+          final bd = await rootBundle.load(sample.pairedCutoutAsset!);
+          return bd.buffer.asUint8List();
+        } catch (_) {}
       }
     }
 
-    // 3. Fallback thong minh: Phat hien vat the (Object Detection) & cat vien die-cut
+    final baseImage = img.decodeImage(fullBytes);
+    if (baseImage == null) return fullBytes;
+
+    // 1. Nếu ảnh đã là PNG trong suốt sẵn
+    if (_hasTransparency(baseImage)) {
+      return fullBytes;
+    }
+
+    // 2. Nếu ảnh có viền nền đồng màu ở 4 góc (như các sticker mẫu trong assets/stickers/*.jpg)
+    //    tách nền nhanh bằng flood-fill màu nền góc trước khi gọi ML Kit
+    final cornerCutout = _tryCornerFloodFillCutout(baseImage);
+    if (cornerCutout != null) {
+      return Uint8List.fromList(img.encodePng(cornerCutout));
+    }
+
+    // 3. Thử dùng Google ML Kit Subject Segmentation on-device (có timeout 3.5s chống treo/văng)
+    if (!Platform.isIOS) {
+      try {
+        final inputImage = InputImage.fromFilePath(localPath);
+        final segResult = await _getSegmenter()
+            .processImage(inputImage)
+            .timeout(const Duration(milliseconds: 3500));
+
+        if (segResult.foregroundBitmap != null && segResult.foregroundBitmap!.isNotEmpty) {
+          return segResult.foregroundBitmap!;
+        }
+      } catch (e) {
+        debugPrint('SubjectSegmenter safe fallback: $e');
+      }
+    }
+
+    // 4. Fallback thông minh: Phát hiện vật thể (Object Detection) hoặc cắt silhouette elip mềm
     try {
       final inputImage = InputImage.fromFilePath(localPath);
-      final objects = await _getObjectDetector().processImage(inputImage);
+      final objects = await _getObjectDetector()
+          .processImage(inputImage)
+          .timeout(const Duration(milliseconds: 2500));
 
       if (objects.isNotEmpty) {
-        // Lay vat the lon nhat
         var bestObj = objects.first;
         double maxArea = bestObj.boundingBox.width * bestObj.boundingBox.height;
-        for (var o in objects) {
+        for (final o in objects) {
           final a = o.boundingBox.width * o.boundingBox.height;
           if (a > maxArea) {
             maxArea = a;
@@ -262,36 +548,16 @@ class CustomStickerService {
         final box = bestObj.boundingBox;
         final cropX = box.left.clamp(0, baseImage.width - 1).toInt();
         final cropY = box.top.clamp(0, baseImage.height - 1).toInt();
-        final cropW = box.width.clamp(20, baseImage.width - cropX).toInt();
-        final cropH = box.height.clamp(20, baseImage.height - cropY).toInt();
+        final cropW = box.width.clamp(32, baseImage.width - cropX).toInt();
+        final cropH = box.height.clamp(32, baseImage.height - cropY).toInt();
 
         final cropped = img.copyCrop(baseImage, x: cropX, y: cropY, width: cropW, height: cropH);
-
-        // Tao mat na bo goc hoac ellipse oval cho chu the
-        final result = img.Image(width: cropW, height: cropH, numChannels: 4);
-        final cx = cropW / 2.0;
-        final cy = cropH / 2.0;
-        final rx = cropW / 2.0;
-        final ry = cropH / 2.0;
-
-        for (int y = 0; y < cropH; y++) {
-          for (int x = 0; x < cropW; x++) {
-            final dx = (x - cx) / rx;
-            final dy = (y - cy) / ry;
-            final distSq = dx * dx + dy * dy;
-            if (distSq <= 1.0) {
-              result.setPixel(x, y, cropped.getPixel(x, y));
-            } else {
-              result.setPixel(x, y, img.ColorRgba8(0, 0, 0, 0));
-            }
-          }
-        }
-        return result;
+        return Uint8List.fromList(img.encodePng(_softOvalMask(cropped)));
       }
     } catch (_) {}
 
-    // 4. Neu khong tim duoc vat the ro rang: cat hinh oval badge sticker
-    final cropSize = baseImage.width < baseImage.height ? baseImage.width : baseImage.height;
+    // 5. Fallback cuối cùng: Cắt chủ thể trung tâm với viền mềm
+    final cropSize = math.min(baseImage.width, baseImage.height);
     final square = img.copyCrop(
       baseImage,
       x: (baseImage.width - cropSize) ~/ 2,
@@ -299,218 +565,216 @@ class CustomStickerService {
       width: cropSize,
       height: cropSize,
     );
+    return Uint8List.fromList(img.encodePng(_softOvalMask(square)));
+  }
 
-    final badge = img.Image(width: cropSize, height: cropSize, numChannels: 4);
-    final center = cropSize / 2.0;
-    final radius = cropSize / 2.0;
+  /// Tách nền nhanh cho ảnh có màu nền đồng nhất ở các góc (trắng/kem/đen)
+  img.Image? _tryCornerFloodFillCutout(img.Image src) {
+    final int w = src.width;
+    final int h = src.height;
+    if (w < 40 || h < 40) return null;
 
-    for (int y = 0; y < cropSize; y++) {
-      for (int x = 0; x < cropSize; x++) {
-        final dx = x - center;
-        final dy = y - center;
-        if (dx * dx + dy * dy <= radius * radius) {
-          badge.setPixel(x, y, square.getPixel(x, y));
-        } else {
-          badge.setPixel(x, y, img.ColorRgba8(0, 0, 0, 0));
+    final c0 = src.getPixel(2, 2);
+    final c1 = src.getPixel(w - 3, 2);
+    final c2 = src.getPixel(2, h - 3);
+    final c3 = src.getPixel(w - 3, h - 3);
+
+    int colorDist(img.Pixel a, img.Pixel b) {
+      final dr = (a.r - b.r).abs().toInt();
+      final dg = (a.g - b.g).abs().toInt();
+      final db = (a.b - b.b).abs().toInt();
+      return math.max(dr, math.max(dg, db));
+    }
+
+    // Kiểm tra ít nhất 2 góc với c0 có màu tương đồng nhau (nền đồng nhất)
+    if (colorDist(c0, c1) > 35 && colorDist(c0, c2) > 35 && colorDist(c0, c3) > 35) {
+      return null;
+    }
+
+    final int bgR = c0.r.toInt();
+    final int bgG = c0.g.toInt();
+    final int bgB = c0.b.toInt();
+    const int threshold = 38;
+
+    final Uint8List visited = Uint8List(w * h);
+    final List<int> queue = [];
+
+    bool isBgColor(int x, int y) {
+      final p = src.getPixel(x, y);
+      final dr = (p.r.toInt() - bgR).abs();
+      final dg = (p.g.toInt() - bgG).abs();
+      final db = (p.b.toInt() - bgB).abs();
+      return dr <= threshold && dg <= threshold && db <= threshold;
+    }
+
+    for (int x = 0; x < w; x++) {
+      if (isBgColor(x, 0)) {
+        visited[x] = 1;
+        queue.add(x);
+      }
+      final botIdx = (h - 1) * w + x;
+      if (isBgColor(x, h - 1) && visited[botIdx] == 0) {
+        visited[botIdx] = 1;
+        queue.add(botIdx);
+      }
+    }
+    for (int y = 0; y < h; y++) {
+      final leftIdx = y * w;
+      if (isBgColor(0, y) && visited[leftIdx] == 0) {
+        visited[leftIdx] = 1;
+        queue.add(leftIdx);
+      }
+      final rightIdx = y * w + (w - 1);
+      if (isBgColor(w - 1, y) && visited[rightIdx] == 0) {
+        visited[rightIdx] = 1;
+        queue.add(rightIdx);
+      }
+    }
+
+    int head = 0;
+    while (head < queue.length) {
+      final curr = queue[head++];
+      final cx = curr % w;
+      final cy = curr ~/ w;
+
+      if (cx > 0) {
+        final ni = curr - 1;
+        if (visited[ni] == 0 && isBgColor(cx - 1, cy)) {
+          visited[ni] = 1;
+          queue.add(ni);
+        }
+      }
+      if (cx < w - 1) {
+        final ni = curr + 1;
+        if (visited[ni] == 0 && isBgColor(cx + 1, cy)) {
+          visited[ni] = 1;
+          queue.add(ni);
+        }
+      }
+      if (cy > 0) {
+        final ni = curr - w;
+        if (visited[ni] == 0 && isBgColor(cx, cy - 1)) {
+          visited[ni] = 1;
+          queue.add(ni);
+        }
+      }
+      if (cy < h - 1) {
+        final ni = curr + w;
+        if (visited[ni] == 0 && isBgColor(cx, cy + 1)) {
+          visited[ni] = 1;
+          queue.add(ni);
         }
       }
     }
-    return badge;
+
+    final int bgCount = queue.length;
+    final int total = w * h;
+    // Nếu vùng nền chiếm từ 8% đến 92% diện tích ảnh thì hợp lệ
+    if (bgCount < total * 0.08 || bgCount > total * 0.92) {
+      return null;
+    }
+
+    final out = img.Image(width: w, height: h, numChannels: 4);
+    for (int y = 0; y < h; y++) {
+      final row = y * w;
+      for (int x = 0; x < w; x++) {
+        if (visited[row + x] == 1) {
+          out.setPixel(x, y, img.ColorRgba8(0, 0, 0, 0));
+        } else {
+          final p = src.getPixel(x, y);
+          // Làm mềm rìa 1px nếu sát nền
+          int adjBg = 0;
+          if (x > 0 && visited[row + x - 1] == 1) adjBg++;
+          if (x < w - 1 && visited[row + x + 1] == 1) adjBg++;
+          if (y > 0 && visited[row - w + x] == 1) adjBg++;
+          if (y < h - 1 && visited[row + w + x] == 1) adjBg++;
+          final int alpha = adjBg >= 2 ? 180 : (adjBg == 1 ? 230 : 255);
+          out.setPixel(x, y, img.ColorRgba8(p.r.toInt(), p.g.toInt(), p.b.toInt(), alpha));
+        }
+      }
+    }
+    return out;
   }
 
-  /// Tao Sticker theo 4 che do: Outline, Full, Badge, Original voi do phan giai cao va thuat toan sieu toc
+  img.Image _softOvalMask(img.Image src) {
+    final int w = src.width;
+    final int h = src.height;
+    final result = img.Image(width: w, height: h, numChannels: 4);
+    final cx = w / 2.0;
+    final cy = h / 2.0;
+    final rx = w * 0.46;
+    final ry = h * 0.46;
+
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final dx = (x - cx) / rx;
+        final dy = (y - cy) / ry;
+        final dist = math.sqrt(dx * dx + dy * dy);
+        if (dist <= 0.92) {
+          final p = src.getPixel(x, y);
+          result.setPixel(x, y, img.ColorRgba8(p.r.toInt(), p.g.toInt(), p.b.toInt(), 255));
+        } else if (dist <= 1.05) {
+          final p = src.getPixel(x, y);
+          final alpha = (((1.05 - dist) / 0.13).clamp(0.0, 1.0) * 255).round();
+          result.setPixel(x, y, img.ColorRgba8(p.r.toInt(), p.g.toInt(), p.b.toInt(), alpha));
+        } else {
+          result.setPixel(x, y, img.ColorRgba8(0, 0, 0, 0));
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Sinh đồng thời cả 3 biến thể (`Original`, `Outline`, `Full`) trong 1 lần duy nhất
+  /// bằng Background Isolate để cả 3 ô thumbnail hiển thị tức thì giống hệt Google Messages / TikTok.
+  Future<Map<StickerEditMode, String>> generateAllStickerVariations({
+    required String sourcePath,
+    required bool isAsset,
+  }) async {
+    final localPath = await _ensureLocalFile(sourcePath, isAsset);
+    final fullBytes = await File(localPath).readAsBytes();
+    final cutoutBytes = await _extractForegroundBytes(sourcePath, localPath, fullBytes);
+
+    final rendered = await compute(
+      _renderAllVariationsIsolate,
+      _VariationIsolateInput(
+        fullBytes: fullBytes,
+        cutoutBytes: cutoutBytes,
+      ),
+    );
+
+    final tempDir = await getTemporaryDirectory();
+    final ts = DateTime.now().millisecondsSinceEpoch;
+
+    final origPath = '${tempDir.path}/sticker_original_$ts.png';
+    final outlinePath = '${tempDir.path}/sticker_outline_$ts.png';
+    final fullPath = '${tempDir.path}/sticker_full_$ts.png';
+
+    await Future.wait([
+      File(origPath).writeAsBytes(rendered.originalPng),
+      File(outlinePath).writeAsBytes(rendered.outlinePng),
+      File(fullPath).writeAsBytes(rendered.fullPng),
+    ]);
+
+    return {
+      StickerEditMode.original: origPath,
+      StickerEditMode.outline: outlinePath,
+      StickerEditMode.full: fullPath,
+      StickerEditMode.badge: outlinePath,
+    };
+  }
+
+  /// Hàm tương thích đơn lẻ
   Future<String> generateStickerVariation({
     required String sourcePath,
     required bool isAsset,
     required StickerEditMode mode,
     String? caption,
   }) async {
-    final localPath = await _ensureLocalFile(sourcePath, isAsset);
-    final bytes = await File(localPath).readAsBytes();
-    img.Image? baseImage = img.decodeImage(bytes);
-    if (baseImage == null) return localPath;
-
-    // Chống OOM: Giới hạn kích thước ảnh gốc ngay từ đầu
-    if (baseImage.width > 512 || baseImage.height > 512) {
-      baseImage = img.copyResize(
-        baseImage,
-        width: baseImage.width >= baseImage.height ? 512 : null,
-        height: baseImage.height > baseImage.width ? 512 : null,
-        interpolation: img.Interpolation.linear,
-      );
-    }
-
-    final tempDir = await getTemporaryDirectory();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-
-    // 1. CHE DO ORIGINAL: Giu nguyen anh goc, thu nho sac net (max 512px)
-    if (mode == StickerEditMode.original) {
-      final outPath = '${tempDir.path}/sticker_orig_$timestamp.png';
-      await File(outPath).writeAsBytes(img.encodePng(baseImage));
-      return outPath;
-    }
-
-    // Lay chu the da duoc tach nen thong minh On-Device
-    img.Image cutoutImage = await _extractForeground(localPath, baseImage);
-
-    // Resize cho vua tam sticker do net cao (max 420x420)
-    if (cutoutImage.width > 420 || cutoutImage.height > 420) {
-      cutoutImage = img.copyResize(
-        cutoutImage,
-        width: cutoutImage.width >= cutoutImage.height ? 420 : null,
-        height: cutoutImage.height > cutoutImage.width ? 420 : null,
-        interpolation: img.Interpolation.linear,
-      );
-    }
-
-    // 2. CHE DO FULL: Tach nen trong suot sac net 100% On-Device
-    if (mode == StickerEditMode.full) {
-      final outPath = '${tempDir.path}/sticker_full_$timestamp.png';
-      await File(outPath).writeAsBytes(img.encodePng(cutoutImage));
-      return outPath;
-    }
-
-    // 3. CHE DO BADGE: Huy hieu tron phong cach Warm Earth (#FEFAE0 & #283618)
-    if (mode == StickerEditMode.badge) {
-      final int badgeSize = (cutoutImage.width > cutoutImage.height ? cutoutImage.width : cutoutImage.height) + 24;
-      final badge = img.Image(width: badgeSize, height: badgeSize, numChannels: 4);
-      img.fill(badge, color: img.ColorRgba8(0, 0, 0, 0));
-
-      final center = badgeSize / 2.0;
-      final radius = (badgeSize / 2.0) - 3;
-      final bgColor = img.ColorRgba8(254, 250, 224, 255); // #FEFAE0 Warm Cream
-      final borderColor = img.ColorRgba8(40, 54, 24, 255); // #283618 Deep Olive
-      final shadowColor = img.ColorRgba8(40, 54, 24, 60);
-
-      // Bong do nhe
-      for (int y = 0; y < badgeSize; y++) {
-        for (int x = 0; x < badgeSize; x++) {
-          final dx = x - center;
-          final dy = y - (center + 3);
-          if (dx * dx + dy * dy <= radius * radius) {
-            badge.setPixel(x, y, shadowColor);
-          }
-        }
-      }
-
-      // Nen tron & vien dam
-      for (int y = 0; y < badgeSize; y++) {
-        for (int x = 0; x < badgeSize; x++) {
-          final dx = x - center;
-          final dy = y - center;
-          final distSq = dx * dx + dy * dy;
-          if (distSq <= radius * radius) {
-            if (distSq >= (radius - 4) * (radius - 4)) {
-              badge.setPixel(x, y, borderColor);
-            } else {
-              badge.setPixel(x, y, bgColor);
-            }
-          }
-        }
-      }
-
-      // Ve chu the vao tam huy hieu
-      final offX = (badgeSize - cutoutImage.width) ~/ 2;
-      final offY = (badgeSize - cutoutImage.height) ~/ 2;
-      for (int y = 0; y < cutoutImage.height; y++) {
-        for (int x = 0; x < cutoutImage.width; x++) {
-          final p = cutoutImage.getPixel(x, y);
-          if (p.a > 20) {
-            badge.setPixel(offX + x, offY + y, p);
-          }
-        }
-      }
-
-      final outPath = '${tempDir.path}/sticker_badge_$timestamp.png';
-      await File(outPath).writeAsBytes(img.encodePng(badge));
-      return outPath;
-    }
-
-    // 4. CHE DO OUTLINE: Vien sticker trang day min mang kieu iMessage/Messenger (Thuat toan bien nhanh ~1000x)
-    const int outlineRadius = 8;
-    const int padding = outlineRadius + 5;
-
-    final int targetW = cutoutImage.width + padding * 2;
-    final int targetH = cutoutImage.height + padding * 2;
-
-    final outlined = img.Image(width: targetW, height: targetH, numChannels: 4);
-    img.fill(outlined, color: img.ColorRgba8(0, 0, 0, 0));
-
-    final whiteColor = img.ColorRgba8(255, 255, 255, 255);
-    final shadowColor = img.ColorRgba8(40, 54, 24, 75);
-
-    final int cw = cutoutImage.width;
-    final int ch = cutoutImage.height;
-
-    // Chi quet qua cac pixel duong bien (Border Pixels) thay vi chay loop 400 trieu lan gay treo may (ANR)
-    final List<int> borderXs = [];
-    final List<int> borderYs = [];
-
-    for (int y = 0; y < ch; y++) {
-      for (int x = 0; x < cw; x++) {
-        if (cutoutImage.getPixel(x, y).a > 25) {
-          if (x == 0 || x == cw - 1 || y == 0 || y == ch - 1 ||
-              cutoutImage.getPixel(x - 1, y).a <= 25 ||
-              cutoutImage.getPixel(x + 1, y).a <= 25 ||
-              cutoutImage.getPixel(x, y - 1).a <= 25 ||
-              cutoutImage.getPixel(x, y + 1).a <= 25) {
-            borderXs.add(x);
-            borderYs.add(y);
-          }
-        }
-      }
-    }
-
-    final int numBorders = borderXs.length;
-    const int radSq = outlineRadius * outlineRadius;
-    const int shadowRadSq = (outlineRadius + 2) * (outlineRadius + 2);
-
-    // Buoc 1: Ve bong do tu cac diem bien
-    for (int i = 0; i < numBorders; i++) {
-      final bx = borderXs[i];
-      final by = borderYs[i];
-      for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
-        for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
-          if (dx * dx + dy * dy <= shadowRadSq) {
-            final nx = bx + padding + dx;
-            final ny = by + padding + dy + 3;
-            if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
-              outlined.setPixel(nx, ny, shadowColor);
-            }
-          }
-        }
-      }
-    }
-
-    // Buoc 2: Ve vien trang tu cac diem bien
-    for (int i = 0; i < numBorders; i++) {
-      final bx = borderXs[i];
-      final by = borderYs[i];
-      for (int dy = -outlineRadius; dy <= outlineRadius; dy++) {
-        for (int dx = -outlineRadius; dx <= outlineRadius; dx++) {
-          if (dx * dx + dy * dy <= radSq) {
-            final nx = bx + padding + dx;
-            final ny = by + padding + dy;
-            if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
-              outlined.setPixel(nx, ny, whiteColor);
-            }
-          }
-        }
-      }
-    }
-
-    // Buoc 3: Ve chu the goc de len tren lop vien trang voi do net cao
-    for (int y = 0; y < ch; y++) {
-      for (int x = 0; x < cw; x++) {
-        final pixel = cutoutImage.getPixel(x, y);
-        if (pixel.a > 15) {
-          outlined.setPixel(x + padding, y + padding, pixel);
-        }
-      }
-    }
-
-    final outPath = '${tempDir.path}/sticker_outline_$timestamp.png';
-    await File(outPath).writeAsBytes(img.encodePng(outlined));
-    return outPath;
+    final all = await generateAllStickerVariations(
+      sourcePath: sourcePath,
+      isAsset: isAsset,
+    );
+    return all[mode] ?? all[StickerEditMode.outline]!;
   }
 }

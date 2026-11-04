@@ -251,13 +251,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.paused) {
       final old = controller;
       controller = null;
       old?.dispose();
       if (mounted) setState(() {});
     } else if (state == AppLifecycleState.resumed) {
-      _initCameraSafe();
+      // Chi khoi dong lai camera neu khong dang mo man hinh Preview/Sticker Studio
+      if (!_isCapturing) {
+        _initCameraSafe();
+      }
     }
   }
 
@@ -631,6 +634,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           clicked = false;
           countdownValue = 0;
         });
+        if (controller == null || !controller!.value.isInitialized) {
+          _initCameraSafe();
+        }
       }
     }
   }

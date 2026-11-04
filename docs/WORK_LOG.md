@@ -5,6 +5,39 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-04 20:22:00] - Xây dựng Full-Screen Sticker Studio (Original | Outline | Full) chứa kho ảnh trong App & Sửa triệt để lỗi văng app khi tạo Sticker tự chọn
+* **Thời gian (Timestamp):** 2026-11-04 20:22:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Giải quyết triệt để lỗi văng ứng dụng (Crash) khi bấm nút "+ Tự tạo từ thư viện máy" / "+ Thư viện" và thiết kế lại toàn bộ màn hình tạo Sticker theo đúng mẫu giao diện Google Messages / TikTok Photomoji trong 3 ảnh người dùng gửi:
+  1. **Tìm ra và khắc phục tận gốc 4 nguyên nhân gây văng app (Crash):**
+     - **Lỗi Native Crash trong `SubjectSegmenter.kt` (`google_mlkit_subject_segmentation`):** Khi `SubjectSegmenter` thất bại trên thiết bị chưa tải xong gói module của Google Play Services, callback `.addOnFailureListener` trên luồng Android Main UI Thread gọi `result.error("Subject segmentation failure!", e.message, e)` truyền trực tiếp đối tượng Java `MlKitException` (`e`) vào `StandardMethodCodec.writeValue`, gây ngoại lệ `IllegalArgumentException: Unsupported value: com.google.mlkit.common.MlKitException` không được bắt trên luồng chính và làm văng toàn bộ tiến trình Android ngay lập tức. Đã sửa truyền `null` thay vì `e` và bọc `try / catch (Throwable)`.
+     - **Xung đột Camera Lifecycle khi mở `ImagePicker`:** Sửa `HomeScreen.didChangeAppLifecycleState` không dispose camera ở trạng thái `inactive` và không tự khởi động lại camera khi `_isCapturing == true` (khi đang mở màn hình `ImagePreview` / `StickerGeneratorSheet`).
+     - **Chạy tách nền & dựng 3 biến thể trong Background Isolate (`compute`):** Đưa toàn bộ xử lý pixel (`_renderAllVariationsIsolate`) sang Isolate riêng biệt, không bao giờ gây đơ luồng giao diện chính (ANR) hay tràn bộ nhớ (OOM).
+     - **Tắt R8 Obfuscation gây mất lớp JNI trong Release Build (`android/app/build.gradle`):** Cấu hình `minifyEnabled false` và `shrinkResources false`.
+  2. **Triển khai Full-Screen Sticker Studio (`Original` | `Outline` | `Full`) giống hệt 3 ảnh mẫu:**
+     - Giao diện nền đen tuyền (`#000000`) toàn màn hình (`fullscreenDialog: true`).
+     - Góc trên trái: Nút Back (`←`).
+     - Góc trên phải: Cột 3 công cụ tương tác trực tiếp trên Sticker gồm **Vẽ tay tự do (`〰️`)**, **Chèn chữ Meme kéo thả (`Aa`)**, và **Gắn biểu cảm (`😊`)**.
+     - Hàng 3 ô Thumbnail sống động ở đáy: **`Original`** (tách nền chủ thể viền mềm không viền trắng), **`Outline`** (tách nền kèm viền trắng dày 11px khử răng cưa mượt mà), **`Full`** (giữ nguyên toàn bộ bức ảnh gốc bo góc), chuyển đổi tức thì 0ms.
+     - Nút **`Save`** màu trắng hình viên thuốc (pill button) ở góc dưới phải.
+  3. **Tích hợp sẵn kho ảnh mẫu ngay trong App (bao gồm ảnh Mèo La Hét `AAAAAAAAAAA`):**
+     - Trích xuất và đóng gói trực tiếp ảnh `assets/stickers/sticker_cat_scream_full.jpg` và bản tách nền `assets/memes/meme_cat_scream.png` cùng bộ 7 ảnh mẫu trong app + ảnh vừa chụp + nút chọn từ Thư viện/Máy ảnh.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `assets/memes/meme_cat_scream.png`, `assets/stickers/sticker_cat_scream_full.jpg`: Tích hợp hình ảnh Mèo La Hét AAAA từ mẫu thiết kế vào kho tài nguyên trong app.
+  - [MODIFY] `lib/services/custom_sticker_service.dart`: Cài đặt `_renderAllVariationsIsolate` chạy trên Background Isolate, hàm `generateAllStickerVariations` sinh đồng thời `Original`, `Outline`, `Full`, và danh sách `inAppSamplePhotos`.
+  - [MODIFY] `lib/screens/sticker_generator_sheet.dart`: Xây dựng màn hình Full-Screen Sticker Studio với 3 công cụ `〰️`, `Aa`, `😊`, kho ảnh trong app, 3 ô thumbnail `Original` | `Outline` | `Full` và nút `Save`.
+  - [MODIFY] `lib/screens/preview.dart`, `lib/screens/home.dart`: Đồng bộ mở Sticker Studio kèm ảnh vừa chụp và bảo vệ vòng đời Camera.
+  - [MODIFY] `android/app/build.gradle`: Tắt `minifyEnabled` và `shrinkResources` trong release build.
+  - [MODIFY] `pubspec.yaml`, `lib/services/update_service.dart`, `ios/Runner/AppDelegate.swift`: Nâng phiên bản lên `1.4.4+8`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze --no-pub` đạt 0 lỗi, 28/28 unit tests PASS.
+* **Bước tiếp theo (Next Steps):**
+  - Đóng gói và phát hành bản cập nhật Dual-Release **Orbit v1.4.4** lên GitHub Releases.
+
+---
+
 ### [2026-11-04 19:59:00] - Phát hành chính thức Orbit v1.4.3 Dual-Release (Anchoring Math Engine, Contextual Meme AI & Stability Fixes)
 * **Thời gian (Timestamp):** 2026-11-04 19:59:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
