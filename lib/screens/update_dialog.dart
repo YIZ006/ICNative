@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/theme_colors.dart';
 
@@ -185,7 +186,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
               const SizedBox(height: 16),
             ],
 
-            // Thông báo phương thức cập nhật dành cho thiết bị iOS
+            // Thông báo phương thức cập nhật dành cho thiết bị iOS (iPhone)
             if (isIOS) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -195,19 +196,34 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: OrbitColors.buttonPrimary.withValues(alpha: 0.25)),
                 ),
-                child: Row(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: OrbitColors.buttonPrimary, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Trên thiết bị iOS (iPhone), vui lòng mở trang GitHub Releases để cập nhật gói cài đặt .IPA mới nhất.',
-                        style: TextStyle(
-                          color: OrbitColors.deepOlive.withValues(alpha: 0.85),
-                          fontSize: 11.5,
-                          height: 1.35,
+                    const Row(
+                      children: [
+                        Icon(Icons.apple_rounded, color: OrbitColors.buttonPrimary, size: 20),
+                        SizedBox(width: 6),
+                        Text(
+                          'Hướng Dẫn Cài Đặt Trên iOS (iPhone)',
+                          style: TextStyle(
+                            color: OrbitColors.deepOlive,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '• Máy dùng TrollStore: Bấm "⚡ Cài Đặt 1-Chạm" bên dưới để cập nhật tức thì.\n'
+                      '• Máy dùng AltStore / SideStore / Scarlet / Esign:\n'
+                      '  1. Bấm "Tải Tệp .IPA" về Safari (hoặc bấm "Sao Chép Link").\n'
+                      '  2. Vào ứng dụng Tệp (Files) > Nhấn giữ file .IPA > Chọn Chia Sẻ (Share) > Chọn công cụ Sideload để cập nhật đè.\n'
+                      '*(Lưu ý: iOS không cho phép chạm mở trực tiếp file .IPA từ Safari/Tệp)*',
+                      style: TextStyle(
+                        color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+                        fontSize: 11.5,
+                        height: 1.4,
                       ),
                     ),
                   ],
@@ -254,25 +270,42 @@ class _UpdateDialogState extends State<UpdateDialog> {
             if (!isDownloading) ...[
               if (isIOS) ...[
                 // CÁC NÚT DÀNH CHO NỀN TẢNG IOS
-                ElevatedButton.icon(
-                  onPressed: () {
-                    UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: OrbitColors.buttonPrimary,
-                    foregroundColor: OrbitColors.textLight,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.open_in_browser_rounded, size: 20),
-                  label: const Text(
-                    '🌐 Mở Trang Tải GitHub Releases',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
                 if (widget.releaseInfo.ipaDownloadUrl != null) ...[
+                  // Nút 1: TrollStore 1-Chạm
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final ipaUrl = widget.releaseInfo.ipaDownloadUrl!;
+                      final launched = await UpdateService.instance.installViaTrollStore(ipaUrl);
+                      if (context.mounted) {
+                        if (launched) {
+                          Navigator.pop(context);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Không mở được TrollStore. Đang chuyển tiếp sang Safari để tải .IPA...'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          await UpdateService.instance.openReleasePage(ipaUrl);
+                          if (context.mounted) Navigator.pop(context);
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: OrbitColors.buttonPrimary,
+                      foregroundColor: OrbitColors.textLight,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.flash_on_rounded, size: 20),
+                    label: const Text(
+                      '⚡ Cài Đặt 1-Chạm (TrollStore)',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   const SizedBox(height: 8),
+
+                  // Nút 2: Tải .IPA về Safari
                   OutlinedButton.icon(
                     onPressed: () {
                       UpdateService.instance.openReleasePage(widget.releaseInfo.ipaDownloadUrl);
@@ -290,7 +323,48 @@ class _UpdateDialogState extends State<UpdateDialog> {
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ),
+                  const SizedBox(height: 8),
+
+                  // Nút 3: Sao Chép Link .IPA
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: widget.releaseInfo.ipaDownloadUrl!));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('📋 Đã sao chép liên kết .IPA! Bạn có thể dán vào SideStore/AltStore/Scarlet.'),
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OrbitColors.deepOlive,
+                      side: BorderSide(color: OrbitColors.deepOlive.withValues(alpha: 0.3), width: 1.0),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text(
+                      '📋 Sao Chép Link Tải .IPA',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ],
+
+                // Nút 4: Mở trang GitHub Releases
+                TextButton.icon(
+                  onPressed: () {
+                    UpdateService.instance.openReleasePage(widget.releaseInfo.releasePageUrl);
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                  label: const Text(
+                    '🌐 Mở Trang GitHub Releases',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ] else ...[
                 // CÁC NÚT DÀNH CHO NỀN TẢNG ANDROID
                 ElevatedButton.icon(

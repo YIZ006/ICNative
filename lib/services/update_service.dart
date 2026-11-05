@@ -257,6 +257,27 @@ class UpdateService {
     }
   }
 
+  /// Kích hoạt cập nhật trực tiếp qua TrollStore URL scheme trên iOS (1-Chạm không cần chứng chỉ)
+  Future<bool> installViaTrollStore(String ipaUrl) async {
+    final encodedUrl = Uri.encodeComponent(ipaUrl);
+    final trollStoreSchemes = [
+      'apple-magnifier://install?url=$encodedUrl',
+      'trollstore://install?url=$encodedUrl',
+    ];
+
+    for (final scheme in trollStoreSchemes) {
+      try {
+        final uri = Uri.parse(scheme);
+        if (await canLaunchUrl(uri)) {
+          return await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (e) {
+        debugPrint('TrollStore launch error ($scheme): $e');
+      }
+    }
+    return false;
+  }
+
   /// Tải tệp cài đặt với thanh tiến trình trực tiếp (Android) hoặc mở Safari (iOS)
   Future<bool> downloadAndInstallApk({
     required String downloadUrl,

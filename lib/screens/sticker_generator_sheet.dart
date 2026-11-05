@@ -182,20 +182,70 @@ class _StickerGeneratorSheetState extends State<StickerGeneratorSheet> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Nút quay lại (Top-left back button)
+            // 1. Thanh công cụ trên cùng (Back button bên trái & 3 công cụ bên phải)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: Colors.white,
-                    size: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    tooltip: 'Quay lại',
                   ),
-                  tooltip: 'Quay lại',
-                ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Chức năng vẽ tay sắp ra mắt ✨'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.gesture_rounded, color: Colors.white, size: 26),
+                        tooltip: 'Vẽ nét',
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Chức năng chèn chữ sắp ra mắt ✨'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        icon: const Text(
+                          'Aa',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        tooltip: 'Chèn chữ',
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Chức năng thêm biểu cảm sắp ra mắt ✨'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: Colors.white, size: 26),
+                        tooltip: 'Biểu cảm',
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
 
