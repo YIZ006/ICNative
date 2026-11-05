@@ -26,10 +26,15 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - [MODIFY] `lib/screens/sticker_generator_sheet.dart`: Tối giản hóa 100%, chỉ hiển thị ảnh được chọn cùng 3 chế độ `Original` | `Outline` | `Full` và nút `Save`.
   - [MODIFY] `lib/screens/preview.dart`: Cập nhật gọi `StickerGeneratorSheet.show(context)` trực tiếp.
   - [MODIFY] `pubspec.yaml`, `lib/services/update_service.dart`, `ios/Runner/AppDelegate.swift`: Nâng phiên bản lên `1.4.5+9`.
+  - [BUILD & RELEASE] `Orbit-v1.4.5-clean-release.apk` (162,036,203 bytes, SHA-256: `c3ba596de1d405de651ed6587007df8dda926c4f3d197f9615ad4e54f34b799d`).
+  - [BUILD & RELEASE] `Orbit-v1.4.5-demo-showcase.apk` (162,036,203 bytes, SHA-256: `62fc40a79b7a20df92645667c5dff1807a70e70dd7d54c7e37f47e1236ad60b0`).
+  - [BUILD & RELEASE] `Orbit-v1.4.5.ipa` (71,256,970 bytes).
+  - [PUBLISH] GitHub Release `v1.4.5` tại `https://github.com/YIZ006/ICNative/releases/tag/v1.4.5`.
 * **Hiện trạng & Rào cản (Current State & Blockers):**
   - `flutter analyze --no-pub` đạt 0 lỗi, `flutter test` PASS 100%.
+  - Cả 3 file cài đặt cho Android và iOS (Clean APK, Demo APK, iOS IPA) đã hoàn tất đóng gói và đính kèm đầy đủ lên GitHub Releases.
 * **Bước tiếp theo (Next Steps):**
-  - Chạy quy trình đóng gói Dual-Release và theo dõi workflow build iOS IPA cho v1.4.5.
+  - Gửi đường dẫn tải gói cài đặt iOS IPA và hướng dẫn người dùng trải nghiệm.
 
 ---
 
