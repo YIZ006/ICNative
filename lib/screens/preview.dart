@@ -154,12 +154,9 @@ class _ImagePreviewState extends State<ImagePreview> {
     super.dispose();
   }
 
-  /// Mở Sticker Studio toàn màn hình (chứa sẵn kho ảnh trong app + ảnh vừa chụp + thư viện máy)
+  /// Mở màn hình tạo Sticker tự chọn (Original | Outline | Full)
   void _openCustomStickerFromGallery() async {
-    final newSticker = await StickerGeneratorSheet.show(
-      context,
-      capturedPhotoPath: currentImagePath,
-    );
+    final newSticker = await StickerGeneratorSheet.show(context);
     if (newSticker != null && mounted) {
       setState(() {
         activeCustomSticker = newSticker;

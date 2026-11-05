@@ -5,6 +5,34 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-05 18:46:00] - Phát hành Orbit v1.4.5 Dual-Release & Build lại bản iOS IPA tinh gọn (Original | Outline | Full)
+* **Thời gian (Timestamp):** 2026-11-05 18:46:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  Cập nhật bản phát hành **Orbit v1.4.5 (`1.4.5+9`)** và đóng gói lại bản cài đặt iOS IPA (`Orbit-v1.4.5.ipa`) theo đúng yêu cầu người dùng:
+  1. **Tinh gọn giao diện tạo Sticker tự chọn:**
+     - Loại bỏ hoàn toàn thanh xem ảnh mẫu trong app và các công cụ chèn chữ/vẽ tay thừa thãi.
+     - Giữ nguyên bản chất cốt lõi: Khi người dùng chọn/chụp ảnh từ máy, ứng dụng mở thẳng màn hình đen tối giản hiển thị duy nhất ảnh đó với đúng 3 chế độ chuyển đổi tức thì:
+       - **`Original`**: Tách nền chủ thể viền mềm tự nhiên.
+       - **`Outline`**: Tách nền chủ thể viền trắng die-cut dày 11px sắc nét.
+       - **`Full`**: Giữ nguyên toàn bộ bức ảnh gốc bo góc.
+       - Nút **`Save`** màu trắng ở góc dưới bên phải để xác nhận và dán ngay lên ảnh xem trước.
+  2. **Nâng cấp phiên bản toàn diện (`1.4.5+9`):** Cập nhật `pubspec.yaml`, `lib/services/update_service.dart` và `ios/Runner/AppDelegate.swift`.
+  3. **Build & Phát hành Dual-Release v1.4.5:**
+     - Build và upload `Orbit-v1.4.5-clean-release.apk` và `Orbit-v1.4.5-demo-showcase.apk`.
+     - Kích hoạt GitHub Actions macos-14 runner đóng gói và đính kèm `Orbit-v1.4.5.ipa` vào GitHub Release `v1.4.5`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/screens/sticker_generator_sheet.dart`: Tối giản hóa 100%, chỉ hiển thị ảnh được chọn cùng 3 chế độ `Original` | `Outline` | `Full` và nút `Save`.
+  - [MODIFY] `lib/screens/preview.dart`: Cập nhật gọi `StickerGeneratorSheet.show(context)` trực tiếp.
+  - [MODIFY] `pubspec.yaml`, `lib/services/update_service.dart`, `ios/Runner/AppDelegate.swift`: Nâng phiên bản lên `1.4.5+9`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze --no-pub` đạt 0 lỗi, `flutter test` PASS 100%.
+* **Bước tiếp theo (Next Steps):**
+  - Chạy quy trình đóng gói Dual-Release và theo dõi workflow build iOS IPA cho v1.4.5.
+
+---
+
 ### [2026-11-04 20:22:00] - Xây dựng Full-Screen Sticker Studio (Original | Outline | Full) chứa kho ảnh trong App & Sửa triệt để lỗi văng app khi tạo Sticker tự chọn
 * **Thời gian (Timestamp):** 2026-11-04 20:22:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
