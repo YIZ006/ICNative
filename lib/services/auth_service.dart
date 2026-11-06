@@ -54,6 +54,21 @@ class AuthService {
   // Notifier để UI phản ứng tức thì khi đổi tên hoặc avatar
   final ValueNotifier<UserProfile?> currentUserNotifier = ValueNotifier<UserProfile?>(null);
 
+  /// Kiểm tra xem Firebase đã được cấu hình thật sự (có backend cloud) hay chưa
+  static bool get isCloudConfigured {
+    if (Firebase.apps.isEmpty) return false;
+    try {
+      final opts = Firebase.app().options;
+      final pid = opts.projectId.toLowerCase();
+      final key = opts.apiKey.toLowerCase();
+      if (pid.isEmpty || pid.contains('offline') || pid.contains('dummy')) return false;
+      if (key.isEmpty || key.contains('dummy') || key.contains('replace')) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static const _prefUidKey = 'iconnative_uid';
   static const _prefNameKey = 'iconnative_name';
   static const _prefSecretKey = 'iconnative_secret';
@@ -168,14 +183,14 @@ class AuthService {
   Future<void> _syncToFirestore() async {
     if (_currentUser == null) return;
     try {
-      if (Firebase.apps.isEmpty) return;
+      if (!isCloudConfigured) return;
       final docRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
       await docRef.set({
         'uid': _currentUser!.uid,
         'displayName': _currentUser!.displayName,
         'createdAt': _currentUser!.createdAt,
         'lastActive': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Firestore User Sync: $e');
     }

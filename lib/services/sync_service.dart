@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
@@ -41,7 +40,7 @@ class SyncService {
       }
     }
 
-    if (Firebase.apps.isNotEmpty) {
+    if (AuthService.isCloudConfigured) {
       startListening();
     }
   }
@@ -55,7 +54,7 @@ class SyncService {
     if (myProfile == null) return false;
 
     // If Firebase is not configured, we gracefully return false
-    if (Firebase.apps.isEmpty) {
+    if (!AuthService.isCloudConfigured) {
       debugPrint('Firebase not initialized. Running offline mode only.');
       return false;
     }
@@ -108,7 +107,7 @@ class SyncService {
   /// Listen for new photos sent by friends in real-time
   void startListening() {
     final myProfile = AuthService.instance.currentUser;
-    if (myProfile == null || Firebase.apps.isEmpty) return;
+    if (myProfile == null || !AuthService.isCloudConfigured) return;
 
     _postSubscription?.cancel();
     // Bỏ .orderBy('createdAt') trong Firestore query để không đòi hỏi composite index thủ công trên Firebase Console

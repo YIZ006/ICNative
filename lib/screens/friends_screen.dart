@@ -3,7 +3,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
 import '../services/friend_service.dart';
+import '../services/secret_photo_service.dart';
 import 'qr_scanner_screen.dart';
+import 'scratch_photo_screen.dart';
+import 'soulmate_screen.dart';
+import 'story_templates_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -180,6 +184,93 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   ),
                 ),
               ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // VIRAL GROWTH SECTION: 3 TÍNH NĂNG KÉO BẠN TỪ LOCKET
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OrbitColors.deepOlive,
+                      side: const BorderSide(color: Color(0xFF00B4D8), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      backgroundColor: const Color(0xFF00B4D8).withValues(alpha: 0.08),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const StoryTemplatesScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.auto_awesome, color: Color(0xFF0077B6), size: 18),
+                    label: const Text(
+                      '10 Story Mẫu',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OrbitColors.deepOlive,
+                      side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      backgroundColor: const Color(0xFFFF3366).withValues(alpha: 0.08),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SoulmateScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.favorite, color: Color(0xFFFF3366), size: 18),
+                    label: const Text(
+                      'Cận tâm #1',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OrbitColors.deepOlive,
+                      side: const BorderSide(color: Color(0xFF7209B7), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      backgroundColor: const Color(0xFF7209B7).withValues(alpha: 0.08),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScratchPhotoScreen(
+                            secretPhoto: SecretPhoto(
+                              id: 'demo_secret_${DateTime.now().millisecondsSinceEpoch}',
+                              senderUid: user?.uid ?? 'me',
+                              senderName: user?.displayName ?? 'Tôi',
+                              imagePath: '',
+                              teaserMessage: 'Tao vừa gửi cho mày 1 tấm ảnh bí mật trên Orbit 🤫',
+                              createdAt: DateTime.now().millisecondsSinceEpoch,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.touch_app, color: Color(0xFF7209B7), size: 18),
+                    label: const Text(
+                      'Cào ảnh 🤫',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             // SECTION: LỜI MỜI KẾT BẠN ĐANG CHỜ (REAL-TIME FRIEND REQUESTS)

@@ -186,8 +186,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       _checkAutoUpdate();
     });
 
-    // Lắng nghe thông báo bạn bè chấp nhận kết bạn & ảnh mới nhận từ bạn bè
+    // Lắng nghe thông báo bạn bè chấp nhận kết bạn, số lượng bạn bè & ảnh mới nhận từ bạn bè
     FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
+    FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
 
     if (_isDemoMode) {
@@ -346,6 +347,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
+    FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
     _demoReactionTimer?.cancel();
@@ -356,6 +358,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     controller?.dispose();
     scrollController.dispose();
     super.dispose();
+  }
+
+  void _onFriendsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onNewFriendAccepted() {

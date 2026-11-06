@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
 import '../services/locale_service.dart';
@@ -34,7 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ValueListenableBuilder<UserProfile?>(
       valueListenable: AuthService.instance.currentUserNotifier,
       builder: (context, user, _) {
-        final isCloudActive = Firebase.apps.isNotEmpty;
+        final isCloudActive = AuthService.isCloudConfigured;
         final avatarPath = user?.avatarPath;
         final hasCustomAvatar = avatarPath != null && File(avatarPath).existsSync();
 
@@ -250,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              isCloudActive ? 'Cloud Sync Đang Hoạt Động (0 VNĐ)' : 'Chế độ Cục bộ (Offline)',
+                              isCloudActive ? 'Cloud Sync Đang Hoạt Động (0 VNĐ)' : 'Chế độ Cục bộ (100% Offline)',
                               style: TextStyle(
                                 color: isCloudActive ? const Color(0xFF388E3C) : OrbitColors.terracotta,
                                 fontSize: 11,
@@ -332,25 +330,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () async {
                         await LocaleService.instance.toggleLanguage();
                         if (mounted) setState(() {});
-                      },
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Card: Chế độ Bạn Bè Mẫu (Trải Nghiệm Trực Quan)
-                ValueListenableBuilder<bool>(
-                  valueListenable: isDemoModeNotifier,
-                  builder: (context, isDemo, _) {
-                    return _buildActionCard(
-                      icon: isDemo ? Icons.groups_rounded : Icons.person_outline_rounded,
-                      iconColor: isDemo ? OrbitColors.terracotta : OrbitColors.deepOlive,
-                      title: tr('demo_mode_title'),
-                      subtitle: tr('demo_mode_subtitle'),
-                      buttonText: isDemo ? 'Đang Bật (Chạm để Tắt Bạn Mẫu)' : 'Đang Tắt (Chạm để Bật Bạn Mẫu)',
-                      onTap: () {
-                        isDemoModeNotifier.value = !isDemo;
                       },
                     );
                   },

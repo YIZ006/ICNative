@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
@@ -15,6 +17,58 @@ import java.io.File
 class MainActivity: FlutterActivity() {
     private val UPDATER_CHANNEL = "com.abom.utas.utas/app_updater"
     private val WIDGET_PIN_CHANNEL = "com.abom.utas.utas/widget_pin"
+    private val SCRATCH_SFX_CHANNEL = "com.abom.utas.utas/scratch_sfx"
+    private var soundPool: SoundPool? = null
+    private var scratchSoundId: Int = 0
+    private var lastPlayTime = 0L
+
+    private fun initScratchSound() {
+        if (soundPool != null) return
+        try {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            soundPool = SoundPool.Builder()
+                .setMaxStreams(4)
+                .setAudioAttributes(audioAttributes)
+                .build()
+
+            scratchSoundId = soundPool!!.load(this, R.raw.scratch, 1)
+        } catch (e: Exception) {
+            soundPool = null
+        }
+    }
+
+    private fun playScratchSound() {
+        try {
+            if (soundPool == null || scratchSoundId == 0) {
+                initScratchSound()
+            }
+            val now = System.currentTimeMillis()
+            // Giới hạn tần suất tối thiểu 70ms: Loại bỏ hoàn toàn tiếng ù/rè liên tục như điện giật
+            if (now - lastPlayTime < 70) return
+            lastPlayTime = now
+
+            soundPool?.let { pool ->
+                if (scratchSoundId != 0) {
+                    // Biến thiên độ cao (pitch) và âm lượng ngẫu nhiên nhẹ: Tạo cảm giác cào ma sát thẻ cào thật 100%
+                    val pitch = 0.92f + (Math.random().toFloat() * 0.22f)
+                    val volume = 0.65f + (Math.random().toFloat() * 0.20f)
+                    pool.play(scratchSoundId, volume, volume, 1, 0, pitch)
+                }
+            }
+        } catch (e: Exception) {}
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            soundPool?.release()
+            soundPool = null
+        } catch (e: Exception) {}
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -120,6 +174,17 @@ class MainActivity: FlutterActivity() {
                     } else {
                         result.success(false)
                     }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 3. Kênh âm thanh xé / cào lớp bạc (100% Offline 0 VNĐ PCM Synthesis)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCRATCH_SFX_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "playScratch" -> {
+                    playScratchSound()
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }

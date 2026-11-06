@@ -9,6 +9,8 @@ import './services/auth_service.dart';
 import './services/custom_sticker_service.dart';
 import './services/friend_service.dart';
 import './services/locale_service.dart';
+import './services/secret_photo_service.dart';
+import './services/soulmate_service.dart';
 import './services/sync_service.dart';
 import './settings/global.dart';
 import './settings/sizes.dart';
@@ -32,19 +34,21 @@ Future<void> _warmupBackgroundServices() async {
   // A. Thăm dò camera có timeout an toàn (Tối đa 1000ms, không bao giờ treo)
   await _initCamerasFast();
 
-  // B. Khởi tạo Auth & Friend cache
-  await Future.wait([
-    AuthService.instance.init(),
-    FriendService.instance.init(),
-  ]);
-
-  // C. Khởi tạo Firebase nếu có cấu hình (Resilient offline-first)
+  // B. Khởi tạo Firebase nếu có cấu hình (Resilient offline-first)
   try {
     await Firebase.initializeApp();
     debugPrint('Firebase successfully initialized!');
   } catch (e) {
     debugPrint('Running in 100% Offline Mode: $e');
   }
+
+  // C. Khởi tạo Auth, Friend, Soulmate & SecretPhoto cache
+  await Future.wait([
+    AuthService.instance.init(),
+    FriendService.instance.init(),
+    SoulmateService.instance.init(),
+    SecretPhotoService.instance.init(),
+  ]);
 
   // D. Khởi tạo Widget Sync Service
   try {

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:icnative/settings/global.dart';
@@ -29,7 +28,7 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
     setState(() => _isLoading = true);
     final myProfile = AuthService.instance.currentUser;
 
-    if (Firebase.apps.isNotEmpty && myProfile != null) {
+    if (AuthService.isCloudConfigured && myProfile != null) {
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('posts')
@@ -63,7 +62,7 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
     final myProfile = AuthService.instance.currentUser;
     if (postId == null || myProfile == null) return;
 
-    if (Firebase.apps.isNotEmpty) {
+    if (AuthService.isCloudConfigured) {
       try {
         await FirebaseFirestore.instance.collection('posts').doc(postId).update({
           'reactions.${myProfile.uid}': {

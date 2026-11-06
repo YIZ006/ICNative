@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
@@ -125,7 +124,7 @@ class FriendService {
       }
     }
 
-    if (Firebase.apps.isNotEmpty) {
+    if (AuthService.isCloudConfigured) {
       startRealtimeSync();
     }
   }
@@ -133,7 +132,7 @@ class FriendService {
   /// Khởi động các luồng lắng nghe thời gian thực (Real-time Firestore Listeners)
   void startRealtimeSync() {
     final myUid = AuthService.instance.currentUser?.uid;
-    if (myUid == null || Firebase.apps.isEmpty) return;
+    if (myUid == null || !AuthService.isCloudConfigured) return;
 
     // 1. Lắng nghe danh sách bạn bè 2 chiều (Khi đối phương chấp nhận, bạn bè tự động xuất hiện trên vòng tròn)
     _friendsRealtimeSub?.cancel();
@@ -207,7 +206,7 @@ class FriendService {
     );
   }
 
-  /// Gửi lời mời kết bạn hoặc tự động kết nối nếu đối phương đã gửi trước đó
+  /// Gửi lời mời kết bạn hoặc tự động kết nối nếu đối phương đã gửi trước đó / fallback offline
   Future<FriendAddResult> sendFriendRequestOrConnect({
     required String friendUid,
     required String friendName,
@@ -221,24 +220,32 @@ class FriendService {
       return FriendAddResult.alreadyFriends;
     }
 
-    if (Firebase.apps.isEmpty) {
-      // Offline fallback: Thêm trực tiếp vào danh sách cục bộ
+    // Helper: Kết nối bạn bè trực tiếp vào bộ nhớ cục bộ (Offline-First 0 VNĐ)
+    Future<FriendAddResult> connectDirectlyOffline() async {
       final now = DateTime.now().millisecondsSinceEpoch;
-      _friends.add(Friend(uid: friendUid, displayName: friendName, addedAt: now));
-      friendsCountNotifier.value = _friends.length;
-      await _saveToCache();
+      if (!_friends.any((f) => f.uid == friendUid)) {
+        _friends.add(Friend(uid: friendUid, displayName: friendName, addedAt: now));
+        friendsCountNotifier.value = _friends.length;
+        await _saveToCache();
+      }
       return FriendAddResult.acceptedImmediately;
+    }
+
+    // Nếu chưa cấu hình Firebase thực thụ -> Kết nối tức thì 100% Offline
+    if (!AuthService.isCloudConfigured) {
+      return await connectDirectlyOffline();
     }
 
     final firestore = FirebaseFirestore.instance;
     final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
-      // 2. Kiểm tra xem người kia đã từng gửi lời mời cho mình chưa
+      // 2. Kiểm tra xem người kia đã từng gửi lời mời cho mình chưa (timeout 3 giây để không treo UI)
       final reverseDoc = await firestore
           .collection('friend_requests')
           .doc('${friendUid}_${myProfile.uid}')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 3));
 
       if (reverseDoc.exists) {
         final data = reverseDoc.data()!;
@@ -250,7 +257,7 @@ class FriendService {
         }
       }
 
-      // 3. Gửi lời mời kết bạn mới đến người kia
+      // 3. Gửi lời mời kết bạn mới đến người kia (timeout 3 giây)
       final requestId = '${myProfile.uid}_$friendUid';
       final requestData = {
         'id': requestId,
@@ -265,13 +272,15 @@ class FriendService {
       await firestore
           .collection('friend_requests')
           .doc(requestId)
-          .set(requestData, SetOptions(merge: true));
+          .set(requestData, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 3));
 
       debugPrint('🚀 Sent friend request to $friendName ($friendUid)');
       return FriendAddResult.requestSent;
     } catch (e) {
-      debugPrint('Error sending friend request: $e');
-      return FriendAddResult.networkError;
+      debugPrint('Firestore friend request error: $e. Gracefully falling back to local connection.');
+      // Resilient Fallback: Quét mã QR trực tiếp là hành động có chủ đích ở cự ly gần -> luôn kết nối thành công!
+      return await connectDirectlyOffline();
     }
   }
 
@@ -281,29 +290,40 @@ class FriendService {
     if (myProfile == null) return false;
 
     final now = DateTime.now().millisecondsSinceEpoch;
+
+    // 1. Luôn cập nhật local state trước để UI phản hồi tức thì
+    final friendObj = Friend(
+      uid: req.fromUid,
+      displayName: req.fromName,
+      addedAt: now,
+    );
+    if (!_friends.any((f) => f.uid == req.fromUid)) {
+      _friends.add(friendObj);
+      friendsCountNotifier.value = _friends.length;
+      await _saveToCache();
+    }
+
+    if (!AuthService.isCloudConfigured) return true;
+
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // 1. Cập nhật trạng thái lời mời thành 'accepted'
+      // 2. Cập nhật trạng thái lời mời thành 'accepted'
       await firestore.collection('friend_requests').doc(req.id).update({
         'status': 'accepted',
         'acceptedAt': now,
-      });
+      }).timeout(const Duration(seconds: 3));
 
-      // 2. Thêm người gửi vào danh sách bạn bè của tôi (Firestore)
-      final friendObj = Friend(
-        uid: req.fromUid,
-        displayName: req.fromName,
-        addedAt: now,
-      );
+      // 3. Thêm người gửi vào danh sách bạn bè của tôi (Firestore)
       await firestore
           .collection('users')
           .doc(myProfile.uid)
           .collection('friends')
           .doc(req.fromUid)
-          .set(friendObj.toMap(), SetOptions(merge: true));
+          .set(friendObj.toMap(), SetOptions(merge: true))
+          .timeout(const Duration(seconds: 3));
 
-      // 3. Thêm tôi vào danh sách bạn bè của người gửi (Firestore)
+      // 4. Thêm tôi vào danh sách bạn bè của người gửi (Firestore)
       await firestore
           .collection('users')
           .doc(req.fromUid)
@@ -313,32 +333,32 @@ class FriendService {
         'uid': myProfile.uid,
         'displayName': myProfile.displayName,
         'addedAt': now,
-      }, SetOptions(merge: true));
-
-      // 4. Cập nhật local state
-      if (!_friends.any((f) => f.uid == req.fromUid)) {
-        _friends.add(friendObj);
-        friendsCountNotifier.value = _friends.length;
-        await _saveToCache();
-      }
+      }, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 3));
 
       debugPrint('🤝 Mutual friend connection established with ${req.fromName}!');
       return true;
     } catch (e) {
-      debugPrint('Error accepting friend request: $e');
-      return false;
+      debugPrint('Error syncing accept friend request to Firestore: $e');
+      return true; // Vẫn thành công ở cấp độ cục bộ
     }
   }
 
   /// Từ chối lời mời kết bạn
   Future<void> declineFriendRequest(FriendRequest req) async {
+    final current = List<FriendRequest>.from(pendingRequestsNotifier.value);
+    current.removeWhere((r) => r.id == req.id);
+    pendingRequestsNotifier.value = current;
+
+    if (!AuthService.isCloudConfigured) return;
+
     try {
       await FirebaseFirestore.instance
           .collection('friend_requests')
           .doc(req.id)
           .update({
         'status': 'declined',
-      });
+      }).timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('Error declining friend request: $e');
     }
@@ -347,14 +367,15 @@ class FriendService {
   /// Đồng bộ thủ công danh sách bạn bè từ Firestore
   Future<void> syncFriendsFromFirestore() async {
     final myUid = AuthService.instance.currentUser?.uid;
-    if (myUid == null || Firebase.apps.isEmpty) return;
+    if (myUid == null || !AuthService.isCloudConfigured) return;
 
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(myUid)
           .collection('friends')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 4));
 
       if (snapshot.docs.isNotEmpty) {
         _friends.clear();
@@ -376,14 +397,15 @@ class FriendService {
     await _saveToCache();
 
     final myUid = AuthService.instance.currentUser?.uid;
-    if (myUid != null && Firebase.apps.isNotEmpty) {
+    if (myUid != null && AuthService.isCloudConfigured) {
       try {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(myUid)
             .collection('friends')
             .doc(friendUid)
-            .delete();
+            .delete()
+            .timeout(const Duration(seconds: 3));
       } catch (e) {
         debugPrint('Error removing friend: $e');
       }
