@@ -635,6 +635,77 @@ class AnchorMath {
       contourPoints: contourPoints,
     );
   }
+
+  /// Dựng [ObjectAnchor] từ tập điểm biên pixel trích xuất từ độ tương phản (Sobel/Gradient).
+  /// Dùng cho các vật thể không có mặt nạ AI (bàn phím, ghế, đồ vật, đồ ăn, laptop...).
+  static ObjectAnchor anchorFromEdgePoints({
+    required Size imageSize,
+    required Rect bounds,
+    required List<Offset> points,
+  }) {
+    if (points.isEmpty) {
+      return ObjectAnchor.fromBounds(imageSize, bounds);
+    }
+
+    // 1. Tìm apex (điểm có toạ độ y nhỏ nhất - đỉnh cao nhất của vật thể)
+    // Để chống nhiễu, lấy trung bình top 7 điểm cao nhất
+    final sortedByY = List<Offset>.from(points)..sort((a, b) => a.dy.compareTo(b.dy));
+    final topCount = math.min(7, sortedByY.length);
+    double sumX = 0, sumY = 0;
+    for (int i = 0; i < topCount; i++) {
+      sumX += sortedByY[i].dx;
+      sumY += sortedByY[i].dy;
+    }
+    final apex = Offset(sumX / topCount, sumY / topCount);
+
+    // 2. Tính góc tiếp tuyến tại đỉnh dựa trên các điểm lân cận apex
+    final nearApex = points.where((p) => (p - apex).distanceSquared < 45 * 45).toList();
+    double angle = 0.0;
+    if (nearApex.length >= 3) {
+      double sumDx = 0, sumDy = 0;
+      for (final p in nearApex) {
+        final d = p - apex;
+        if (d.dx > 2) {
+          sumDx += d.dx;
+          sumDy += d.dy;
+        } else if (d.dx < -2) {
+          sumDx -= d.dx;
+          sumDy -= d.dy;
+        }
+      }
+      if (sumDx.abs() > 1e-3) {
+        angle = math.atan2(sumDy, sumDx).clamp(-0.8, 0.8);
+      }
+    }
+
+    // 3. Tính centroid (trọng tâm)
+    double cX = 0, cY = 0;
+    for (final p in points) {
+      cX += p.dx;
+      cY += p.dy;
+    }
+    final centroid = Offset(cX / points.length, cY / points.length);
+
+    // 4. Tìm điểm cực phải (rightEdge) và cực trái (leftEdge)
+    Offset? rightMost;
+    Offset? leftMost;
+    for (final p in points) {
+      if (rightMost == null || p.dx > rightMost.dx) rightMost = p;
+      if (leftMost == null || p.dx < leftMost.dx) leftMost = p;
+    }
+
+    return ObjectAnchor(
+      imageSize: imageSize,
+      bounds: bounds,
+      apex: apex,
+      tangentAngle: angle,
+      centroid: centroid,
+      fromMask: true,
+      rightEdge: rightMost == null ? null : TopEdge(apex: rightMost, angle: math.pi / 2),
+      leftEdge: leftMost == null ? null : TopEdge(apex: leftMost, angle: -math.pi / 2),
+      contourPoints: points,
+    );
+  }
 }
 
 /// Bước 3: đổi điểm neo + góc tiếp tuyến thành vị trí/scale/góc xoay của sticker
@@ -870,10 +941,29 @@ class StickerPlacementSolver {
         final step = math.max(1, (slope.length / 20).ceil());
         for (var i = 0; i < slope.length; i += step) {
           final pt = slope[i];
-          final inward = centerInFrame - pt;
+          final inwardToCenter = centerInFrame - pt;
+
+          // Tính pháp tuyến cục bộ của đường cong contour xung quanh pt:
+          // Slope chạy từ trên xuống dưới (dy tăng dần)
+          final iPrev = math.max(0, i - 2);
+          final iNext = math.min(slope.length - 1, i + 2);
+          final dContour = slope[iNext] - slope[iPrev];
+          Offset unitInward;
+          if (dContour.distanceSquared > 1e-4) {
+            // Pháp tuyến vuông góc với đường viền: N = (-dy, dx)
+            final normal = Offset(-dContour.dy, dContour.dx);
+            // Hướng vào trong (cùng hướng với vector về tâm)
+            final dot = normal.dx * inwardToCenter.dx + normal.dy * inwardToCenter.dy;
+            final oriented = dot >= 0 ? normal : Offset(-normal.dx, -normal.dy);
+            final len = oriented.distance;
+            unitInward = len > 1e-6 ? oriented / len : (inwardToCenter / math.max(1e-6, inwardToCenter.distance));
+          } else {
+            unitInward = inwardToCenter / math.max(1e-6, inwardToCenter.distance);
+          }
+
           final res = tryPlacementAt(
             apexInFrame: pt,
-            inward: inward,
+            inward: unitInward,
             kind: PlacementKind.sideEdge,
             edgeSide: edgeSide,
             allowFlip: true,

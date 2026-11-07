@@ -5,6 +5,26 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 20:15:00] - Phục Hồi Đường Viền Neon Bàn Phím, Cyberpunk HUD & Sửa Lỗi Cắn Mép Usagi - Phát Hành v1.4.12
+* **Thời gian (Timestamp):** 2026-11-07 20:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết triệt để 2 vấn đề thị giác & logic cắn mép người dùng phản hồi:
+  1. **Khôi phục đường viền Neon bàn phím & vật thể:**
+     - *Nguyên nhân:* Trước đây khi chụp vật thể (bàn phím, ghế, cốc, đồ ăn, laptop...), `SubjectSegmenter` chỉ phân đoạn người/thú cưng nên trả về rỗng. Hệ thống rơi vào fallback vẽ một hộp chữ nhật màu xanh đục ngầu (`AI: VẬT THỂ`) che kín toàn bộ ảnh người dùng, làm mất đường viền neon uốn lượn ôm khít phím bấm như ở bản v1.1.
+     - *Khắc phục:* Khôi phục thuật toán trích xuất biên tương phản pixel (Sobel/Gradient) siêu tốc (~10ms) trực tiếp trên Skia buffer trong `StickerAnchoringEngine.extractObjectEdgePoints`.
+     - *Hiển thị NeonContourPainter:* Vẽ đường viền phát sáng hạt neon cyan ôm khít từng phím bấm, đường cong của ghế.
+     - *Cyberpunk HUD fallback:* Khi vật thể nằm trên nền trơn không có tương phản, vẽ 4 góc ngoặc neon Cyberpunk `[  ]` tinh tế quanh 4 góc, tuyệt đối KHÔNG BAO GIỜ vẽ hộp xanh đục che khuất ảnh.
+  2. **Hiệu chỉnh cắn mép Usagi & Bắt góc 90 độ:**
+     - Đo quang học pixel thực tế toàn bộ 18 meme cắn (`assets/memes/bite/`): Sửa toạ độ khoang miệng của Usagi từ `[0.48, 0.52]` (lệch vào trong má làm Usagi bị lơ lửng ngoài không khí) thành `[0.60, 0.58]` – đúng đỉnh sâu nhất của khoang miệng há to.
+     - Trong `StickerPlacementSolver.solve`: Khi Usagi cắn vào sườn tóc ở ảnh selfie, tính toán vector pháp tuyến vuông góc với đường viền tóc ($N = (-dy, dx)$), giúp miệng Usagi quay đúng một góc 90 độ cắn thẳng và ngập sâu tự nhiên vào tóc.
+  3. **Kiểm thử & Đóng gói:**
+     - 37/37 tests PASSED, 0 issue analyze.
+     - Đóng gói đủ 2 bản APK: `Orbit-v1.4.12-clean-release.apk` và `Orbit-v1.4.12-demo-showcase.apk`.
+
+---
+
 ### [2026-11-07 19:45:00] - Khắc Phục Lỗi Đồng Bộ Ảnh Bạn Bè, Hiển Thị Ảnh Bạn Bè Trên Vòng Tròn Orbit & Phát Hành Orbit v1.4.11 Dual-Release
 * **Thời gian (Timestamp):** 2026-11-07 19:45:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

@@ -825,27 +825,10 @@ class _ImagePreviewState extends State<ImagePreview> {
                             );
                             final rect = mapping.rectToFrame(_anchor!.bounds);
 
-                            return Positioned(
-                              left: rect.left,
-                              top: rect.top,
-                              width: rect.width.clamp(0.0, photoBoxSize),
-                              height: rect.height.clamp(0.0, photoBoxSize),
+                            return Positioned.fill(
                               child: IgnorePointer(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00E5FF).withValues(alpha: 0.18),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: const Color(0xFF00E5FF),
-                                      width: 2.2,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
-                                        blurRadius: 10,
-                                      ),
-                                    ],
-                                  ),
+                                child: CustomPaint(
+                                  painter: CyberpunkCornerPainter(rect: rect),
                                 ),
                               ),
                             );
@@ -1493,4 +1476,62 @@ class NeonContourPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant NeonContourPainter oldDelegate) =>
       oldDelegate.points != points;
+}
+
+/// Painter vẽ 4 góc cyberpunk neon [  ] tinh tế quanh đối tượng khi chưa có đường bao chi tiết
+class CyberpunkCornerPainter extends CustomPainter {
+  final Rect rect;
+
+  const CyberpunkCornerPainter({required this.rect});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rect.isEmpty || rect.width <= 0 || rect.height <= 0) return;
+
+    final glowPaint = Paint()
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.55)
+      ..strokeWidth = 5.0
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+
+    final linePaint = Paint()
+      ..color = const Color(0xFF00E5FF)
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke;
+
+    final double cornerLen = (rect.width * 0.16).clamp(16.0, 42.0);
+
+    // Top-Left
+    final pathTL = Path()
+      ..moveTo(rect.left, rect.top + cornerLen)
+      ..lineTo(rect.left, rect.top)
+      ..lineTo(rect.left + cornerLen, rect.top);
+
+    // Top-Right
+    final pathTR = Path()
+      ..moveTo(rect.right - cornerLen, rect.top)
+      ..lineTo(rect.right, rect.top)
+      ..lineTo(rect.right, rect.top + cornerLen);
+
+    // Bottom-Left
+    final pathBL = Path()
+      ..moveTo(rect.left, rect.bottom - cornerLen)
+      ..lineTo(rect.left, rect.bottom)
+      ..lineTo(rect.left + cornerLen, rect.bottom);
+
+    // Bottom-Right
+    final pathBR = Path()
+      ..moveTo(rect.right - cornerLen, rect.bottom)
+      ..lineTo(rect.right, rect.bottom)
+      ..lineTo(rect.right, rect.bottom - cornerLen);
+
+    for (final p in [pathTL, pathTR, pathBL, pathBR]) {
+      canvas.drawPath(p, glowPaint);
+      canvas.drawPath(p, linePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CyberpunkCornerPainter oldDelegate) =>
+      oldDelegate.rect != rect;
 }

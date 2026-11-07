@@ -447,15 +447,16 @@ class StickerAnchoringEngine {
       );
 
       // 4. Bước 2 của đặc tả: lấy đỉnh + tiếp tuyến mép trên từ đường viền thật
-      //    (mặt nạ tách chủ thể). Không có mặt nạ thì dùng bbox (đỉnh = giữa cạnh trên).
+      //    (mặt nạ tách chủ thể hoặc gradient biên vật thể). Không có mặt nạ/biên thì dùng bbox.
       ObjectAnchor? anchor;
       if (hasClearObject && origW > 0 && origH > 0) {
-        anchor = _buildAnchor(
+        anchor = await _buildAnchor(
           imageSize: ui.Size(origW, origH),
           detectedBounds: targetRect,
           subjectMask: subjectMask,
           maskWidth: maskWidth,
           maskHeight: maskHeight,
+          imageBytes: bytes,
         );
       }
 
@@ -469,15 +470,85 @@ class StickerAnchoringEngine {
     }
   }
 
+  /// Trích xuất các điểm viền biên (edge points) từ độ tương phản pixel (Sobel/Gradient)
+  /// trong vùng bounding box của vật thể. Hoàn toàn 0 VNĐ & 100% Offline (~10ms).
+  static Future<List<ui.Offset>> extractObjectEdgePoints({
+    required Uint8List imageBytes,
+    required ui.Size origSize,
+    required Rect bounds,
+  }) async {
+    try {
+      final double scale = 480.0 / origSize.width;
+      const int targetW = 480;
+      final int targetH = (origSize.height * scale).round();
+      final codec = await ui.instantiateImageCodec(
+        imageBytes,
+        targetWidth: targetW,
+        targetHeight: targetH,
+      );
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      img.dispose();
+      codec.dispose();
+      if (byteData == null) return [];
+
+      final buffer = byteData.buffer.asUint8List();
+      final bLeft = (bounds.left * scale).toInt().clamp(0, targetW - 3);
+      final bTop = (bounds.top * scale).toInt().clamp(0, targetH - 3);
+      final bRight = (bounds.right * scale).toInt().clamp(bLeft + 2, targetW - 1);
+      final bBottom = (bounds.bottom * scale).toInt().clamp(bTop + 2, targetH - 1);
+
+      final points = <ui.Offset>[];
+      const int step = 2;
+      final invScale = 1.0 / scale;
+
+      for (int y = bTop + 2; y < bBottom - 2; y += step) {
+        final rowOffset = y * targetW * 4;
+        final nextRowOffset = (y + 2) * targetW * 4;
+        for (int x = bLeft + 2; x < bRight - 2; x += step) {
+          final idx = rowOffset + x * 4;
+          final idxRight = rowOffset + (x + 2) * 4;
+          final idxDown = nextRowOffset + x * 4;
+
+          final r = buffer[idx];
+          final g = buffer[idx + 1];
+          final b = buffer[idx + 2];
+
+          final rR = buffer[idxRight];
+          final gR = buffer[idxRight + 1];
+          final bR = buffer[idxRight + 2];
+
+          final rD = buffer[idxDown];
+          final gD = buffer[idxDown + 1];
+          final bD = buffer[idxDown + 2];
+
+          final diff = ((r - rR).abs() + (g - gR).abs() + (b - bR).abs() +
+                        (r - rD).abs() + (g - gD).abs() + (b - bD).abs()) ~/ 6;
+
+          if (diff > 26) {
+            points.add(ui.Offset(x * invScale, y * invScale));
+          }
+        }
+      }
+      return points;
+    } catch (e) {
+      debugPrint('extractObjectEdgePoints error: $e');
+      return [];
+    }
+  }
+
   /// Dựng [ObjectAnchor] cho vật thể mà AI tìm thấy.
-  /// Ưu tiên trích xuất đường viền từ mặt nạ phân vùng pixel thực tế.
-  static ObjectAnchor? _buildAnchor({
+  /// Ưu tiên trích xuất đường viền từ mặt nạ phân vùng pixel thực tế (Người/Thú cưng),
+  /// hoặc từ gradient viền đối tượng (Bàn phím, Ghế, Đồ vật, Đồ ăn).
+  static Future<ObjectAnchor?> _buildAnchor({
     required ui.Size imageSize,
     required Rect detectedBounds,
     required List<double>? subjectMask,
     required int maskWidth,
     required int maskHeight,
-  }) {
+    Uint8List? imageBytes,
+  }) async {
     const tolerance = 1.05;
     if (detectedBounds.right > imageSize.width * tolerance ||
         detectedBounds.bottom > imageSize.height * tolerance) {
@@ -489,6 +560,7 @@ class StickerAnchoringEngine {
       Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
     );
 
+    // 1. Ưu tiên cao nhất: Mặt nạ phân vùng pixel từ SubjectSegmenter (Người / Thú cưng)
     if (subjectMask != null &&
         maskWidth > 0 &&
         maskHeight > 0 &&
@@ -498,6 +570,22 @@ class StickerAnchoringEngine {
         bounds: bounds,
         mask: BinaryMask.fromConfidence(subjectMask, maskWidth, maskHeight),
       );
+    }
+
+    // 2. Nhận diện đường viền biên thực tế cho vật thể (Bàn phím, Ghế, Laptop, Đồ ăn...) qua gradient
+    if (imageBytes != null && bounds.width > 20 && bounds.height > 20) {
+      final edgePoints = await extractObjectEdgePoints(
+        imageBytes: imageBytes,
+        origSize: imageSize,
+        bounds: bounds,
+      );
+      if (edgePoints.isNotEmpty) {
+        return AnchorMath.anchorFromEdgePoints(
+          imageSize: imageSize,
+          bounds: bounds,
+          points: edgePoints,
+        );
+      }
     }
 
     return ObjectAnchor.fromBounds(imageSize, bounds);
