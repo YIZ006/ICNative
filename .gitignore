@@ -39,6 +39,10 @@ Thumbs.db
 android/.kotlin/
 **/android/.kotlin/
 
+# Binaries & APK releases
+*.apk
+*.exe
+
 # Private Work Logs & Agent Directives
 docs/WORK_LOG.md
 agent.md

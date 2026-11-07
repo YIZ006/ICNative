@@ -48,6 +48,8 @@ class _ImagePreviewState extends State<ImagePreview> {
   Size _activeStickerPixelSize = Size.zero;
   Offset? _debugTargetInFrame;
   List<CustomStickerItem> _biteTrayItems = const [];
+  StickerCategory _detectedCategory = StickerCategory.scene;
+  late bool _showDebugBoundingBox = isDemoModeNotifier.value;
 
   // Location & Time Badges
   String? locationBadgeText;
@@ -121,20 +123,33 @@ class _ImagePreviewState extends State<ImagePreview> {
       final suggested = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
       final biteAssets = await biteAssetsFuture;
 
-      final trayBites = <CustomStickerItem>[
-        for (final assetPath in biteAssets)
+      final resolved = suggested ??
+          StickerAnchoringEngine.pickStickerForCategory(StickerCategory.scene);
+      final stickerPx = resolved.stickerPixelSize ??
+          await StickerAnchoringEngine.loadStickerPixelSize(resolved.assetPath);
+
+      // Chỉ hiển thị khay meme cắn khi là đồ ăn, thức uống hoặc selfie con người
+      final bool isBiteEligible = resolved.category == StickerCategory.food ||
+          resolved.category == StickerCategory.beverage ||
+          resolved.category == StickerCategory.person;
+
+      final List<String> trayPool = isBiteEligible && biteAssets.isNotEmpty
+          ? biteAssets
+          : (resolved.category == StickerCategory.animal
+              ? StickerAnchoringEngine.catMemes
+              : (resolved.category == StickerCategory.scene
+                  ? StickerAnchoringEngine.capybaraMemes
+                  : StickerAnchoringEngine.allMemes));
+
+      final trayItems = <CustomStickerItem>[
+        for (final assetPath in trayPool)
           CustomStickerItem(
-            id: 'bite_asset_${assetPath.split('/').last}',
+            id: 'tray_asset_${assetPath.split('/').last}',
             path: assetPath,
             title: assetPath.split('/').last,
             isAsset: true,
           ),
       ];
-
-      final resolved = suggested ??
-          StickerAnchoringEngine.pickStickerForCategory(StickerCategory.scene);
-      final stickerPx = resolved.stickerPixelSize ??
-          await StickerAnchoringEngine.loadStickerPixelSize(resolved.assetPath);
 
       if (mounted) {
         final photoBox = _boxSizeFor(MediaQuery.of(context).size.width);
@@ -151,7 +166,8 @@ class _ImagePreviewState extends State<ImagePreview> {
                 photoBoxSize: photoBox,
               );
         setState(() {
-          _biteTrayItems = trayBites;
+          _biteTrayItems = trayItems;
+          _detectedCategory = resolved.category;
           _anchor = resolved.anchor;
           _detectedMode = resolved.anchorMode;
           _activeBitePoint = resolved.bitePoint;
@@ -203,9 +219,9 @@ class _ImagePreviewState extends State<ImagePreview> {
     } else {
       final meta = await StickerAnchoringEngine.getBiteMetaForAsset(item.path);
       if (!mounted) return;
-      if (_detectedMode == AnchorMode.hug &&
+      if (_detectedMode == AnchorMode.hug ||
           !StickerAnchoringEngine.isBiteAssetPath(item.path)) {
-        mode = AnchorMode.hug;
+        mode = _detectedMode == AnchorMode.hug ? AnchorMode.hug : AnchorMode.topEdge;
         bitePoint = const Offset(0.5, 0.5);
         biteDir = meta.dir;
         widthFactor = StickerPlacementSolver.hugWidthFactor;
@@ -527,9 +543,11 @@ class _ImagePreviewState extends State<ImagePreview> {
     final baseStickers = CustomStickerService.instance.stickers;
     final existingPaths = <String>{for (final s in baseStickers) s.path};
     final stickerList = <CustomStickerItem>[
-      for (final b in _biteTrayItems)
-        if (!existingPaths.contains(b.path)) b,
+      if (activeCustomSticker != null && !existingPaths.contains(activeCustomSticker!.path))
+        activeCustomSticker!,
       ...baseStickers,
+      for (final b in _biteTrayItems)
+        if (!existingPaths.contains(b.path) && b.path != activeCustomSticker?.path) b,
     ];
 
     return Container(
@@ -592,7 +610,22 @@ class _ImagePreviewState extends State<ImagePreview> {
                         letterSpacing: 0.8,
                       ),
                     ),
-                    const SizedBox(width: 48), // Canh giữa với nút hủy bên trái
+                    if (isDemoModeNotifier.value)
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _showDebugBoundingBox = !_showDebugBoundingBox;
+                          });
+                        },
+                        icon: Icon(
+                          _showDebugBoundingBox ? Icons.radar_rounded : Icons.radar_outlined,
+                          color: _showDebugBoundingBox ? const Color(0xFF00E5FF) : OrbitColors.deepOlive,
+                          size: 24,
+                        ),
+                        tooltip: "Bật/Tắt vùng nhận diện AI",
+                      )
+                    else
+                      const SizedBox(width: 48), // Canh giữa với nút hủy bên trái
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -747,19 +780,84 @@ class _ImagePreviewState extends State<ImagePreview> {
                           );
                         }(),
 
-                        // Chấm xanh debug tại điểm neo trên mép vật thể khi bật `kDebugBite = true`
-                        if (AnchorMath.debugBiteEnabled && _debugTargetInFrame != null)
-                          Positioned(
-                            left: _debugTargetInFrame!.dx - 5,
-                            top: _debugTargetInFrame!.dy - 5,
+                        // VÙNG XANH NHẬN DIỆN AI (Hiển thị trong bản Showcase / Demo Mode để check AI phát hiện vật thể ở đâu)
+                        if (_showDebugBoundingBox && _anchor != null) () {
+                          final mapping = CoverMapping(
+                            imageSize: _anchor!.imageSize,
+                            frameSide: photoBoxSize,
+                          );
+                          final rect = mapping.rectToFrame(_anchor!.bounds);
+
+                          return Positioned(
+                            left: rect.left,
+                            top: rect.top,
+                            width: rect.width.clamp(0.0, photoBoxSize),
+                            height: rect.height.clamp(0.0, photoBoxSize),
                             child: IgnorePointer(
                               child: Container(
-                                width: 10,
-                                height: 10,
                                 decoration: BoxDecoration(
-                                  color: Colors.greenAccent,
+                                  color: const Color(0xFF00E5FF).withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFF00E5FF),
+                                    width: 2.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned(
+                                      top: -12,
+                                      left: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00E5FF),
+                                          borderRadius: BorderRadius.circular(6),
+                                          boxShadow: const [
+                                            BoxShadow(color: Colors.black26, blurRadius: 4),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          'AI: ${_detectedMode == AnchorMode.scene ? "BỐI CẢNH" : "VẬT THỂ"} (${_anchor!.bounds.width.toInt()}x${_anchor!.bounds.height.toInt()})',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }(),
+
+                        // Chấm xanh debug tại điểm neo trên mép vật thể
+                        if ((AnchorMath.debugBiteEnabled || _showDebugBoundingBox) && _debugTargetInFrame != null)
+                          Positioned(
+                            left: _debugTargetInFrame!.dx - 6,
+                            top: _debugTargetInFrame!.dy - 6,
+                            child: IgnorePointer(
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00E5FF),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.black87, width: 1.5),
+                                  border: Border.all(color: Colors.black87, width: 2),
+                                  boxShadow: const [
+                                    BoxShadow(color: Color(0xFF00E5FF), blurRadius: 6),
+                                  ],
                                 ),
                               ),
                             ),

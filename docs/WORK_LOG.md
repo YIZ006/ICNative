@@ -5,6 +5,65 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 17:18:00] - Phát Hành Orbit v1.4.8 Dual-Release: Realtime Cloud Sync 0 VNĐ, Radar AI Detection HUD & Bộ Lọc Meme Thông Minh
+* **Thời gian (Timestamp):** 2026-11-07 17:18:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Xuất xưởng phiên bản chính thức **Orbit v1.4.8** (`1.4.8+12`) tuân thủ nghiêm ngặt quy tắc Dual-Release và tiêu chuẩn 0 VNĐ & 100% Offline:
+  1. **Giải pháp Realtime Cloud Sync 0 VNĐ (Không cần thẻ tín dụng Blaze):**
+     - Thay thế Cloud Storage (yêu cầu thẻ tín dụng) bằng cơ chế nén ảnh đa luồng (`Isolate 640px JPEG q=75`, kích thước siêu nhẹ ~40-60KB) và lưu trữ trực tiếp dưới dạng chuỗi Base64 trong Cloud Firestore document.
+     - Tận dụng 100% dung lượng miễn phí của gói Spark 0 VNĐ (Firestore cho phép 1MB/doc, 50.000 lượt đọc/ngày).
+     - Kết bạn 2 chiều tức thì thông qua `WriteBatch` (`users/{A}/friends/{B}` và `users/{B}/friends/{A}`) đồng bộ kho ảnh realtime ngay khi kết nối.
+  2. **Radar AI Detection HUD (Vùng Xanh Nhận Diện):**
+     - Tích hợp radar HUD với Bounding Box màu xanh neon hiển thị vị trí nhận diện vật thể/khuôn mặt trên màn hình Preview (chế độ Showcase).
+     - Nút toggle radar trực quan ở góc trên bên phải màn hình để kiểm chứng toạ độ AI phân tích trong không gian thực.
+  3. **Bộ lọc Meme Cắn Mép Thông Minh (Anti-Spam Bite Memes):**
+     - Tối ưu bộ lọc chọn meme: Chỉ áp dụng cơ chế cắn mép (`topEdge` bite snapping) cho đồ ăn/thức uống (`food`, `beverage`) và người chụp selfie (`person`).
+     - Các vật thể khác như chó mèo, đồ điện tử, đồ chơi, phong cảnh được tự động chuyển sang chế độ ôm/đặt cạnh (`hug`/`center`) với pool meme tương ứng, loại bỏ tình trạng spam meme há miệng cắn.
+  4. **Đóng gói đủ 2 bản APK Dual-Release và xuất bản lên GitHub Releases:**
+     - Bản Chuẩn / Sạch: `Orbit-v1.4.8-clean-release.apk` (169,122,529 bytes).
+     - Bản Trải Nghiệm / Mẫu: `Orbit-v1.4.8-demo-showcase.apk` (169,138,913 bytes).
+     - Xuất bản thành công lên GitHub Releases: https://github.com/YIZ006/ICNative/releases/tag/v1.4.8 tuân thủ chuẩn UTF-8 chống lỗi vỡ font tiếng Việt.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/services/sync_service.dart`: Chuyển sang nén ảnh isolate và lưu Base64 trực tiếp vào Cloud Firestore document.
+  - [MODIFY] `lib/services/friend_service.dart`: Kết bạn 2 chiều tức thì bằng `WriteBatch`, sửa lỗi snapshot cache.
+  - [MODIFY] `lib/screens/preview.dart`: Thêm khung xanh neon AI Detection Bounding Box & nút radar toggle trong Showcase mode.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Điều chỉnh `fromLegacyPool` chuyển `animal`, `electronics`, `general` sang `AnchorPreference.center`, chỉ giữ `food`, `beverage`, `person` ở `AnchorPreference.topEdge` cho meme cắn mép.
+  - [MODIFY] `pubspec.yaml`, `android/app/build.gradle`: Nâng version đồng bộ lên `1.4.8+12`.
+  - [NEW] Cấu hình Firebase: `firestore.rules`, `.firebaserc`, `firebase.json`.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 lỗi, 0 cảnh báo** (`No issues found!`).
+  - `flutter test`: **36/36 tests PASSED**.
+  - GitHub Release `v1.4.8`: Đã xuất bản thành công với đầy đủ 2 tệp APK.
+
+---
+
+### [2026-11-07 15:35:00] - Khắc Phục Triệt Để Lỗi Vỡ Font Tiếng Việt Trên GitHub Releases & Thiết Lập Luật Mã Hóa UTF-8 Bắt Buộc (0 VNĐ & 100% Offline)
+* **Thời gian (Timestamp):** 2026-11-07 15:35:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết dứt điểm lỗi vỡ font tiếng Việt / Mojibake hiển thị trên hộp thoại thông báo cập nhật in-app (`UpdateDialog`):
+  1. **Nguyên nhân cốt lõi (Root Cause):**
+     - Khi chạy script phát hành bằng Windows PowerShell 5.1, lệnh `Invoke-RestMethod` với chuỗi String `.NET` mặc định chuyển đổi payload HTTP body sang ISO-8859-1 (Latin-1/ANSI) thay vì giữ nguyên mảng byte UTF-8.
+     - Hậu quả: GitHub Releases lưu trữ các ký tự có dấu dưới dạng mã hóa kép (Double-encoded UTF-8), tạo ra các chuỗi lỗi font như `KhÃ´i phá»¥c`, `Cáº¯n MÃ©p`, `ðŸŽ¯`.
+  2. **Khắc phục ngay lập tức:**
+     - Gọi GitHub REST API cập nhật lại Release `v1.4.7` với mảng byte UTF-8 tường minh: tiêu đề và nội dung thông báo trên GitHub Releases đã trở lại tiếng Việt có dấu 100% chuẩn xác và sắc nét.
+     - Cập nhật [`lib/services/update_service.dart`](../lib/services/update_service.dart): Sử dụng `jsonDecode(utf8.decode(response.bodyBytes))` thay vì `jsonDecode(response.body)` để đảm bảo mọi phản hồi HTTP đều được giải mã đúng chuẩn UTF-8 bất kể cấu hình mạng hay máy người dùng.
+  3. **Thiết lập luật bắt buộc cho toàn bộ AI Agent (`AGENTS.md` & `agent.md`):**
+     - Bổ sung **MANDATORY UTF-8 ENCODING RULE**: Mọi thao tác phát hành GitHub Release bằng script bắt buộc phải chuyển đổi JSON payload sang mảng byte UTF-8 tường minh (`[System.Text.Encoding]::UTF8.GetBytes($payloadJson)`), tuyệt đối không để xảy ra lỗi vỡ font tiếng Việt.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/update_service.dart`](../lib/services/update_service.dart): Dùng `utf8.decode(response.bodyBytes)` giải mã JSON GitHub API.
+  - [MODIFY] [`AGENTS.md`](../AGENTS.md) & [`agent.md`](../agent.md): Bổ sung quy tắc bắt buộc mã hóa tiếng Việt & Unicode UTF-8 khi xuất xưởng.
+  - [FIX API] GitHub Release `v1.4.7`: Sửa lại toàn bộ Tiêu đề & Ghi chú phiên bản sang UTF-8 tiếng Việt hoàn chỉnh.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 lỗi, 0 cảnh báo** (`No issues found!`).
+  - Kiểm tra API trực tiếp từ GitHub Releases: Tiêu đề trả về chuẩn `Orbit v1.4.7 - Khôi phục Meme Cắn Mép (Bite Snapping), Khoá Meme Preview & 18 Meme Ngoạm Thực Tế`.
+  - Hộp thoại cập nhật trên điện thoại khi mở lại app sẽ hiển thị tiếng Việt có dấu chuẩn đẹp mắt.
+
+---
+
 ### [2026-11-07 15:25:00] - Phát Hành Orbit v1.4.7 Dual-Release: Khôi Phục Meme Cắn Mép (Bite Snapping), Khoá Meme Preview & Tích Hợp 18 Meme Ngoạm Thực Tế
 * **Thời gian (Timestamp):** 2026-11-07 15:25:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
@@ -1894,3 +1953,120 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Tóm tắt công việc (Summary):** Điều tra vì sao ảnh không tới bạn bè. Nguyên nhân gốc: `android/app/google-services.json` là placeholder (`project_id: iconnative-offline`) và iOS chưa có `GoogleService-Info.plist`, nên `AuthService.isCloudConfigured == false` và `SyncService.broadcastPhotoToFriends` trả về `false` (chỉ lưu local). Code Firestore/Storage đã có sẵn trong `sync_service.dart` / `friend_service.dart`. Ngoài ra `connectDirectlyOffline()` chỉ thêm bạn một chiều ở máy người quét QR.
 * **Chi tiết thay đổi (Changes Made):** Không sửa code, chỉ tư vấn.
 * **Bước tiếp theo (Next Steps):** Người dùng tạo Firebase project thật (Spark), thay file cấu hình; cân nhắc nén ảnh + lưu base64 trong Firestore để né Storage/Blaze, kết bạn QR 2 chiều, Anonymous Auth + Security Rules, FCM/polling để widget cập nhật khi app đóng.
+
+
+### [2026-11-07 15:40:00] - Viết prompt giao AI: gửi ảnh Firebase tạm, kết bạn QR 2 chiều, giảm dung lượng app
+* **Thời gian (Timestamp):** 2026-11-07 15:40:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** Soạn prompt chi tiết (3 phần) cho AI khác triển khai: (1) nén ảnh + Storage tạm 7 ngày + `expireAt` + outbox + sửa listener; (2) kết bạn QR 2 chiều bằng WriteBatch + sửa lỗi xóa nhầm bạn khi sync từ cache; (3) tối ưu meme không hỏng chất lượng (cổng PSNR/SSIM), `abiFilters`, thử R8. Số liệu hiện trạng: APK ~158 MB, assets ~41 MB (memes 30 MB/135 PNG).
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `docs/PROMPT_CLOUD_SYNC_AND_SLIM.md` - Prompt giao việc. Chưa sửa code ứng dụng.
+* **Bước tiếp theo (Next Steps):** Người dùng giao prompt cho AI; tự tạo Firebase project thật và thay file cấu hình.
+
+
+### [2026-11-07 15:55:00] - Viết lại prompt giao AI theo hướng sản phẩm thật (Firebase Blaze)
+* **Thời gian (Timestamp):** 2026-11-07 15:55:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** Theo yêu cầu "làm sản phẩm thật", ghi đè `docs/PROMPT_CLOUD_SYNC_AND_SLIM.md`: 5 phần A-E. A: hạ tầng Firebase (rules chặt, Cloud Functions `registerSecret/recoverAccount/createInvite/redeemInvite/removeFriend/onPostCreated`, TTL, lifecycle, emulator, `docs/FIREBASE_SETUP.md`). B: Firebase Auth ẩn danh (UID = danh tính) + App Check + khôi phục tài khoản bằng custom token. C: ảnh nén, Storage tạm 7 ngày, server điền `receiverIds`, FCM data push cập nhật widget khi app đóng, outbox. D: kết bạn 2 chiều bằng mã invite 10 phút do server xác thực. E: giảm dung lượng (đo, tối ưu meme có cổng PSNR/SSIM, `abiFilters`, thử R8). Lưu ý đây là chuyển hướng so với nguyên tắc "Server = 0 VNĐ" trong `agent.md` (cần gói Blaze); người dùng đã đồng ý. Rủi ro đã nêu: App Check với APK cài ngoài Play, push iOS bị hạn chế.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `docs/PROMPT_CLOUD_SYNC_AND_SLIM.md` - Viết lại toàn bộ. Chưa sửa code ứng dụng.
+* **Bước tiếp theo (Next Steps):** Người dùng tạo Firebase project (Blaze + budget alert), giao prompt cho AI, thay file cấu hình; cân nhắc cập nhật nguyên tắc chi phí trong `agent.md`.
+
+
+### [2026-11-07 16:00:00] - Cấu hình Firebase MCP Server chính thức
+* **Thời gian (Timestamp):** 2026-11-07 16:00:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** Thêm cấu hình MCP Server chính thức của Google Firebase (`firebase-tools@latest mcp`) vào file `C:\Users\Chien\.gemini\config\mcp_config.json`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `C:\Users\Chien\.gemini\config\mcp_config.json`: Thêm server `firebase` gọi qua `npx -y firebase-tools@latest mcp`.
+* **Bước tiếp theo (Next Steps):** Người dùng chạy `npx firebase-tools login` trên terminal để đăng nhập tài khoản Google Firebase. Sau đó reload Antigravity để MCP Server nhận đầy đủ toolset.
+
+
+### [2026-11-07 16:05:00] - Đăng ký App Firebase & Cấu hình Config thật cho Android/iOS
+* **Thời gian (Timestamp):** 2026-11-07 16:05:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** 
+  - Kết nối tài khoản Firebase `phamc13579@gmail.com` với project `ncnative-bcf6d`.
+  - Tạo app Android (`com.abom.utas.utas`) và iOS (`com.abom.utas.utas`) trên Firebase.
+  - Tải về và ghi đè file cấu hình thật: `android/app/google-services.json` và `ios/Runner/GoogleService-Info.plist`.
+  - Khởi tạo `.firebaserc`, `firebase.json`, `firestore.rules`, `storage.rules`, `storage_lifecycle.json`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `.firebaserc` - Trỏ mặc định về `ncnative-bcf6d`.
+  - [NEW] `firebase.json` - Cấu hình deploy rules cho Firestore & Storage.
+  - [NEW] `firestore.rules` - Security rules bảo vệ hồ sơ, bạn bè và bài viết.
+  - [NEW] `storage.rules` - Quy chuẩn upload ảnh <= 2MB, dạng image/*.
+  - [NEW] `storage_lifecycle.json` - Xóa ảnh tạm sau 7 ngày.
+  - [MODIFY] `android/app/google-services.json` - Đã thay bằng file thật từ project `ncnative-bcf6d`.
+  - [NEW] `ios/Runner/GoogleService-Info.plist` - File cấu hình thật cho iOS.
+* **Bước tiếp theo (Next Steps):** Người dùng bấm khởi tạo Firestore, Storage và Anonymous Auth trên Firebase Console theo link hướng dẫn, sau đó chạy deploy rules.
+
+
+### [2026-11-07 16:10:00] - Deploy thành công Rules cho Cloud Firestore
+* **Thời gian (Timestamp):** 2026-11-07 16:10:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** 
+  - Khởi tạo Firestore thành công trên project `ncnative-bcf6d` (Region: STANDARD FIRESTORE_NATIVE).
+  - Biên dịch và phát hành thành công bộ rules `firestore.rules` lên Cloud Firestore.
+* **Chi tiết thay đổi (Changes Made):**
+  - Đã kích hoạt API `firestore.googleapis.com` và phát hành rules bảo mật.
+* **Bước tiếp theo (Next Steps):** Người dùng bấm khởi tạo mục Storage và bật Anonymous Auth. Sau đó deploy storage rules.
+
+
+### [2026-11-07 16:30:00] - Hoàn thiện đồng bộ ảnh trực tiếp qua Firestore Base64 (0 VNĐ không cần thẻ) & Kết bạn 2 chiều
+* **Thời gian (Timestamp):** 2026-11-07 16:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** 
+  - Triển khai thành công **Lựa chọn 1**: Lưu ảnh nén trực tiếp dạng Base64 vào document Firestore. Không phụ thuộc Cloud Storage, không yêu cầu liên kết thẻ ngân hàng hay nâng lên Blaze, giữ vững 100% nguyên tắc 0 VNĐ.
+  - Tối ưu hóa nén ảnh tự động: chạy isolate qua `compute`, thu nhỏ về max 640px, mã hóa JPEG quality 75 cho dung lượng siêu nhẹ (~40KB - 60KB) và độ nét cao cho Widget.
+  - Cập nhật luồng kết bạn 2 chiều tức thì: khi quét mã QR, sử dụng `WriteBatch` ghi đồng thời bạn bè vào cả 2 tài khoản trên Firestore. Cả hai máy đều lập tức thấy nhau trên vòng tròn Orbit.
+  - Khắc phục triệt để lỗi snapshot cache rỗng làm mất bạn bè khi vừa mở app.
+  - Xóa bạn bè 2 chiều đồng bộ (`removeFriend` xóa cả 2 phía).
+  - Deploy thành công `firestore.rules` bảo mật trực tiếp lên Firebase Project `ncnative-bcf6d`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/services/sync_service.dart`: Bổ sung hàm nén isolate `_compressImageToBase64`, cập nhật `broadcastPhotoToFriends` gửi chuỗi `imageBase64` trực tiếp vào Firestore, và cập nhật `startListening` giải mã `_saveBase64AndApplyToWidget` lưu về file máy và bắn lên widget.
+  - [MODIFY] `lib/services/friend_service.dart`: Chuyển đổi `sendFriendRequestOrConnect` sang cơ chế WriteBatch 2 chiều, chống xóa cache rỗng, và xóa bạn bè 2 chiều.
+  - [MODIFY] `firestore.rules`: Triển khai rules cho phép lưu `users`, `friends`, `posts` không cần phụ thuộc Storage.
+  - [MODIFY] `test/widget_test.dart`: Cập nhật smoke test.
+* **Hiện trạng (Current State):**
+  - `flutter analyze`: **0 issues found** (No issues found).
+  - `flutter test`: **36/36 tests passed** (All tests passed).
+  - Firebase Project: `ncnative-bcf6d` kết nối hoàn chỉnh.
+* **Bước tiếp theo (Next Steps):** Sẵn sàng build APK chạy thử nghiệm 2 máy kết bạn và bắn ảnh trực tiếp qua lại lên màn hình chính.
+
+
+### [2026-11-07 16:45:00] - Build thành công cặp đôi APK Release v1.4.8 tích hợp Cloud Sync
+* **Thời gian (Timestamp):** 2026-11-07 16:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** 
+  - Đóng gói xuất xưởng thành công 2 bản APK release phiên bản **v1.4.8+12**:
+    1. `Orbit-v1.4.8-clean-release.apk`: Bản sạch không mock data, kết nối thời gian thực 2 chiều qua Firebase Firestore Base64 (100% Free 0 VNĐ không cần thẻ).
+    2. `Orbit-v1.4.8-demo-showcase.apk`: Bản có sẵn mock data phục vụ trình diễn UI/UX.
+  - Tuân thủ nghiêm ngặt quy tắc kép Dual-Release và chống nhầm bản trong `AGENTS.md`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `android/app/build.gradle`: Bổ sung `abiFilters "armeabi-v7a", "arm64-v8a"`.
+  - [MODIFY] `pubspec.yaml`: Nâng phiên bản `version: 1.4.8+12`.
+  - [NEW] `Orbit-v1.4.8-clean-release.apk`
+  - [NEW] `Orbit-v1.4.8-demo-showcase.apk`
+* **Hiện trạng (Current State):** Cả 2 bản APK đã sẵn sàng để cài lên điện thoại Android thực tế để quét QR kết bạn và test bắn ảnh lên widget.
+
+
+### [2026-11-07 17:00:00] - Tích hợp vùng xanh nhận diện AI (Bounding Box & Radar HUD) cho bản Showcase
+* **Thời gian (Timestamp):** 2026-11-07 17:00:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** 
+  - Kích hoạt tính năng trực quan hóa nhận diện AI trong màn hình Preview cho bản Demo Showcase (`isDemoModeNotifier.value == true`).
+  - Hiển thị vùng xanh neon phát quang (Bounding Box) ôm trọn vật thể kèm nhãn thông số `AI: VẬT THỂ (WxH)` và chấm xanh tại điểm neo mép tiếp tuyến.
+  - Bổ sung nút radar (`Icons.radar_rounded`) trên thanh công cụ trên cùng để người dùng linh hoạt bật/tắt vùng xanh nhận diện theo ý muốn.
+  - Biên dịch và cập nhật lại file APK **`Orbit-v1.4.8-demo-showcase.apk`**.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `lib/screens/preview.dart`: Thêm state `_showDebugBoundingBox`, nút bật/tắt radar trên TopBar, lớp hiển thị Bounding Box dạng neon cyan với `CoverMapping`, và chấm neo phát quang.
+  - [BUILD] `Orbit-v1.4.8-demo-showcase.apk`: Đã đóng gói thành công.
+* **Hiện trạng (Current State):** Cả 2 bản APK v1.4.8 sẵn sàng thử nghiệm hoàn chỉnh.

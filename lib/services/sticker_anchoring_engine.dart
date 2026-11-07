@@ -178,64 +178,57 @@ class StickerAnchoringEngine {
   }) {
     final rand = math.Random();
 
-    if (category == StickerCategory.scene) {
-      // KHÔNG CÓ VẬT THỂ RÕ RÀNG -> Chụp phong cảnh thư giãn -> Capybara chill ngâm bồn, đội cam
-      final path = capybaraMemes[rand.nextInt(capybaraMemes.length)];
-      return StickerMetadata(
-        id: 'scene_capybara',
-        assetPath: path,
-        category: StickerCategory.scene,
-        preference: AnchorPreference.bottomScene,
-        bitePoint: const ui.Offset(0.5, 1.0),
-        biteDirection: BiteMeta.defaultDir,
-        widthFactor: 0.30,
-      );
-    }
-
-    // Nếu pool meme "cắn" có ≥ 1 ảnh: mọi category có vật thể rõ ràng (kể cả beverage)
-    // đều chọn ngẫu nhiên từ pool bite và neo cắn mép (`topEdge`).
-    if (bitePool.isNotEmpty) {
-      final path = bitePool[rand.nextInt(bitePool.length)];
-      final meta = BiteMeta.lookup(biteMetaMap, path);
-      return StickerMetadata(
-        id: 'bite_${category.name}',
-        assetPath: path,
-        category: category,
-        preference: AnchorPreference.topEdge,
-        bitePoint: meta.bite,
-        biteDirection: meta.dir,
-        widthFactor: meta.width,
-      );
-    }
-
-    // Fallback khi thư mục `assets/memes/bite/` chưa có ảnh PNG: giữ hành vi cũ,
-    // nhưng đọc `bitePoint`, `biteDirection`, `width` qua `BiteMeta` thay vì hằng cứng.
-    StickerMetadata fromLegacyPool(String id, List<String> pool) {
+    // Helper: Lấy meme từ kho 115 meme phong phú (Cat, Capybara, React)
+    StickerMetadata fromLegacyPool(
+      String id,
+      List<String> pool, {
+      AnchorPreference pref = AnchorPreference.topEdge,
+      Offset bite = const Offset(0.5, 0.85),
+    }) {
       final path = pool[rand.nextInt(pool.length)];
       final meta = BiteMeta.lookup(biteMetaMap, path);
       return StickerMetadata(
         id: id,
         assetPath: path,
         category: category,
-        preference: AnchorPreference.topEdge,
-        bitePoint: meta.bite,
+        preference: pref,
+        bitePoint: meta != BiteMeta.fallback ? meta.bite : bite,
         biteDirection: meta.dir,
         widthFactor: meta.width,
       );
     }
 
+    // Helper: Lấy meme từ pool bite (chỉ áp dụng cho food, beverage, person)
+    StickerMetadata fromBitePool(String id) {
+      if (bitePool.isNotEmpty) {
+        final path = bitePool[rand.nextInt(bitePool.length)];
+        final meta = BiteMeta.lookup(biteMetaMap, path);
+        return StickerMetadata(
+          id: id,
+          assetPath: path,
+          category: category,
+          preference: AnchorPreference.topEdge,
+          bitePoint: meta.bite,
+          biteDirection: meta.dir,
+          widthFactor: meta.width,
+        );
+      }
+      return fromLegacyPool(id, [...funnyMemes, ...catMemes]);
+    }
+
     switch (category) {
-      case StickerCategory.animal:
-        // Động vật, thú cưng, chó mèo -> Chọn từ kho 29 meme mèo bựa & cute
-        return fromLegacyPool('animal_cat', catMemes);
-      case StickerCategory.person:
-        // Con người, khuôn mặt, selfie -> Chọn từ kho 64 meme biểu cảm hài hước
-        return fromLegacyPool('person_funny', funnyMemes);
       case StickerCategory.food:
-        // Đồ ăn -> Chọn từ các meme thèm ăn, há miệng háo hức trong funnyMemes & catMemes
-        return fromLegacyPool('food_meme', [...funnyMemes, ...catMemes]);
+        // Đồ ăn (bánh ngọt, đồ ăn vặt, mì...) -> Meme cắn mép đồ ăn khi có pool bite
+        if (bitePool.isNotEmpty) {
+          return fromBitePool('food_bite');
+        }
+        return fromLegacyPool('food_meme', funnyMemes, pref: AnchorPreference.center);
+
       case StickerCategory.beverage:
-        // Đồ uống (chỉ dùng `hug` khi pool bite rỗng)
+        // Đồ uống (ly trà sữa, cốc nước, tách cafe...) -> Meme cắn miệng ly khi có pool bite, rỗng -> hug
+        if (bitePool.isNotEmpty) {
+          return fromBitePool('drink_bite');
+        }
         final drinkPool = [...funnyMemes, ...catMemes];
         final path = drinkPool[rand.nextInt(drinkPool.length)];
         return StickerMetadata(
@@ -247,16 +240,35 @@ class StickerAnchoringEngine {
           biteDirection: BiteMeta.defaultDir,
           widthFactor: StickerPlacementSolver.hugWidthFactor,
         );
+
+      case StickerCategory.person:
+        // Con người, selfie, chân dung -> Cắn selfie vui nhộn khi có pool bite
+        if (bitePool.isNotEmpty) {
+          return fromBitePool('selfie_bite');
+        }
+        return fromLegacyPool('person_funny', funnyMemes, pref: AnchorPreference.center);
+
+      case StickerCategory.animal:
+        // Thú cưng, chó mèo -> Chọn từ kho 29 meme mèo bựa & cute (TUYỆT ĐỐI không cắn, ôm nhẹ giữa vật thể)
+        return fromLegacyPool('animal_cat', catMemes, pref: AnchorPreference.center);
+
       case StickerCategory.electronics:
-        // Công nghệ, laptop, máy tính, điện thoại -> Meme mèo gõ phím, công nghệ
-        return fromLegacyPool('tech_cat', catMemes);
+        // Công nghệ, laptop, máy tính, điện thoại -> Meme mèo gõ phím / tech, ôm giữa vật thể
+        return fromLegacyPool('tech_cat', catMemes, pref: AnchorPreference.center);
+
       case StickerCategory.general:
-        // CÓ VẬT THỂ RÕ RÀNG NHƯNG LÀ ĐỒ VẬT KHÁC (móc khóa, bàn làm việc, đồ chơi, sách vở...)
-        // -> Chọn ngẫu nhiên phong phú từ toàn bộ 115 meme (Mèo, Capybara, Reaction)
-        return fromLegacyPool('general_meme', allMemes);
+        // Đồ vật thông thường (bàn, ghế, giá đỡ, móc khóa, đồ chơi, sách vở...)
+        // -> Chọn ngẫu nhiên phong phú từ toàn bộ 115 meme (Mèo, Capybara, Reaction), ôm giữa hoặc đặt cạnh, KHÔNG cắn mép
+        return fromLegacyPool('general_meme', allMemes, pref: AnchorPreference.center);
+
       case StickerCategory.scene:
-        // Đã xử lý ở trên
-        return fromLegacyPool('scene_capybara', capybaraMemes);
+        // Không có vật thể rõ ràng (chụp cảnh) -> Capybara chill ngâm bồn, đội cam ở đáy
+        return fromLegacyPool(
+          'scene_capybara',
+          capybaraMemes,
+          pref: AnchorPreference.bottomScene,
+          bite: const Offset(0.5, 1.0),
+        );
     }
   }
 

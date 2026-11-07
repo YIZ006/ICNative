@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "123456789012",
-    "project_id": "iconnative-offline",
-    "storage_bucket": "iconnative-offline.appspot.com"
+    "project_number": "557846425032",
+    "project_id": "ncnative-bcf6d",
+    "storage_bucket": "ncnative-bcf6d.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+        "mobilesdk_app_id": "1:557846425032:android:beff31ea5c354cf40de4fd",
         "android_client_info": {
           "package_name": "com.abom.utas.utas"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "dummy_offline_key_replace_with_real_one"
+          "current_key": "AIzaSyCm29p10GBhnIE4wqIJVEakNDva8FdMcaY"
         }
       ],
       "services": {

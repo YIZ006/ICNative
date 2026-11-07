@@ -647,6 +647,28 @@ void main() {
       );
       expect(scene.anchorMode, AnchorMode.scene);
 
+      // Đồ vật khác (bàn ghế, đồ dùng...), điện tử và động vật TUYỆT ĐỐI không cắn bừa
+      final general = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.general,
+        bitePool: pool,
+        biteMetaMap: metaMap,
+      );
+      expect(general.assetPath.startsWith('assets/memes/bite/'), isFalse);
+
+      final electronics = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.electronics,
+        bitePool: pool,
+        biteMetaMap: metaMap,
+      );
+      expect(electronics.assetPath.startsWith('assets/memes/bite/'), isFalse);
+
+      final animal = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.animal,
+        bitePool: pool,
+        biteMetaMap: metaMap,
+      );
+      expect(animal.assetPath.startsWith('assets/memes/bite/'), isFalse);
+
       // Khi pool bite rỗng: fallback về hành vi cũ, không lỗi
       final drinkFallback = StickerAnchoringEngine.pickStickerForCategory(
         StickerCategory.beverage,

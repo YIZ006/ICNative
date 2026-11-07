@@ -134,7 +134,7 @@ class FriendService {
     final myUid = AuthService.instance.currentUser?.uid;
     if (myUid == null || !AuthService.isCloudConfigured) return;
 
-    // 1. Lắng nghe danh sách bạn bè 2 chiều (Khi đối phương chấp nhận, bạn bè tự động xuất hiện trên vòng tròn)
+    // 1. Lắng nghe danh sách bạn bè 2 chiều (Khi đối phương chấp nhận hoặc kết nối qua QR, bạn bè tự động xuất hiện trên vòng tròn)
     _friendsRealtimeSub?.cancel();
     _friendsRealtimeSub = FirebaseFirestore.instance
         .collection('users')
@@ -143,6 +143,12 @@ class FriendService {
         .snapshots()
         .listen(
       (snapshot) async {
+        // Tránh lỗi xóa nhầm bạn bè khi cache cục bộ vừa mở chưa kịp load từ cloud
+        if (snapshot.metadata.isFromCache && snapshot.docs.isEmpty && _friends.isNotEmpty) {
+          debugPrint('Skipping empty cache snapshot for friends');
+          return;
+        }
+
         final List<Friend> updated = [];
         for (var doc in snapshot.docs) {
           updated.add(Friend.fromMap(doc.data()));
@@ -240,45 +246,46 @@ class FriendService {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
-      // 2. Kiểm tra xem người kia đã từng gửi lời mời cho mình chưa (timeout 3 giây để không treo UI)
-      final reverseDoc = await firestore
-          .collection('friend_requests')
-          .doc('${friendUid}_${myProfile.uid}')
-          .get()
-          .timeout(const Duration(seconds: 3));
+      // 2. Kết nối trực tiếp 2 chiều trên Cloud Firestore (WriteBatch)
+      // Khi A quét mã QR của B, lập tức cả 2 trở thành bạn bè trên vòng tròn Orbit của nhau
+      final batch = firestore.batch();
 
-      if (reverseDoc.exists) {
-        final data = reverseDoc.data()!;
-        if (data['status'] == 'pending') {
-          // Người kia đã gửi lời mời -> Chấp nhận ngay lập tức! Cả hai trở thành bạn bè!
-          final request = FriendRequest.fromMap(data, reverseDoc.id);
-          await acceptFriendRequest(request);
-          return FriendAddResult.acceptedImmediately;
-        }
+      // Thêm B vào danh sách bạn bè của A
+      batch.set(
+        firestore.collection('users').doc(myProfile.uid).collection('friends').doc(friendUid),
+        {
+          'uid': friendUid,
+          'displayName': friendName,
+          'addedAt': now,
+        },
+        SetOptions(merge: true),
+      );
+
+      // Thêm A vào danh sách bạn bè của B
+      batch.set(
+        firestore.collection('users').doc(friendUid).collection('friends').doc(myProfile.uid),
+        {
+          'uid': myProfile.uid,
+          'displayName': myProfile.displayName,
+          'addedAt': now,
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit().timeout(const Duration(seconds: 4));
+
+      // Cập nhật trạng thái cục bộ để UI phản hồi tức thì
+      final friendObj = Friend(uid: friendUid, displayName: friendName, addedAt: now);
+      if (!_friends.any((f) => f.uid == friendUid)) {
+        _friends.add(friendObj);
+        friendsCountNotifier.value = _friends.length;
+        await _saveToCache();
       }
 
-      // 3. Gửi lời mời kết bạn mới đến người kia (timeout 3 giây)
-      final requestId = '${myProfile.uid}_$friendUid';
-      final requestData = {
-        'id': requestId,
-        'fromUid': myProfile.uid,
-        'fromName': myProfile.displayName,
-        'toUid': friendUid,
-        'toName': friendName,
-        'status': 'pending',
-        'createdAt': now,
-      };
-
-      await firestore
-          .collection('friend_requests')
-          .doc(requestId)
-          .set(requestData, SetOptions(merge: true))
-          .timeout(const Duration(seconds: 3));
-
-      debugPrint('🚀 Sent friend request to $friendName ($friendUid)');
-      return FriendAddResult.requestSent;
+      debugPrint('🤝 Mutual 2-way friend connection established directly with $friendName ($friendUid)!');
+      return FriendAddResult.acceptedImmediately;
     } catch (e) {
-      debugPrint('Firestore friend request error: $e. Gracefully falling back to local connection.');
+      debugPrint('Firestore mutual friend request error: $e. Gracefully falling back to local connection.');
       // Resilient Fallback: Quét mã QR trực tiếp là hành động có chủ đích ở cự ly gần -> luôn kết nối thành công!
       return await connectDirectlyOffline();
     }
@@ -390,7 +397,7 @@ class FriendService {
     }
   }
 
-  /// Xóa bạn bè
+  /// Xóa bạn bè (xóa 2 chiều trên Cloud Firestore)
   Future<void> removeFriend(String friendUid) async {
     _friends.removeWhere((f) => f.uid == friendUid);
     friendsCountNotifier.value = _friends.length;
@@ -399,13 +406,11 @@ class FriendService {
     final myUid = AuthService.instance.currentUser?.uid;
     if (myUid != null && AuthService.isCloudConfigured) {
       try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(myUid)
-            .collection('friends')
-            .doc(friendUid)
-            .delete()
-            .timeout(const Duration(seconds: 3));
+        final batch = FirebaseFirestore.instance.batch();
+        batch.delete(FirebaseFirestore.instance.collection('users').doc(myUid).collection('friends').doc(friendUid));
+        batch.delete(FirebaseFirestore.instance.collection('users').doc(friendUid).collection('friends').doc(myUid));
+        await batch.commit().timeout(const Duration(seconds: 3));
+        debugPrint('🗑️ Removed mutual friend connection with $friendUid');
       } catch (e) {
         debugPrint('Error removing friend: $e');
       }

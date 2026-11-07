@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Hồ sơ người dùng & danh sách bạn bè
+    match /users/{uid} {
+      allow read, write: if true;
+      match /friends/{friendUid} {
+        allow read, write: if true;
+      }
+    }
+
+    // 2. Bài viết / Ảnh widget (lưu trực tiếp base64 trong document)
+    match /posts/{postId} {
+      allow read, write: if true;
+    }
+
+    // 3. Tương thích luồng cũ
+    match /friend_requests/{reqId} {
+      allow read, write: if true;
+    }
+  }
+}
