@@ -190,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
+    SyncService.friendPhotosChangeNotifier.addListener(_onFriendPhotosChanged);
 
     if (_isDemoMode) {
       _startDemoReactions();
@@ -349,6 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
+    SyncService.friendPhotosChangeNotifier.removeListener(_onFriendPhotosChanged);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
     _demoReactionTimer?.cancel();
     _orbitTicker.dispose();
@@ -361,6 +363,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   }
 
   void _onFriendsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onFriendPhotosChanged() {
     if (mounted) setState(() {});
   }
 
@@ -1153,33 +1159,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     if (_isDemoMode) {
       // BẢN TRẢI NGHIỆM (DEMO SHOWCASE): Hiển thị bạn bè mẫu phân tầng rõ nét
       final demoFriends = DemoDataService.instance.demoFriends;
+      final realFriends = FriendService.instance.friends;
 
-      // Tầng 1 (Cận tâm - 3 bạn thân nhất tương tác 24h-48h): Viền vàng hào quang phát sáng
-      for (final f in demoFriends.where((d) => d.tier == 1)) {
+      if (realFriends.isNotEmpty) {
+        // ĐÃ KẾT BẠN THẬT: Ưu tiên đưa toàn bộ bạn bè thật lên Tầng 1 (Cận tâm) có hào quang viền vàng
+        for (final f in realFriends) {
+          final initial = f.displayName.isNotEmpty ? f.displayName.substring(0, 1).toUpperCase() : '?';
+          innerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: initial,
+            hasGlow: true,
+            color: OrbitColors.buttonPrimary,
+          ));
+        }
+
         innerSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: f.initial,
-          hasGlow: true,
-          color: f.avatarColor,
+          id: 'add_friend',
+          name: 'Thêm',
+          initial: '+',
+          isAddButton: true,
         ));
-      }
-      innerSatellites.add(_SatelliteItem(
-        id: 'add_friend',
-        name: 'Thêm',
-        initial: '+',
-        isAddButton: true,
-      ));
 
-      // Tầng 2 & 3 (Tầm trung & Xa): Vòng ngoài
-      for (final f in demoFriends.where((d) => d.tier > 1)) {
-        outerSatellites.add(_SatelliteItem(
-          id: f.uid,
-          name: f.displayName,
-          initial: f.initial,
-          hasGlow: false,
-          color: f.avatarColor,
+        // Các slot còn lại ở vòng ngoài lấp đầy bằng bạn bè mẫu demo để giữ không gian sinh động
+        for (final f in demoFriends) {
+          if (outerSatellites.length >= 6) break;
+          outerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: f.initial,
+            hasGlow: false,
+            color: f.avatarColor,
+          ));
+        }
+      } else {
+        // Chưa có bạn thật: Hiển thị full demo 8 bạn như cũ
+        // Tầng 1 (Cận tâm - 3 bạn thân nhất tương tác 24h-48h): Viền vàng hào quang phát sáng
+        for (final f in demoFriends.where((d) => d.tier == 1)) {
+          innerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: f.initial,
+            hasGlow: true,
+            color: f.avatarColor,
+          ));
+        }
+        innerSatellites.add(_SatelliteItem(
+          id: 'add_friend',
+          name: 'Thêm',
+          initial: '+',
+          isAddButton: true,
         ));
+
+        // Tầng 2 & 3 (Tầm trung & Xa): Vòng ngoài
+        for (final f in demoFriends.where((d) => d.tier > 1)) {
+          outerSatellites.add(_SatelliteItem(
+            id: f.uid,
+            name: f.displayName,
+            initial: f.initial,
+            hasGlow: false,
+            color: f.avatarColor,
+          ));
+        }
       }
     } else {
       // BẢN CHUẨN SẠCH (CLEAN RELEASE): Chỉ hiển thị bạn bè thật của người dùng
@@ -1828,15 +1869,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                   ),
                 ],
               ),
-              child: Center(
-                child: Text(
-                  item.initial,
-                  style: TextStyle(
-                    color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
-                    fontWeight: FontWeight.bold,
-                    fontSize: item.isAddButton ? 22.0 : 16.0,
-                  ),
-                ),
+              child: ClipOval(
+                child: hasFriendPhoto
+                    ? Image.file(
+                        File(friendPhoto),
+                        width: avatarSize,
+                        height: avatarSize,
+                        fit: BoxFit.cover,
+                      )
+                    : Center(
+                        child: Text(
+                          item.initial,
+                          style: TextStyle(
+                            color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
+                            fontWeight: FontWeight.bold,
+                            fontSize: item.isAddButton ? 22.0 : 16.0,
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),

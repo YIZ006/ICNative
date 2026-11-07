@@ -42,25 +42,27 @@ Future<void> _warmupBackgroundServices() async {
     debugPrint('Running in 100% Offline Mode: $e');
   }
 
-  // C. Khởi tạo Auth, Friend, Soulmate & SecretPhoto cache
+  // C. Khởi tạo Auth trước để đảm bảo có danh tính người dùng và UID hợp lệ
+  await AuthService.instance.init();
+
+  // D. Khởi tạo Friend, Soulmate, SecretPhoto & SyncService
   await Future.wait([
-    AuthService.instance.init(),
     FriendService.instance.init(),
     SoulmateService.instance.init(),
     SecretPhotoService.instance.init(),
   ]);
 
-  // D. Khởi tạo Widget Sync Service
+  // E. Khởi tạo Widget Sync Service và kích hoạt lắng nghe ảnh bạn bè
   try {
     await SyncService.instance.init();
   } catch (e) {
     debugPrint('SyncService warmup error: $e');
   }
 
-  // E. Tải ảnh lịch sử
+  // F. Tải ảnh lịch sử
   await _loadSavedImages();
 
-  // F. Khởi tạo kho meme & sticker engine đầy đủ
+  // G. Khởi tạo kho meme & sticker engine đầy đủ
   try {
     await CustomStickerService.instance.initialize();
   } catch (e) {

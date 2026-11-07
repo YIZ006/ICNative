@@ -1390,13 +1390,37 @@ class _ImagePreviewState extends State<ImagePreview> {
                               await HomeWidget.saveWidgetData<String>('widget_sender_name', myName);
                               await SyncService.updateAllHomeWidgets();
 
-                              SyncService.instance.broadcastPhotoToFriends(
+                              // Gửi ảnh đồng bộ lên đám mây 0 VNĐ cho toàn bộ bạn bè
+                              final bool sentCloud = await SyncService.instance.broadcastPhotoToFriends(
                                 localImagePath: savedImage.path,
                                 caption: _captionController.text,
                               );
 
                               widget.onSend();
                               if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: [
+                                        Icon(
+                                          sentCloud ? Icons.cloud_done_rounded : Icons.check_circle_rounded,
+                                          color: const Color(0xFFFFD54F),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            sentCloud
+                                                ? 'Đã gửi ảnh lên Widget của bạn bè thành công! 🚀'
+                                                : 'Đã lưu ảnh và ghim lên Widget trên máy! 📸',
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    backgroundColor: OrbitColors.deepOlive,
+                                    duration: const Duration(seconds: 3),
+                                  ),
+                                );
                                 Navigator.pop(context);
                               }
                             } catch (e) {

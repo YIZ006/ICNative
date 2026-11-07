@@ -20,6 +20,7 @@ class SyncService {
   StreamSubscription<QuerySnapshot>? _postSubscription;
   final Set<String> _processedPostIds = {};
   static const _prefProcessedPostsKey = 'iconnative_processed_posts';
+  static const _prefFriendLatestPhotosKey = 'iconnative_friend_latest_photos';
 
   /// Thông báo ảnh mới nhận từ bạn bè để HomeScreen hiển thị banner / toast tức thì
   final ValueNotifier<Map<String, dynamic>?> latestReceivedPhotoNotifier =
@@ -34,6 +35,23 @@ class SyncService {
     final list = prefs.getStringList(_prefProcessedPostsKey) ?? [];
     _processedPostIds.addAll(list);
 
+    // Khôi phục bản đồ ảnh mới nhất của bạn bè từ bộ nhớ máy
+    final photosJson = prefs.getString(_prefFriendLatestPhotosKey);
+    if (photosJson != null && photosJson.isNotEmpty) {
+      try {
+        final Map<String, dynamic> decoded = jsonDecode(photosJson);
+        for (final entry in decoded.entries) {
+          final path = entry.value as String;
+          if (File(path).existsSync()) {
+            friendLatestPhotos[entry.key] = path;
+          }
+        }
+        friendPhotosChangeNotifier.value++;
+      } catch (e) {
+        debugPrint('Error restoring friendLatestPhotos: $e');
+      }
+    }
+
     if (Platform.isIOS) {
       try {
         await HomeWidget.setAppGroupId('group.com.abom.utas.utas');
@@ -47,34 +65,26 @@ class SyncService {
     }
   }
 
+  static Future<void> _saveFriendLatestPhotos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefFriendLatestPhotosKey, jsonEncode(friendLatestPhotos));
+    } catch (_) {}
+  }
+
   /// Nén ảnh về kích thước chuẩn sắc nét cho Widget (cạnh max 640px, JPEG q=75)
   /// và chuyển thành chuỗi Base64 nhẹ nhàng (~40KB - 70KB) để gửi qua Firestore (0 VNĐ, không cần Storage)
   static Future<String?> _compressImageToBase64(String localImagePath) async {
     try {
-      return await compute((String path) {
-        final file = File(path);
-        if (!file.existsSync()) return null;
-        final bytes = file.readAsBytesSync();
-        final decoded = img.decodeImage(bytes);
-        if (decoded == null) return null;
-
-        img.Image processed = decoded;
-        final maxDim = max(decoded.width, decoded.height);
-        if (maxDim > 640) {
-          if (decoded.width >= decoded.height) {
-            processed = img.copyResize(decoded, width: 640, interpolation: img.Interpolation.linear);
-          } else {
-            processed = img.copyResize(decoded, height: 640, interpolation: img.Interpolation.linear);
-          }
-        }
-
-        // Mã hóa JPEG quality 75 cho chất lượng ảnh rất nét nhưng dung lượng siêu nhẹ
-        final jpgBytes = img.encodeJpg(processed, quality: 75);
-        return base64Encode(jpgBytes);
-      }, localImagePath);
+      return await compute(_compressSyncWorker, localImagePath);
     } catch (e) {
-      debugPrint('Error compressing image to Base64: $e');
-      return null;
+      debugPrint('Worker compute error, falling back to direct compression: $e');
+      try {
+        return _compressSyncWorker(localImagePath);
+      } catch (err) {
+        debugPrint('Direct compression failed: $err');
+        return null;
+      }
     }
   }
 
@@ -84,7 +94,10 @@ class SyncService {
     required String caption,
   }) async {
     final myProfile = AuthService.instance.currentUser;
-    if (myProfile == null) return false;
+    if (myProfile == null) {
+      debugPrint('Broadcast Error: currentUser is null.');
+      return false;
+    }
 
     // If Firebase is not configured, we gracefully return false
     if (!AuthService.isCloudConfigured) {
@@ -94,7 +107,10 @@ class SyncService {
 
     try {
       final file = File(localImagePath);
-      if (!file.existsSync()) return false;
+      if (!file.existsSync()) {
+        debugPrint('Broadcast Error: local image not found: $localImagePath');
+        return false;
+      }
 
       final now = DateTime.now().millisecondsSinceEpoch;
       final postId = 'post_${myProfile.uid}_$now';
@@ -107,7 +123,11 @@ class SyncService {
       }
 
       // 2. Target audience = myself + all connected friends
-      final friendUids = FriendService.instance.getFriendUids();
+      var friendUids = FriendService.instance.getFriendUids();
+      if (friendUids.isEmpty) {
+        await FriendService.instance.syncFriendsFromFirestore();
+        friendUids = FriendService.instance.getFriendUids();
+      }
       final receiverIds = [myProfile.uid, ...friendUids];
 
       // 3. Save post record directly to Firestore (Spark Free 0 VNĐ)
@@ -121,7 +141,7 @@ class SyncService {
         'createdAt': now,
         'expireAt': now + (7 * 24 * 60 * 60 * 1000), // 7 days TTL
         'serverTimestamp': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 10));
 
       _processedPostIds.add(postId);
       _saveProcessedPostIds();
@@ -160,8 +180,21 @@ class SyncService {
           final imageBase64 = data['imageBase64'] as String? ?? '';
           final imageUrl = data['imageUrl'] as String? ?? '';
 
-          // Don't re-download my own posts or already processed posts
-          if (senderId == myProfile.uid || _processedPostIds.contains(postId)) {
+          // Don't re-download my own posts
+          if (senderId == myProfile.uid) {
+            continue;
+          }
+
+          // Khôi phục cache friendLatestPhotos nếu tệp ảnh đã tải về trước đó
+          final directory = await getApplicationDocumentsDirectory();
+          final localFile = File('${directory.path}/friend_widget_$postId.jpg');
+          if (localFile.existsSync() && (!friendLatestPhotos.containsKey(senderId) || friendLatestPhotos[senderId] != localFile.path)) {
+            friendLatestPhotos[senderId] = localFile.path;
+            await _saveFriendLatestPhotos();
+            friendPhotosChangeNotifier.value++;
+          }
+
+          if (_processedPostIds.contains(postId)) {
             continue;
           }
 
@@ -186,6 +219,64 @@ class SyncService {
     );
   }
 
+  /// Quét chủ động các bài viết mới khi mở bảng tin hoặc kéo làm mới
+  Future<void> syncNow() async {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null || !AuthService.isCloudConfigured) return;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('receiverIds', arrayContains: myProfile.uid)
+          .get()
+          .timeout(const Duration(seconds: 8));
+
+      final docs = snapshot.docs.toList()
+        ..sort((a, b) {
+          final aTime = (a.data()['createdAt'] as num?)?.toInt() ?? 0;
+          final bTime = (b.data()['createdAt'] as num?)?.toInt() ?? 0;
+          return bTime.compareTo(aTime);
+        });
+
+      for (var doc in docs) {
+        final data = doc.data();
+        final postId = data['id'] as String? ?? doc.id;
+        final senderId = data['senderId'] as String? ?? '';
+        final senderName = data['senderName'] as String? ?? 'Bạn bè';
+        final imageBase64 = data['imageBase64'] as String? ?? '';
+        final imageUrl = data['imageUrl'] as String? ?? '';
+
+        if (senderId == myProfile.uid) continue;
+
+        final directory = await getApplicationDocumentsDirectory();
+        final localFile = File('${directory.path}/friend_widget_$postId.jpg');
+        if (localFile.existsSync() && (!friendLatestPhotos.containsKey(senderId) || friendLatestPhotos[senderId] != localFile.path)) {
+          friendLatestPhotos[senderId] = localFile.path;
+          await _saveFriendLatestPhotos();
+          friendPhotosChangeNotifier.value++;
+        }
+
+        if (_processedPostIds.contains(postId)) continue;
+
+        if (imageBase64.isNotEmpty) {
+          final ok = await _saveBase64AndApplyToWidget(postId, imageBase64, senderId, senderName);
+          if (ok) {
+            _processedPostIds.add(postId);
+            _saveProcessedPostIds();
+          }
+        } else if (imageUrl.isNotEmpty) {
+          final ok = await _downloadAndApplyToWidget(postId, imageUrl, senderId, senderName);
+          if (ok) {
+            _processedPostIds.add(postId);
+            _saveProcessedPostIds();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('syncNow error: $e');
+    }
+  }
+
   /// Decode friend's Base64 photo and immediately update Home Widget & History
   Future<bool> _saveBase64AndApplyToWidget(
       String postId, String base64Data, String senderId, String senderName) async {
@@ -206,6 +297,7 @@ class SyncService {
       // 3. Cache latest photo for this friend
       if (senderId.isNotEmpty) {
         friendLatestPhotos[senderId] = localFile.path;
+        await _saveFriendLatestPhotos();
         friendPhotosChangeNotifier.value++;
       }
 
@@ -251,6 +343,7 @@ class SyncService {
         // 3. Cache latest photo for this friend
         if (senderId.isNotEmpty) {
           friendLatestPhotos[senderId] = localFile.path;
+          await _saveFriendLatestPhotos();
           friendPhotosChangeNotifier.value++;
         }
 
@@ -316,5 +409,32 @@ class SyncService {
 
   void dispose() {
     _postSubscription?.cancel();
+  }
+}
+
+/// Hàm top-level nén ảnh độc lập, an toàn tuyệt đối khi chạy trên background Isolate
+String? _compressSyncWorker(String path) {
+  try {
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    final bytes = file.readAsBytesSync();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return null;
+
+    img.Image processed = decoded;
+    final maxDim = max(decoded.width, decoded.height);
+    if (maxDim > 640) {
+      if (decoded.width >= decoded.height) {
+        processed = img.copyResize(decoded, width: 640, interpolation: img.Interpolation.linear);
+      } else {
+        processed = img.copyResize(decoded, height: 640, interpolation: img.Interpolation.linear);
+      }
+    }
+
+    final jpgBytes = img.encodeJpg(processed, quality: 75);
+    return base64Encode(jpgBytes);
+  } catch (e) {
+    debugPrint('_compressSyncWorker error: $e');
+    return null;
   }
 }

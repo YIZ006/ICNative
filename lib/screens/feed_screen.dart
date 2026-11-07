@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/auth_service.dart';
 import '../services/sync_service.dart';
 
@@ -33,11 +35,16 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
         final snapshot = await FirebaseFirestore.instance
             .collection('posts')
             .where('receiverIds', arrayContains: myProfile.uid)
-            .orderBy('createdAt', descending: true)
-            .limit(20)
+            .limit(40)
             .get();
 
-        _posts = snapshot.docs.map((doc) => doc.data()).toList();
+        final docs = snapshot.docs.map((doc) => doc.data()).toList();
+        docs.sort((a, b) {
+          final aTime = (a['createdAt'] as num?)?.toInt() ?? 0;
+          final bTime = (b['createdAt'] as num?)?.toInt() ?? 0;
+          return bTime.compareTo(aTime);
+        });
+        _posts = docs;
       } catch (e) {
         debugPrint('Error loading firestore feed: $e');
       }
@@ -78,35 +85,61 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
     }
   }
 
-  Future<void> _pinToHomeWidget(String? localPath, String? remoteUrl, String? senderName) async {
-    if (localPath != null && File(localPath).existsSync()) {
-      await HomeWidget.saveWidgetData<String>('widget_image_path', localPath);
-      await HomeWidget.saveWidgetData<String>('widget_sender_name', senderName ?? 'Bạn bè');
-      await SyncService.updateAllHomeWidgets();
+  Future<void> _pinToHomeWidget({
+    String? localPath,
+    String? imageBase64,
+    String? imageUrl,
+    String? senderName,
+    String? postId,
+  }) async {
+    try {
+      String? pathToSave = localPath;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: OrbitColors.buttonPrimary),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Đã ghim ảnh của "${senderName ?? "bạn bè"}" lên Widget!')),
-              ],
+      if ((pathToSave == null || !File(pathToSave).existsSync()) &&
+          imageBase64 != null &&
+          imageBase64.isNotEmpty) {
+        final bytes = base64Decode(imageBase64);
+        final directory = await getApplicationDocumentsDirectory();
+        final localFile = File(
+            '${directory.path}/friend_widget_${postId ?? DateTime.now().millisecondsSinceEpoch}.jpg');
+        await localFile.writeAsBytes(bytes);
+        pathToSave = localFile.path;
+      }
+
+      if (pathToSave != null && File(pathToSave).existsSync()) {
+        await HomeWidget.saveWidgetData<String>('widget_image_path', pathToSave);
+        await HomeWidget.saveWidgetData<String>(
+            'widget_sender_name', senderName ?? 'Bạn bè');
+        await SyncService.updateAllHomeWidgets();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Color(0xFFFFD54F)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(
+                          'Đã ghim ảnh của "${senderName ?? "bạn bè"}" lên Widget! ✨')),
+                ],
+              ),
+              backgroundColor: OrbitColors.deepOlive,
             ),
-            backgroundColor: OrbitColors.deepOlive,
-          ),
-        );
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không tìm thấy tệp ảnh để ghim!'),
+              backgroundColor: OrbitColors.deepOlive,
+            ),
+          );
+        }
       }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đang hiển thị trên widget!'),
-            backgroundColor: OrbitColors.deepOlive,
-          ),
-        );
-      }
+    } catch (e) {
+      debugPrint('Error pinning widget: $e');
     }
   }
 
@@ -240,9 +273,11 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
 
   Widget _buildOnlinePostCard(Map<String, dynamic> post) {
     final senderName = post['senderName'] as String? ?? 'Bạn bè';
+    final imageBase64 = post['imageBase64'] as String? ?? '';
     final imageUrl = post['imageUrl'] as String? ?? '';
     final caption = post['caption'] as String? ?? '';
     final createdAt = post['createdAt'] as int?;
+    final postId = post['id'] as String? ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -298,38 +333,54 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
                 IconButton(
                   icon: const Icon(Icons.widgets_outlined, color: OrbitColors.buttonPrimary),
                   tooltip: 'Ghim lên Home Widget',
-                  onPressed: () => _pinToHomeWidget(null, imageUrl, senderName),
+                  onPressed: () => _pinToHomeWidget(
+                    imageBase64: imageBase64,
+                    imageUrl: imageUrl,
+                    senderName: senderName,
+                    postId: postId,
+                  ),
                 ),
               ],
             ),
           ),
 
-          if (imageUrl.isNotEmpty)
+          if (imageBase64.isNotEmpty || imageUrl.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: AspectRatio(
                   aspectRatio: 1.0,
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (ctx, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        color: OrbitColors.surfaceCream,
-                        child: const Center(
-                          child: CircularProgressIndicator(color: OrbitColors.buttonPrimary),
+                  child: imageBase64.isNotEmpty
+                      ? Image.memory(
+                          base64Decode(imageBase64),
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => Container(
+                            color: OrbitColors.surfaceCream,
+                            child: const Center(
+                              child: Icon(Icons.broken_image_rounded, color: OrbitColors.buttonPrimary, size: 40),
+                            ),
+                          ),
+                        )
+                      : Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              color: OrbitColors.surfaceCream,
+                              child: const Center(
+                                child: CircularProgressIndicator(color: OrbitColors.buttonPrimary),
+                              ),
+                            );
+                          },
+                          errorBuilder: (ctx, err, stack) => Container(
+                            color: OrbitColors.surfaceCream,
+                            child: const Center(
+                              child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
+                            ),
+                          ),
                         ),
-                      );
-                    },
-                    errorBuilder: (ctx, err, stack) => Container(
-                      color: OrbitColors.surfaceCream,
-                      child: const Center(
-                        child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -421,7 +472,7 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
                 IconButton(
                   icon: const Icon(Icons.widgets_outlined, color: OrbitColors.buttonPrimary),
                   tooltip: 'Ghim lên Home Widget',
-                  onPressed: () => _pinToHomeWidget(filePath, null, 'Tôi'),
+                  onPressed: () => _pinToHomeWidget(localPath: filePath, senderName: 'Tôi'),
                 ),
               ],
             ),
