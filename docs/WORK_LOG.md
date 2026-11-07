@@ -5,6 +5,53 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 19:45:00] - Khắc Phục Lỗi Đồng Bộ Ảnh Bạn Bè, Hiển Thị Ảnh Bạn Bè Trên Vòng Tròn Orbit & Phát Hành Orbit v1.4.11 Dual-Release
+* **Thời gian (Timestamp):** 2026-11-07 19:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết dứt điểm câu hỏi và phản hồi của người dùng: *"Kết nối bạn bè thì ổn r vậy còn sao nó không nhận ảnh từ bạn bè vậy?"* cùng việc hoàn thiện trải nghiệm thị giác nhận ảnh:
+  1. **Nguyên nhân kỹ thuật được tìm ra qua phân tích luồng dữ liệu:**
+     - **Nguyên nhân 1 (Preview unmount sớm):** Trong `lib/screens/preview.dart`, lệnh gọi `SyncService.instance.broadcastPhotoToFriends()` trước đây không được `await`. Khi người dùng bấm nút *"GỬI LÊN WIDGET BẠN BÈ"*, `Navigator.pop(context)` lập tức đóng modal bottom sheet và giải phóng bộ nhớ trước khi tiến trình nén Base64 và tác vụ ghi document `posts` lên Cloud Firestore hoàn tất.
+     - **Nguyên nhân 2 (Isolate closure fallback):** Hàm nén ảnh `_compressImageToBase64` sử dụng anonymous lambda trong `compute()`. Khi chuyển sang release mode (AOT build), closure có nguy cơ gặp lỗi hoặc gián đoạn.
+     - **Nguyên nhân 3 (Danh sách bạn bè rỗng khi vừa kết nối):** `friendUids` lấy từ cache bộ nhớ có thể rỗng nếu người dùng vừa quét QR xong mà cache Firestore snapshot chưa kịp cập nhật, dẫn tới `receiverIds` chỉ chứa mỗi UID người gửi.
+     - **Nguyên nhân 4 (Avatar bạn bè trên Orbit không vẽ ảnh):** Tại `lib/screens/home.dart`, khi bạn bè gửi ảnh (`hasFriendPhoto == true`), quả cầu vệ tinh chỉ bật viền phát sáng màu vàng nhưng ruột bên trong vẫn chỉ hiển thị chữ cái ban đầu (`item.initial`). Người dùng không thấy ảnh đâu nếu không bấm vào avatar!
+     - **Nguyên nhân 5 (Dữ liệu Demo Showcase che khuất bạn bè thật):** Ở chế độ Demo Mode, hệ thống chỉ hiển thị cố định 8 bạn bè mẫu giả định mà không đưa các tài khoản bạn bè thật đã kết nối lên màn hình.
+     - **Nguyên nhân 6 (Lỗi Composite Index ở Bảng Tin Feed):** Trong `lib/screens/feed_screen.dart`, truy vấn `where('receiverIds', ...)` kèm `orderBy('createdAt', ...)` yêu cầu Composite Index trên Firestore Console, gây lỗi âm thầm làm bảng tin luôn rỗng. Đồng thời màn hình chỉ đọc `imageUrl` mà không render chuỗi `imageBase64` 0 VNĐ.
+  2. **Giải pháp & Khắc phục toàn diện:**
+     - **Luồng gửi ảnh an toàn (Broadcast Reliability):**
+       * Tách hàm `_compressSyncWorker` thành hàm top-level độc lập, bổ sung fallback nén đồng bộ trực tiếp nếu isolate gặp trục trặc.
+       * Tự động kiểm tra và đồng bộ danh sách bạn bè 2 chiều mới nhất từ Firestore (`syncFriendsFromFirestore()`) nếu `friendUids.isEmpty`, đảm bảo `receiverIds` luôn có đủ mọi bạn bè.
+       * `await` tường minh tiến trình phát tán ảnh trong `preview.dart`, hiển thị SnackBar thông báo gửi thành công và nút trạng thái xoay vòng khi đang xử lý.
+     - **Hiển thị trực tiếp ảnh bạn bè trên Vòng Tròn Orbit (`HomeScreen`):**
+       * Khi bạn bè gửi ảnh, avatar quả cầu vệ tinh lập tức hiển thị ảnh chụp thực tế của bạn bè được cắt tròn (`ClipOval`) với hiệu ứng hào quang viền vàng rực rỡ và huy hiệu camera. Chạm trực tiếp vào ảnh để mở modal phóng to xem trọn vẹn.
+       * Bổ sung lắng nghe `SyncService.friendPhotosChangeNotifier` trong `initState()` của `HomeScreen` để giao diện phản ứng thời gian thực ngay giây phút ảnh được tải về.
+       * Lưu trữ bản đồ ảnh bạn bè (`iconnative_friend_latest_photos`) vào `SharedPreferences`, khôi phục ngay lập tức khi mở lại ứng dụng.
+     - **Ưu tiên bạn bè thật trong Bản Trải Nghiệm (Demo Showcase):**
+       * Nếu người dùng đã kết bạn thật (`FriendService.friends.isNotEmpty`), hệ thống luôn ưu tiên đưa toàn bộ bạn bè thật lên Tầng 1 (Cận tâm - Inner Orbit) có phát sáng viền vàng, các vị trí vòng ngoài mới lấp đầy bằng bạn bè mẫu.
+     - **Nâng cấp Bảng Tin Bạn Bè (`FriendsFeedScreen`):**
+       * Bỏ `orderBy` trong query Firestore để tránh lỗi Composite Index; chuyển sang sắp xếp thời gian mượt mà trên client bằng Dart.
+       * Hỗ trợ render đầy đủ ảnh Base64 0 VNĐ (`Image.memory`) và ghim trực tiếp từ bảng tin ra Home Widget.
+     - **Hiệu chỉnh cắn mép góc Usagi (`bite_meta.json`):**
+       * Chỉnh toạ độ cắn của Usagi từ `[0.62, 0.55]` thành `[0.48, 0.52]` ăn sâu vào khoang miệng, giúp meme ngoạm ngập sâu và tự nhiên vào đỉnh đầu, sườn vai và góc vật thể.
+     - **Build & Xuất xưởng Dual-Release v1.4.11:**
+       * Đóng gói đủ 2 bản APK: `Orbit-v1.4.11-clean-release.apk` và `Orbit-v1.4.11-demo-showcase.apk` (169,220,957 bytes).
+       * Xuất bản chính thức lên GitHub Releases v1.4.11 tuân thủ chuẩn UTF-8.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/sync_service.dart`](../lib/services/sync_service.dart): Top-level worker nén ảnh, auto-sync bạn bè khi gửi, khôi phục và lưu trữ cache ảnh bạn bè vào SharedPreferences, bổ sung `syncNow()`.
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart): `await` gửi ảnh lên cloud, hiển thị SnackBar thông báo trạng thái gửi thành công.
+  - [MODIFY] [`lib/screens/home.dart`](../lib/screens/home.dart): Lắng nghe `friendPhotosChangeNotifier`, hiển thị ảnh bạn bè cắt tròn `ClipOval` trên quả cầu vệ tinh, ưu tiên bạn bè thật trên Orbit ở chế độ Demo Mode.
+  - [MODIFY] [`lib/screens/feed_screen.dart`](../lib/screens/feed_screen.dart): Khắc phục lỗi Composite Index, hỗ trợ render và ghim Base64 ra widget.
+  - [MODIFY] [`assets/memes/bite/bite_meta.json`](../assets/memes/bite/bite_meta.json): Hiệu chỉnh tâm cắn của Usagi vào sâu khoang miệng `[0.48, 0.52]`.
+  - [MODIFY] [`pubspec.yaml`](../pubspec.yaml): Nâng phiên bản lên `1.4.11+2007`.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 issues found** (100% sạch).
+  - `flutter test`: **37/37 tests PASSED**.
+  - `git commit & push`: Commit `ea7967a` và Tag `v1.4.11` đã đẩy lên nhánh `main`.
+  - GitHub Releases v1.4.11: https://github.com/YIZ006/ICNative/releases/tag/v1.4.11
+
+---
+
 ### [2026-11-07 18:45:00] - Hoàn Thiện Cắn Mép Góc (Corner Bite Snapping), Tự Động Lật Meme (FlipX) & Phát Hành Orbit v1.4.10 Dual-Release
 * **Thời gian (Timestamp):** 2026-11-07 18:45:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
