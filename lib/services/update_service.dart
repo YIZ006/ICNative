@@ -91,7 +91,7 @@ class UpdateService {
       }).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         
         // Không thông báo cập nhật nếu release đang là bản nháp (draft)
         if (data['draft'] == true) {
