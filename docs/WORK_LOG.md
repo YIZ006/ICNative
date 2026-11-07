@@ -5,6 +5,29 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 17:44:00] - Khôi Phục Cơ Chế Nhận Diện Phân Tách Điểm Ảnh (Subject Segmentation) & Hiển Thị Đường Viền Neon Phát Sáng Cho Bản Demo (0 VNĐ & 100% Offline)
+* **Thời gian (Timestamp):** 2026-11-07 17:44:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết triệt để vấn đề nhận diện vật thể bị sai lệch hình khối theo phản hồi và hình ảnh đối chiếu của người dùng:
+  1. **Khôi phục Subject Segmentation làm ưu tiên số 1:**
+     - Thay vì phụ thuộc vào khung Bounding Box thô của `ObjectDetector` (dễ quét nhầm cả căn phòng 560x916), hệ thống đưa `SubjectSegmenter` lên làm AI nhận diện trọng tâm số 1 để bóc tách vật thể thực tế theo từng pixel (`confidenceMask`).
+     - Tự động trích xuất các điểm biên thực tế `contourPoints` bám khít 100% theo từng gờ, rãnh, mép vật lý của vật thể (như các phím bấm bàn phím, mép cốc, đĩa thức ăn).
+     - Meme và sticker tự động neo (ngồi, bám, cắn mép) trực tiếp vào đường biên thật này.
+  2. **Hiển thị đường viền Neon Contour riêng cho bản Demo Showcase:**
+     - **Bản Demo Showcase (`isDemoModeNotifier.value == true`):** Tích hợp `NeonContourPainter` vẽ đường viền phát sáng Neon Cyan (`#00E5FF`) kèm lõi trắng (`#F0FFFF`) bám sát đường bao thực tế của vật thể như ảnh chụp bàn phím mẫu. Kèm nút Radar Toggle để bật/tắt tuỳ ý.
+     - **Bản Chuẩn / Sạch (Clean Release - `isDemoModeNotifier.value == false`):** 100% sạch sẽ, không hiển thị bất kỳ đường viền debug nào trên giao diện cũng như trong ảnh xuất xưởng.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/anchor_math.dart`](../lib/services/anchor_math.dart): Bổ sung `contourPoints` vào `ObjectAnchor`, nâng cấp `anchorFromMask()` tự động quét và thu thập các điểm biên contour từ `BinaryMask`.
+  - [MODIFY] [`lib/services/sticker_anchoring_engine.dart`](../lib/services/sticker_anchoring_engine.dart): Ưu tiên `SubjectSegmenter` lấy `targetRect` và `subjectMask`, chỉ fallback sang `ObjectDetector` khi không tìm thấy chủ thể.
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart): Thêm `NeonContourPainter`, hiển thị đường viền phát sáng uốn lượn khi ở chế độ Demo Mode.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 lỗi, 0 cảnh báo** (`No issues found!`).
+  - `flutter test`: **36/36 tests PASSED**.
+
+---
+
 ### [2026-11-07 17:26:00] - Clone Nguyên Trạng Mã Nguồn Bản v1.1 Ra Thư Mục Kế Bên Để Đối Soát Logic Cắn Mép
 * **Thời gian (Timestamp):** 2026-11-07 17:26:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

@@ -780,67 +780,93 @@ class _ImagePreviewState extends State<ImagePreview> {
                           );
                         }(),
 
-                        // VÙNG XANH NHẬN DIỆN AI (Hiển thị trong bản Showcase / Demo Mode để check AI phát hiện vật thể ở đâu)
-                        if (_showDebugBoundingBox && _anchor != null) () {
-                          final mapping = CoverMapping(
-                            imageSize: _anchor!.imageSize,
-                            frameSide: photoBoxSize,
-                          );
-                          final rect = mapping.rectToFrame(_anchor!.bounds);
-
-                          return Positioned(
-                            left: rect.left,
-                            top: rect.top,
-                            width: rect.width.clamp(0.0, photoBoxSize),
-                            height: rect.height.clamp(0.0, photoBoxSize),
-                            child: IgnorePointer(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00E5FF).withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFF00E5FF),
-                                    width: 2.2,
+                        // ĐƯỜNG VIỀN THỰC TẾ & KHUNG NHẬN DIỆN AI (Chỉ hiển thị trong bản Showcase / Demo Mode)
+                        if (_showDebugBoundingBox && _anchor != null) ...[
+                          if (_anchor!.contourPoints != null && _anchor!.contourPoints!.isNotEmpty)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: NeonContourPainter(
+                                    points: _anchor!.contourPoints!,
+                                    mapping: CoverMapping(
+                                      imageSize: _anchor!.imageSize,
+                                      frameSide: photoBoxSize,
+                                    ),
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Positioned(
-                                      top: -12,
-                                      left: 8,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF00E5FF),
-                                          borderRadius: BorderRadius.circular(6),
-                                          boxShadow: const [
-                                            BoxShadow(color: Colors.black26, blurRadius: 4),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          'AI: ${_detectedMode == AnchorMode.scene ? "BỐI CẢNH" : "VẬT THỂ"} (${_anchor!.bounds.width.toInt()}x${_anchor!.bounds.height.toInt()})',
-                                          style: const TextStyle(
-                                            color: Colors.black,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ),
-                            ),
-                          );
-                        }(),
+                            )
+                          else () {
+                            final mapping = CoverMapping(
+                              imageSize: _anchor!.imageSize,
+                              frameSide: photoBoxSize,
+                            );
+                            final rect = mapping.rectToFrame(_anchor!.bounds);
+
+                            return Positioned(
+                              left: rect.left,
+                              top: rect.top,
+                              width: rect.width.clamp(0.0, photoBoxSize),
+                              height: rect.height.clamp(0.0, photoBoxSize),
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00E5FF).withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: const Color(0xFF00E5FF),
+                                      width: 2.2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF00E5FF).withValues(alpha: 0.4),
+                                        blurRadius: 10,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }(),
+
+                          // AI Badge hiển thị thông tin
+                          () {
+                            final mapping = CoverMapping(
+                              imageSize: _anchor!.imageSize,
+                              frameSide: photoBoxSize,
+                            );
+                            final rect = mapping.rectToFrame(_anchor!.bounds);
+                            final hasContour = _anchor!.contourPoints != null && _anchor!.contourPoints!.isNotEmpty;
+
+                            return Positioned(
+                              left: rect.left.clamp(8.0, photoBoxSize - 180.0),
+                              top: (rect.top - 14).clamp(8.0, photoBoxSize - 30.0),
+                              child: IgnorePointer(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00E5FF),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: const [
+                                      BoxShadow(color: Colors.black26, blurRadius: 4),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    hasContour
+                                        ? 'AI: ĐƯỜNG VIỀN [${_detectedCategory.name.toUpperCase()}] (${_anchor!.bounds.width.toInt()}x${_anchor!.bounds.height.toInt()})'
+                                        : 'AI: ${_detectedMode == AnchorMode.scene ? "BỐI CẢNH" : "VẬT THỂ"} (${_anchor!.bounds.width.toInt()}x${_anchor!.bounds.height.toInt()})',
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }(),
+                        ],
 
                         // Chấm xanh debug tại điểm neo trên mép vật thể
                         if ((AnchorMath.debugBiteEnabled || _showDebugBoundingBox) && _debugTargetInFrame != null)
@@ -1385,4 +1411,40 @@ class _ImagePreviewState extends State<ImagePreview> {
       ),
     );
   }
+}
+
+/// Painter vẽ đường viền phát sáng Neon Cyan bám sát hình khối thực tế của vật thể
+/// (Dành riêng cho bản Demo Showcase để kiểm tra vị trí AI bóc tách đối tượng)
+class NeonContourPainter extends CustomPainter {
+  final List<Offset> points;
+  final CoverMapping mapping;
+
+  const NeonContourPainter({required this.points, required this.mapping});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+
+    final glowPaint = Paint()
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..style = PaintingStyle.fill;
+
+    final corePaint = Paint()
+      ..color = const Color(0xFFF0FFFF)
+      ..style = PaintingStyle.fill;
+
+    // Vẽ các điểm pixel biên với hiệu ứng hạt viền phát sáng
+    for (int i = 0; i < points.length; i += 2) {
+      final p = mapping.toFrame(points[i]);
+      if (p.dx >= -4 && p.dx <= size.width + 4 && p.dy >= -4 && p.dy <= size.height + 4) {
+        canvas.drawCircle(p, 3.2, glowPaint);
+        canvas.drawCircle(p, 1.5, corePaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NeonContourPainter oldDelegate) =>
+      oldDelegate.points != points;
 }

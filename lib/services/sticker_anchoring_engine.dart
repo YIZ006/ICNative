@@ -345,21 +345,49 @@ class StickerAnchoringEngine {
         labelerFuture.then<dynamic>((v) => v).catchError((_) => <ImageLabel>[]),
         bitePoolFuture,
         biteMetaFuture,
+        segmenterFuture.then<dynamic>((v) => v).catchError((_) => null),
       ]);
 
       final objects = (results[0] as List<DetectedObject>?) ?? [];
       final labels = (results[1] as List<ImageLabel>?) ?? [];
       final bitePool = (results[2] as List<String>?) ?? const [];
       final biteMetaMap = (results[3] as Map<String, BiteMeta>?) ?? const {};
+      final segResult = results[4] as SubjectSegmentationResult?;
 
-      // 2. Tìm vật thể lớn nhất trong khung hình
+      // 2. Tìm vật thể chính trong ảnh:
+      // Ưu tiên cao nhất cho SubjectSegmenter (nhận diện hình khối pixel thực tế của vật thể)
       Rect? targetRect;
       double maxArea = 0;
-      for (final obj in objects) {
-        final area = (obj.boundingBox.width * obj.boundingBox.height).toDouble();
-        if (area > maxArea) {
-          maxArea = area;
-          targetRect = obj.boundingBox;
+      List<double>? subjectMask;
+      int maskWidth = 0;
+      int maskHeight = 0;
+
+      if (segResult != null && segResult.subjects.isNotEmpty) {
+        for (final subj in segResult.subjects) {
+          final area = (subj.width * subj.height).toDouble();
+          if (area > maxArea) {
+            maxArea = area;
+            targetRect = Rect.fromLTWH(
+              subj.startX.toDouble(),
+              subj.startY.toDouble(),
+              subj.width.toDouble(),
+              subj.height.toDouble(),
+            );
+            subjectMask = subj.confidenceMask;
+            maskWidth = subj.width;
+            maskHeight = subj.height;
+          }
+        }
+      }
+
+      // Fallback: nếu SubjectSegmenter không tìm thấy (trên iOS hoặc ảnh quá mờ), mới dùng ObjectDetector
+      if (targetRect == null) {
+        for (final obj in objects) {
+          final area = (obj.boundingBox.width * obj.boundingBox.height).toDouble();
+          if (area > maxArea) {
+            maxArea = area;
+            targetRect = obj.boundingBox;
+          }
         }
       }
 
@@ -422,10 +450,12 @@ class StickerAnchoringEngine {
       //    (mặt nạ tách chủ thể). Không có mặt nạ thì dùng bbox (đỉnh = giữa cạnh trên).
       ObjectAnchor? anchor;
       if (hasClearObject && origW > 0 && origH > 0) {
-        anchor = await _buildAnchor(
+        anchor = _buildAnchor(
           imageSize: ui.Size(origW, origH),
           detectedBounds: targetRect,
-          segmenterFuture: segmenterFuture,
+          subjectMask: subjectMask,
+          maskWidth: maskWidth,
+          maskHeight: maskHeight,
         );
       }
 
@@ -439,14 +469,15 @@ class StickerAnchoringEngine {
     }
   }
 
-  /// Dựng [ObjectAnchor] cho vật thể mà ObjectDetector tìm thấy.
-  /// Trả null (-> chế độ cảnh) nếu toạ độ ML Kit không khớp không gian ảnh
-  /// (ví dụ lệch hướng EXIF), vì neo sai còn tệ hơn không neo.
-  static Future<ObjectAnchor?> _buildAnchor({
+  /// Dựng [ObjectAnchor] cho vật thể mà AI tìm thấy.
+  /// Ưu tiên trích xuất đường viền từ mặt nạ phân vùng pixel thực tế.
+  static ObjectAnchor? _buildAnchor({
     required ui.Size imageSize,
     required Rect detectedBounds,
-    required Future<SubjectSegmentationResult?> segmenterFuture,
-  }) async {
+    required List<double>? subjectMask,
+    required int maskWidth,
+    required int maskHeight,
+  }) {
     const tolerance = 1.05;
     if (detectedBounds.right > imageSize.width * tolerance ||
         detectedBounds.bottom > imageSize.height * tolerance) {
@@ -458,37 +489,15 @@ class StickerAnchoringEngine {
       Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
     );
 
-    try {
-      final seg = await segmenterFuture;
-      final subjects = seg?.subjects ?? const [];
-      if (subjects.isNotEmpty) {
-        final rects = [
-          for (final s in subjects)
-            Rect.fromLTWH(
-              s.startX.toDouble(),
-              s.startY.toDouble(),
-              s.width.toDouble(),
-              s.height.toDouble(),
-            ),
-        ];
-        final idx = AnchorMath.bestOverlapIndex(bounds, rects);
-        if (idx >= 0) {
-          final s = subjects[idx];
-          final confidence = s.confidenceMask;
-          if (confidence != null &&
-              s.width > 0 &&
-              s.height > 0 &&
-              confidence.length == s.width * s.height) {
-            return AnchorMath.anchorFromMask(
-              imageSize: imageSize,
-              bounds: rects[idx],
-              mask: BinaryMask.fromConfidence(confidence, s.width, s.height),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Subject mask unavailable, dùng bbox: $e');
+    if (subjectMask != null &&
+        maskWidth > 0 &&
+        maskHeight > 0 &&
+        subjectMask.length == maskWidth * maskHeight) {
+      return AnchorMath.anchorFromMask(
+        imageSize: imageSize,
+        bounds: bounds,
+        mask: BinaryMask.fromConfidence(subjectMask, maskWidth, maskHeight),
+      );
     }
 
     return ObjectAnchor.fromBounds(imageSize, bounds);

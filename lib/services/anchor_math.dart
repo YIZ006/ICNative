@@ -165,6 +165,7 @@ class ObjectAnchor {
     required this.fromMask,
     this.rightEdge,
     this.leftEdge,
+    this.contourPoints,
   });
 
   /// Dự phòng khi không có mặt nạ (iOS, hoặc ML Kit không trả mask):
@@ -177,6 +178,7 @@ class ObjectAnchor {
       tangentAngle: 0,
       centroid: bounds.center,
       fromMask: false,
+      contourPoints: null,
     );
   }
 
@@ -190,6 +192,9 @@ class ObjectAnchor {
   /// Mép phải và mép trái trích từ mặt nạ (toạ độ ảnh gốc) để cắn cạnh bên.
   final TopEdge? rightEdge;
   final TopEdge? leftEdge;
+
+  /// Các toạ độ pixel biên thực tế của mặt nạ (toạ độ ảnh gốc).
+  final List<Offset>? contourPoints;
 }
 
 /// Ánh xạ ảnh gốc -> khung preview vuông theo `BoxFit.cover` (cắt giữa).
@@ -584,6 +589,32 @@ class AnchorMath {
     if (edge == null || c == null) return ObjectAnchor.fromBounds(imageSize, bounds);
     final right = _sideEdgeForAnchor(mask, EdgeSide.right);
     final left = _sideEdgeForAnchor(mask, EdgeSide.left);
+
+    // Trích xuất đường bao pixel (contour) từ mặt nạ phân vùng thực tế
+    final List<Offset> contourPoints = [];
+    final w = mask.width;
+    final h = mask.height;
+    for (int y = 0; y < h; y += 2) {
+      for (int x = 0; x < w; x += 2) {
+        if (mask.at(x, y)) {
+          bool isEdge = false;
+          if (x <= 1 || x >= w - 2 || y <= 1 || y >= h - 2) {
+            isEdge = true;
+          } else {
+            if (!mask.at(x - 2, y) ||
+                !mask.at(x + 2, y) ||
+                !mask.at(x, y - 2) ||
+                !mask.at(x, y + 2)) {
+              isEdge = true;
+            }
+          }
+          if (isEdge) {
+            contourPoints.add(Offset(bounds.left + x, bounds.top + y));
+          }
+        }
+      }
+    }
+
     return ObjectAnchor(
       imageSize: imageSize,
       bounds: bounds,
@@ -597,6 +628,7 @@ class AnchorMath {
       leftEdge: left == null
           ? null
           : TopEdge(apex: bounds.topLeft + left.apex, angle: left.angle),
+      contourPoints: contourPoints,
     );
   }
 }
