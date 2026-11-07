@@ -5,6 +5,24 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 18:16:00] - Khắc Phục Lỗi INSTALL_FAILED_VERSION_DOWNGRADE & Cài Đặt Trực Tiếp Lên MEIZU 21 Note
+* **Thời gian (Timestamp):** 2026-11-07 18:16:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  1. **Phân tích nguyên nhân lỗi:**
+     - Thiết bị MEIZU 21 Note đã từng cài một bản build có `versionCode 2001`. Khi người dùng gỡ cài đặt trên giao diện Flyme OS, hệ điều hành giữ lại dữ liệu ứng dụng (`DELETE_KEEP_DATA`).
+     - Khi `flutter run` đẩy bản build có `versionCode 13` (`1.4.9+13`), Android từ chối cài đặt vì hạ cấp phiên bản (`INSTALL_FAILED_VERSION_DOWNGRADE`). Do đó app chưa hề được cài vào máy chứ không phải crash khi khởi động.
+  2. **Xử lý triệt để:**
+     - Dùng ADB gỡ sạch hoàn toàn metadata và cache cũ: `adb uninstall com.abom.utas.utas`.
+     - Nâng `versionCode` trong `pubspec.yaml` lên `2005` (`version: 1.4.9+2005`) để tránh mọi xung đột downgrade trong tương lai.
+     - Cài đặt thành công bản `Orbit-v1.4.9-demo-showcase.apk` lên MEIZU 21 Note và khởi chạy trực tiếp qua `am start`.
+  3. **Kiểm tra Logcat thực tế trên thiết bị MEIZU 21 Note:**
+     - Impeller (Vulkan backend) hoạt động mượt mà.
+     - `Firebase successfully initialized!` hiển thị rõ ràng, không có bất kỳ crash hay lỗi fatal nào.
+
+---
+
 ### [2026-11-07 18:01:00] - Phát Hành Orbit v1.4.9 Dual-Release: Khôi Phục Subject Segmentation & Viền Neon Đa Cạnh Cho Demo
 * **Thời gian (Timestamp):** 2026-11-07 18:01:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
