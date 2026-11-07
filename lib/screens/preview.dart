@@ -37,13 +37,17 @@ class _ImagePreviewState extends State<ImagePreview> {
   bool isProcessingAi = true;
   bool isSending = false;
 
-  // Custom Sticker them vao (neu nguoi dung muon gan them hoac chon doi meme)
+  // Sticker meme tự động neo vào mép vật thể (khoá chỉnh tay / xoá)
   CustomStickerItem? activeCustomSticker;
   Offset stickerPosition = const Offset(0.55, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
   double stickerScale = 1.0;
   double stickerRotation = 0.05;
-  double _baseScale = 1.0;
-  double _baseRotation = 0.0;
+  ObjectAnchor? _anchor;
+  AnchorMode _detectedMode = AnchorMode.topEdge;
+  Offset _activeBitePoint = BiteMeta.defaultBite;
+  Size _activeStickerPixelSize = Size.zero;
+  Offset? _debugTargetInFrame;
+  List<CustomStickerItem> _biteTrayItems = const [];
 
   // Location & Time Badges
   String? locationBadgeText;
@@ -113,25 +117,50 @@ class _ImagePreviewState extends State<ImagePreview> {
   /// 1. Tự động chạy mô hình On-Device AI nhận diện bối cảnh và gắn sticker meme thông minh (0 VNĐ, Offline)
   Future<void> _runAiContextualEngine() async {
     try {
+      final biteAssetsFuture = StickerAnchoringEngine.getAvailableBiteAssets();
       final suggested = await StickerAnchoringEngine.detectAndSuggestSticker(widget.imagePath);
-      if (suggested != null && mounted) {
-        // Bước 3 của đặc tả: neo bitePoint của sticker vào đỉnh/tâm vật thể,
-        // xoay theo tiếp tuyến mép. Không đủ dữ liệu thì dùng vị trí an toàn cũ.
-        final stickerPx = suggested.stickerPixelSize;
+      final biteAssets = await biteAssetsFuture;
+
+      final trayBites = <CustomStickerItem>[
+        for (final assetPath in biteAssets)
+          CustomStickerItem(
+            id: 'bite_asset_${assetPath.split('/').last}',
+            path: assetPath,
+            title: assetPath.split('/').last,
+            isAsset: true,
+          ),
+      ];
+
+      final resolved = suggested ??
+          StickerAnchoringEngine.pickStickerForCategory(StickerCategory.scene);
+      final stickerPx = resolved.stickerPixelSize ??
+          await StickerAnchoringEngine.loadStickerPixelSize(resolved.assetPath);
+
+      if (mounted) {
+        final photoBox = _boxSizeFor(MediaQuery.of(context).size.width);
         final placement = stickerPx == null
             ? null
             : StickerPlacementSolver.solve(
-                mode: suggested.anchorMode,
-                anchor: suggested.anchor,
-                bitePoint: suggested.bitePoint,
+                mode: resolved.anchorMode,
+                anchor: resolved.anchor,
+                bitePoint: resolved.bitePoint,
+                biteDirection: resolved.biteDirection,
+                widthFactor: resolved.widthFactor,
+                biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
                 stickerPixelSize: stickerPx,
-                photoBoxSize: _boxSizeFor(MediaQuery.of(context).size.width),
+                photoBoxSize: photoBox,
               );
         setState(() {
+          _biteTrayItems = trayBites;
+          _anchor = resolved.anchor;
+          _detectedMode = resolved.anchorMode;
+          _activeBitePoint = resolved.bitePoint;
+          _activeStickerPixelSize = stickerPx ?? Size.zero;
+          _debugTargetInFrame = placement?.targetInFrame;
           activeCustomSticker = CustomStickerItem(
-            id: suggested.id,
-            path: suggested.assetPath,
-            title: suggested.id,
+            id: resolved.id,
+            path: resolved.assetPath,
+            title: resolved.id,
             isAsset: true,
           );
           stickerPosition = placement?.position ?? const Offset(0.08, 0.35);
@@ -148,6 +177,70 @@ class _ImagePreviewState extends State<ImagePreview> {
     }
   }
 
+  /// Đổi sang meme / sticker khác và tự động neo lại bằng solver theo `ObjectAnchor` đã phát hiện.
+  Future<void> _applyStickerWithSolver(CustomStickerItem item) async {
+    final Size? stickerPx = item.isAsset
+        ? await StickerAnchoringEngine.loadStickerPixelSize(item.path)
+        : await StickerAnchoringEngine.loadFileStickerPixelSize(item.path);
+    if (!mounted) return;
+
+    final AnchorMode mode;
+    final Offset bitePoint;
+    final Offset biteDir;
+    final double widthFactor;
+
+    if (_anchor == null || _detectedMode == AnchorMode.scene) {
+      mode = AnchorMode.scene;
+      bitePoint = const Offset(0.5, 1.0);
+      biteDir = BiteMeta.defaultDir;
+      widthFactor = 0.30;
+    } else if (!item.isAsset) {
+      // Sticker tự tạo từ thư viện máy: neo tự động với bitePoint mặc định (0.5, 0.9) và dir (0, 1).
+      mode = AnchorMode.topEdge;
+      bitePoint = const Offset(0.5, 0.9);
+      biteDir = const Offset(0.0, 1.0);
+      widthFactor = BiteMeta.defaultWidth;
+    } else {
+      final meta = await StickerAnchoringEngine.getBiteMetaForAsset(item.path);
+      if (!mounted) return;
+      if (_detectedMode == AnchorMode.hug &&
+          !StickerAnchoringEngine.isBiteAssetPath(item.path)) {
+        mode = AnchorMode.hug;
+        bitePoint = const Offset(0.5, 0.5);
+        biteDir = meta.dir;
+        widthFactor = StickerPlacementSolver.hugWidthFactor;
+      } else {
+        mode = AnchorMode.topEdge;
+        bitePoint = meta.bite;
+        biteDir = meta.dir;
+        widthFactor = meta.width;
+      }
+    }
+
+    final photoBox = _boxSizeFor(MediaQuery.of(context).size.width);
+    final resolvedPx = stickerPx ?? const Size(512, 512);
+    final placement = StickerPlacementSolver.solve(
+      mode: mode,
+      anchor: _anchor,
+      bitePoint: bitePoint,
+      biteDirection: biteDir,
+      widthFactor: widthFactor,
+      biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
+      stickerPixelSize: resolvedPx,
+      photoBoxSize: photoBox,
+    );
+
+    setState(() {
+      activeCustomSticker = item;
+      _activeBitePoint = bitePoint;
+      _activeStickerPixelSize = resolvedPx;
+      _debugTargetInFrame = placement.targetInFrame;
+      stickerPosition = placement.position;
+      stickerScale = placement.scale;
+      stickerRotation = placement.rotation;
+    });
+  }
+
   @override
   void dispose() {
     _captionController.dispose();
@@ -158,12 +251,7 @@ class _ImagePreviewState extends State<ImagePreview> {
   void _openCustomStickerFromGallery() async {
     final newSticker = await StickerGeneratorSheet.show(context);
     if (newSticker != null && mounted) {
-      setState(() {
-        activeCustomSticker = newSticker;
-        stickerPosition = const Offset(0.50, 0.20);
-        stickerScale = 1.0;
-        stickerRotation = 0.0;
-      });
+      await _applyStickerWithSolver(newSticker);
     }
   }
 
@@ -436,7 +524,13 @@ class _ImagePreviewState extends State<ImagePreview> {
     final screenWidth = MediaQuery.of(context).size.width;
     final photoBoxSize = _boxSizeFor(screenWidth);
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    final stickerList = CustomStickerService.instance.stickers;
+    final baseStickers = CustomStickerService.instance.stickers;
+    final existingPaths = <String>{for (final s in baseStickers) s.path};
+    final stickerList = <CustomStickerItem>[
+      for (final b in _biteTrayItems)
+        if (!existingPaths.contains(b.path)) b,
+      ...baseStickers,
+    ];
 
     return Container(
       decoration: const BoxDecoration(
@@ -566,50 +660,30 @@ class _ImagePreviewState extends State<ImagePreview> {
                             ),
                           ),
 
-                        // 3. Interactive Custom Sticker Overlay (Draggable, Scalable, Rotatable)
+                        // 3. Auto-Anchored Meme Overlay (Locked: không cho kéo/zoom/xoay/xoá)
                         if (activeCustomSticker != null) () {
                           // Hình học dùng chung với bước khắc ảnh để preview và ảnh gửi đi không lệch nhau
                           final geo = StickerGeometry(photoBoxSize: photoBoxSize, scale: stickerScale);
                           final double stickerPixelSize = geo.size;
-                          final double maxLeft = geo.maxLeft;
-                          final double maxTop = geo.maxTop;
                           final Offset stickerTopLeft = geo.topLeftFor(stickerPosition);
                           final double left = stickerTopLeft.dx;
                           final double top = stickerTopLeft.dy;
+                          final Offset debugBiteLocal = geo.biteLocal(
+                            _activeBitePoint,
+                            _activeStickerPixelSize,
+                          );
 
                           return Positioned(
                             left: left,
                             top: top,
-                            child: GestureDetector(
-                              onScaleStart: (details) {
-                                _baseScale = stickerScale;
-                                _baseRotation = stickerRotation;
-                              },
-                              onScaleUpdate: (ScaleUpdateDetails details) {
-                                setState(() {
-                                  if (maxLeft > 0) {
-                                    final newX = (left + details.focalPointDelta.dx) / maxLeft;
-                                    final newY = (top + details.focalPointDelta.dy) / (maxTop > 0 ? maxTop : 1);
-                                    stickerPosition = Offset(
-                                      newX.clamp(0.0, 1.0),
-                                      newY.clamp(0.0, 1.0),
-                                    );
-                                  }
-                                  if (details.scale != 1.0) {
-                                    stickerScale = (_baseScale * details.scale).clamp(0.5, 2.5);
-                                  }
-                                  if (details.rotation != 0.0) {
-                                    stickerRotation = _baseRotation + details.rotation;
-                                  }
-                                });
-                              },
+                            child: IgnorePointer(
                               child: Transform.rotate(
                                 angle: stickerRotation,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Column(
-                                      mainAxisSize: MainAxisSize.min,
+                                    Stack(
+                                      clipBehavior: Clip.none,
                                       children: [
                                         Container(
                                           width: stickerPixelSize,
@@ -627,62 +701,69 @@ class _ImagePreviewState extends State<ImagePreview> {
                                                   filterQuality: FilterQuality.high,
                                                 ),
                                         ),
-                                        if (activeCustomSticker!.caption != null &&
-                                            activeCustomSticker!.caption!.trim().isNotEmpty)
-                                          Container(
-                                            margin: const EdgeInsets.only(top: 2),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: OrbitColors.deepOlive.withValues(alpha: 0.95),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: OrbitColors.khakiGold, width: 1.4),
-                                              boxShadow: const [
-                                                BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                                              ],
-                                            ),
-                                            child: Text(
-                                              activeCustomSticker!.caption!,
-                                              style: const TextStyle(
-                                                color: OrbitColors.textLight,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 0.4,
+                                        if (AnchorMath.debugBiteEnabled)
+                                          Positioned(
+                                            left: debugBiteLocal.dx - 5,
+                                            top: debugBiteLocal.dy - 5,
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                color: Colors.redAccent,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: Colors.white, width: 1.5),
                                               ),
                                             ),
                                           ),
                                       ],
                                     ),
-                                    Positioned(
-                                      top: -6,
-                                      right: -6,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() => activeCustomSticker = null);
-                                        },
-                                        child: Container(
-                                          width: 24,
-                                          height: 24,
-                                          decoration: const BoxDecoration(
-                                            color: OrbitColors.deepOlive,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(color: Colors.black26, blurRadius: 3),
-                                            ],
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
+                                    if (activeCustomSticker!.caption != null &&
+                                        activeCustomSticker!.caption!.trim().isNotEmpty)
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: OrbitColors.deepOlive.withValues(alpha: 0.95),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: OrbitColors.khakiGold, width: 1.4),
+                                          boxShadow: const [
+                                            BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          activeCustomSticker!.caption!,
+                                          style: const TextStyle(
                                             color: OrbitColors.textLight,
-                                            size: 15,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.4,
                                           ),
                                         ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
                             ),
                           );
                         }(),
+
+                        // Chấm xanh debug tại điểm neo trên mép vật thể khi bật `kDebugBite = true`
+                        if (AnchorMath.debugBiteEnabled && _debugTargetInFrame != null)
+                          Positioned(
+                            left: _debugTargetInFrame!.dx - 5,
+                            top: _debugTargetInFrame!.dy - 5,
+                            child: IgnorePointer(
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: Colors.greenAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black87, width: 1.5),
+                                ),
+                              ),
+                            ),
+                          ),
 
                         // Draggable Location Badge (Gán tên địa danh / đường)
                         if (locationBadgeText != null) () {
@@ -1074,20 +1155,14 @@ class _ImagePreviewState extends State<ImagePreview> {
                           }
 
                           final item = stickerList[index - 1];
-                          final isSelected = activeCustomSticker?.id == item.id;
+                          final isSelected = activeCustomSticker != null &&
+                              (activeCustomSticker!.id == item.id ||
+                                  activeCustomSticker!.path == item.path);
 
                           return GestureDetector(
                             onTap: () {
-                              setState(() {
-                                if (isSelected) {
-                                  activeCustomSticker = null;
-                                } else {
-                                  activeCustomSticker = item;
-                                  stickerPosition = const Offset(0.50, 0.20);
-                                  stickerScale = 1.0;
-                                  stickerRotation = 0.0;
-                                }
-                              });
+                              if (isSelected) return;
+                              _applyStickerWithSolver(item);
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),

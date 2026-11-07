@@ -5,6 +5,73 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 15:25:00] - Phát Hành Orbit v1.4.7 Dual-Release: Khôi Phục Meme Cắn Mép (Bite Snapping), Khoá Meme Preview & Tích Hợp 18 Meme Ngoạm Thực Tế
+* **Thời gian (Timestamp):** 2026-11-07 15:25:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Xuất xưởng phiên bản phát hành chính thức **Orbit v1.4.7** (`1.4.7+11`) tuân thủ nghiêm ngặt quy tắc bắt buộc Dual-Release:
+  1. **Khôi phục trải nghiệm Meme Cắn Mép (Bite Snapping) đa cạnh:**
+     - Tích hợp 18 meme cắn thực tế của người dùng vào `assets/memes/bite/` (Chiikawa, Hachiware, Usagi, Doraemon, Pikachu, Husky, Momonga...) kèm bảng toạ độ `assets/memes/bite/bite_meta.json`.
+     - Nâng cấp thuật toán `AnchorMath.rotateMask()` và `AnchorMath.findEdge()` hỗ trợ neo 3 cạnh (`top → right → left`), tự động chọn cạnh vừa vặn trong khung và lún nhẹ vào mép vật thể.
+  2. **Khoá Meme cố định trên màn hình Preview:**
+     - Gỡ bỏ `GestureDetector` (kéo/zoom/xoay) và nút `✕`, meme được khoá cố định với `IgnorePointer`.
+     - Tự động neo lại bằng toán học khi người dùng đổi meme hoặc thêm sticker từ thư viện.
+  3. **Đóng gói đủ 2 bản APK Dual-Release (100% Offline & 0 VNĐ):**
+     - Bản Chuẩn / Sạch: `Orbit-v1.4.7-clean-release.apk` (166,158,613 bytes, SHA-256: `6AFCAC097134FE601BD9D4B6C5042D5A2F8DF881A4D3471884437466413891F0`).
+     - Bản Trải Nghiệm / Mẫu: `Orbit-v1.4.7-demo-showcase.apk` (166,158,613 bytes, SHA-256: `01EAF1295EB0A88C93242A62112CA97B2CE68588FF94EABD60A729892B145C2C`).
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `pubspec.yaml`, `lib/services/update_service.dart`, `ios/Runner/AppDelegate.swift`: Nâng version đồng bộ lên `1.4.7+11`.
+  - [MODIFY] `lib/screens/preview.dart`: Khoá di chuyển/xoá meme, tự động neo lại với `StickerPlacementSolver`.
+  - [MODIFY] `lib/services/anchor_math.dart`: Nâng cấp `BiteMeta`, xoay mặt nạ tìm mép đa cạnh (`top`, `right`, `left`), cờ debug `kDebugBite`.
+  - [MODIFY] `lib/services/sticker_anchoring_engine.dart`: Bộ nạp cache `bite_meta.json` & pool `assets/memes/bite/`, dọn code chết `processAndMerge()`.
+  - [NEW] `assets/memes/bite/`: 18 file PNG meme cắn mép thực tế + `bite_meta.json` + `README.txt`.
+  - [TEST] `test/anchor_math_test.dart`: 35/35 tests passed.
+  - [BUILD & RELEASE] `Orbit-v1.4.7-clean-release.apk` & `Orbit-v1.4.7-demo-showcase.apk`.
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Cả 2 bản APK đã được build hoàn tất ở thư mục gốc workspace, sẵn sàng cài đặt và kiểm thử trực tiếp trên điện thoại.
+* **Bước tiếp theo (Next Steps):**
+  - Bàn giao tệp APK và hướng dẫn kiểm thử cho người dùng.
+
+---
+
+### [2026-11-07 13:46:00] - Khôi Phục Cơ Chế Meme "Cắn Mép" Đa Cạnh (Bite Snapping: Top / Right / Left) & Khoá Cố Định Meme Trên Màn Hình Preview (0 VNĐ & 100% Offline)
+* **Thời gian (Timestamp):** 2026-11-07 13:46:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Engineering Agent
+* **Tóm tắt công việc (Summary):**
+  Thực thi trọn vẹn đặc tả giao việc **Bite Snapping** nhằm khôi phục trải nghiệm meme "há miệng ngoạm đúng vào mép thật" (mép bánh, miệng ly, gò má...) và khoá hoàn toàn thao tác kéo/xoay/phóng to/xoá meme của người dùng trên màn hình Xem trước:
+  1. **Khoá Meme trên màn hình Preview (`lib/screens/preview.dart`):**
+     - Thay thế `GestureDetector` kéo/zoom/xoay trên meme bằng `IgnorePointer`, xoá hoàn toàn nút đóng `✕` trên góc meme và dọn bỏ biến trạng thái thừa `_baseScale`, `_baseRotation`.
+     - Luôn duy trì 1 meme trên ảnh: bấm lại meme đang chọn ở khay dưới không còn làm biến mất meme; bấm sang meme khác hoặc tạo sticker mới từ `+ Thư viện` sẽ tự động tính toán và neo lại vào `ObjectAnchor` bằng `StickerPlacementSolver` (với `bitePoint = (0.5, 0.9)`, `biteDirection = (0, 1)` cho sticker thư viện).
+     - Giữ nguyên cơ chế khắc ảnh `_burnStickerAndCaptionToImage()` đồng bộ 1:1 với preview và giữ nguyên các badge địa điểm/giờ.
+  2. **Metadata "Cắn Mép" riêng cho từng ảnh (`BiteMeta` & `assets/memes/bite/bite_meta.json`):**
+     - Bổ sung lớp `BiteMeta` (`bite`, `dir`, `width`), trường `biteDirection` + `widthFactor` trên `StickerMetadata`, và bộ nạp cache 1 lần qua `rootBundle` + `AssetManifest`.
+     - Thêm cờ `const bool kDebugBite = false;` trong `lib/services/anchor_math.dart`: khi bật `true`, màn hình preview vẽ chấm đỏ tại `bitePoint` và chấm xanh tại điểm neo trên mép vật thể.
+     - Tự động fallback an toàn về kho meme mặc định nếu thư mục `assets/memes/bite/` chưa có file `.png` nào (không crash). Khi có ≥ 1 ảnh trong `assets/memes/bite/`, mọi nhóm vật thể rõ ràng (kể cả `beverage` — đổi sang cắn miệng ly `topEdge`) đều chọn từ pool bite.
+  3. **Nâng cấp Toán Học Bám Mép Đa Cạnh (`lib/services/anchor_math.dart`) & Dọn Code Chết:**
+     - Bổ sung `EdgeSide { top, right, left }`, `AnchorMath.rotateMask()`, `AnchorMath.findEdge()` (tái sử dụng `findTopEdge` Theil–Sen cho cạnh phải và cạnh trái) và lưu `rightEdge`, `leftEdge` trong `ObjectAnchor`.
+     - Mở rộng `StickerPlacementSolver.solve()` thử lần lượt `top → right → left`, chọn cạnh đầu tiên mà hộp meme nằm trọn trong khung ảnh (chừa `reservedBottom`), xoay meme sao cho vector miệng `dir` hướng vào trong vật thể (`clamp` trong `±0.9 rad` tránh lộn ngược), và lún nhẹ vào vật thể (`0.04 * visible.width`) để mép lọt vào miệng meme. Giữ tương thích ngược 100% với chữ ký cũ.
+     - Xoá 2 hàm code chết `processAndMerge()` và `_mergeImages()` cùng import thừa `package:image/image.dart` trong `lib/services/sticker_anchoring_engine.dart`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/anchor_math.dart`](../lib/services/anchor_math.dart): Thêm `kDebugBite`, `EdgeSide`, `BiteMeta`, `AnchorMath.rotateMask()`, `AnchorMath.findEdge()`, mở rộng `ObjectAnchor`, `PlacementKind.sideEdge`, `StickerPlacement`, `StickerPlacementSolver.solve()`.
+  - [MODIFY] [`lib/services/sticker_anchoring_engine.dart`](../lib/services/sticker_anchoring_engine.dart): Thêm `biteDirection`, `widthFactor`, bộ nạp cache `bite_meta.json` & pool `assets/memes/bite/`, cập nhật `pickStickerForCategory()`, thêm `loadFileStickerPixelSize()`, xoá `processAndMerge()` và `_mergeImages()`.
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart): Khoá meme bằng `IgnorePointer`, xoá nút `✕`, tự động neo lại bằng solver khi đổi meme hoặc tạo từ thư viện, vẽ chấm đỏ/xanh khi bật `kDebugBite`.
+  - [NEW] [`assets/memes/bite/bite_meta.json`](../assets/memes/bite/bite_meta.json): Khai báo mẫu metadata toạ độ miệng `bite`, hướng `dir`, tỉ lệ `width`.
+  - [NEW] [`assets/memes/bite/README.txt`](../assets/memes/bite/README.txt): Hướng dẫn thêm PNG nền trong suốt và căn chỉnh `bite_meta.json` bằng `kDebugBite`.
+  - [MODIFY] [`pubspec.yaml`](../pubspec.yaml): Thêm dòng khai báo asset `- assets/memes/bite/`.
+  - [MODIFY] [`test/anchor_math_test.dart`](../test/anchor_math_test.dart): Giữ nguyên 28 test cũ và bổ sung 7 unit/widget test mới kiểm chứng `rotateMask`, `findEdge`, `BiteMeta`, chọn cạnh `top → right → left`, fallback thư mục rỗng và kiểm chứng `RenderBox.localToGlobal` trên mặt nạ có mép phải nghiêng.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 lỗi, 0 cảnh báo (`No issues found!`)**.
+  - `flutter test test/anchor_math_test.dart`: **35/35 tests PASSED (`All tests passed!`)** — toàn bộ 28 test cũ + 7 test mới đều xanh.
+  - Ghi chú ngoài phạm vi (không tự ý sửa theo quy tắc giao việc): file mặc định `test/widget_test.dart` vẫn chứa bài test mẫu `Counter increments smoke test` của template khởi tạo Flutter nên tìm text `'0'` không khớp giao diện Orbit.
+* **Việc người dùng cần làm tay (Manual User Steps):**
+  1. Thả các file ảnh meme `.png` **nền trong suốt** (nhân vật há miệng hướng xuống hoặc sang ngang, ví dụ Chiikawa / Hachiware / Usagi) vào thư mục `assets/memes/bite/`.
+  2. Khai báo tên file và thông số `"bite"`, `"dir"`, `"width"` tương ứng trong `assets/memes/bite/bite_meta.json`.
+  3. Để căn chỉnh tâm miệng chuẩn bằng mắt: mở `lib/services/anchor_math.dart`, đổi `const bool kDebugBite = false;` thành `true`, chạy app để quan sát **chấm đỏ** (`bitePoint` trên meme) trùng **chấm xanh** (điểm neo trên mép vật thể), tinh chỉnh xong đổi lại `kDebugBite = false`.
+
+---
+
 ### [2026-11-07 02:35:00] - Khắc Phục Triệt Để Lỗi Quét QR Báo "Không thể gửi lời mời kết bạn", Nâng Cấp Hệ Thống Kết Bạn Offline-First & Tự Động Fallback Cục Bộ (0 VNĐ & 100% Offline)
 * **Thời gian (Timestamp):** 2026-11-07 02:35:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
@@ -1818,3 +1885,12 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - [NEW] docs/REPORT_LOCKET_FRIEND_MIGRATION.md - Báo cáo và prompt.
 * **Bước tiếp theo (Next Steps):** Người dùng duyệt rồi giao prompt mục 6 cho agent triển khai.
 
+
+
+### [2026-11-07 15:15:00] - Tư vấn: gửi ảnh realtime cho bạn bè không cần tự dựng database
+* **Thời gian (Timestamp):** 2026-11-07 15:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):** Điều tra vì sao ảnh không tới bạn bè. Nguyên nhân gốc: `android/app/google-services.json` là placeholder (`project_id: iconnative-offline`) và iOS chưa có `GoogleService-Info.plist`, nên `AuthService.isCloudConfigured == false` và `SyncService.broadcastPhotoToFriends` trả về `false` (chỉ lưu local). Code Firestore/Storage đã có sẵn trong `sync_service.dart` / `friend_service.dart`. Ngoài ra `connectDirectlyOffline()` chỉ thêm bạn một chiều ở máy người quét QR.
+* **Chi tiết thay đổi (Changes Made):** Không sửa code, chỉ tư vấn.
+* **Bước tiếp theo (Next Steps):** Người dùng tạo Firebase project thật (Spark), thay file cấu hình; cân nhắc nén ảnh + lưu base64 trong Firestore để né Storage/Blaze, kết bạn QR 2 chiều, Anonymous Auth + Security Rules, FCM/polling để widget cập nhật khi app đóng.

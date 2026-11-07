@@ -13,6 +13,10 @@ import 'package:flutter/painting.dart';
 /// Hệ toạ độ: gốc ở góc trên-trái, trục y hướng XUỐNG (giống Flutter/ảnh).
 /// Góc dương = xoay theo chiều kim đồng hồ trên màn hình.
 
+/// Cờ debug: khi bật `true`, màn hình preview vẽ chấm đỏ tại `bitePoint`
+/// và chấm xanh tại điểm neo trên mép để người dùng tinh chỉnh `bite_meta.json`.
+const bool kDebugBite = false;
+
 /// Chế độ neo. Rút gọn từ `AnchorPreference` của engine.
 enum AnchorMode {
   /// Đặt sticker lên đỉnh vật thể, xoay theo tiếp tuyến mép trên.
@@ -23,6 +27,83 @@ enum AnchorMode {
 
   /// Không có vật thể rõ ràng (chụp phong cảnh): đặt giữa-đáy khung.
   scene,
+}
+
+/// Hướng mép vật thể dùng để chọn cạnh cắn (`top → right → left`).
+enum EdgeSide { top, right, left }
+
+/// Metadata "cắn mép" cho từng ảnh meme trong `assets/memes/bite/bite_meta.json`.
+class BiteMeta {
+  const BiteMeta({
+    this.bite = defaultBite,
+    this.dir = defaultDir,
+    this.width = defaultWidth,
+  });
+
+  static const Offset defaultBite = Offset(0.5, 0.85);
+  static const Offset defaultDir = Offset(0.0, 1.0);
+  static const double defaultWidth = 0.45;
+  static const BiteMeta fallback = BiteMeta();
+
+  /// Toạ độ chuẩn hoá (0..1) của tâm miệng trong ảnh PNG của sticker.
+  final Offset bite;
+
+  /// Vector đơn vị trong hệ toạ độ sticker (chưa xoay) từ miệng hướng về vật thể.
+  final Offset dir;
+
+  /// Tỉ lệ chiều rộng meme so với chiều rộng vật thể hiển thị.
+  final double width;
+
+  factory BiteMeta.fromJson(Map<String, dynamic> json) {
+    Offset parsePair(Object? raw, Offset fallbackValue) {
+      if (raw is List && raw.length >= 2) {
+        final x = (raw[0] as num?)?.toDouble();
+        final y = (raw[1] as num?)?.toDouble();
+        if (x != null && y != null && x.isFinite && y.isFinite) {
+          return Offset(x, y);
+        }
+      }
+      return fallbackValue;
+    }
+
+    final parsedBite = parsePair(json['bite'], defaultBite);
+    final rawDir = parsePair(json['dir'], defaultDir);
+    final dirLen = rawDir.distance;
+    final unitDir = dirLen > 1e-9 ? rawDir / dirLen : defaultDir;
+    final rawWidth = (json['width'] as num?)?.toDouble();
+    final validWidth = (rawWidth != null && rawWidth > 0 && rawWidth.isFinite)
+        ? rawWidth
+        : defaultWidth;
+
+    return BiteMeta(
+      bite: Offset(
+        parsedBite.dx.clamp(0.0, 1.0).toDouble(),
+        parsedBite.dy.clamp(0.0, 1.0).toDouble(),
+      ),
+      dir: unitDir,
+      width: validWidth,
+    );
+  }
+
+  static Map<String, BiteMeta> parseJsonMap(Map<String, dynamic> raw) {
+    final result = <String, BiteMeta>{};
+    raw.forEach((key, value) {
+      if (value is Map<String, dynamic>) {
+        result[key] = BiteMeta.fromJson(value);
+      } else if (value is Map) {
+        result[key] = BiteMeta.fromJson(Map<String, dynamic>.from(value));
+      }
+    });
+    return result;
+  }
+
+  static BiteMeta lookup(Map<String, BiteMeta> map, String assetPath) {
+    final direct = map[assetPath];
+    if (direct != null) return direct;
+    final slashIdx = assetPath.lastIndexOf('/');
+    final baseName = slashIdx >= 0 ? assetPath.substring(slashIdx + 1) : assetPath;
+    return map[baseName] ?? fallback;
+  }
 }
 
 /// Mặt nạ nhị phân (1 = thuộc vật thể) của vùng ROI, hàng trước cột sau.
@@ -82,6 +163,8 @@ class ObjectAnchor {
     required this.tangentAngle,
     required this.centroid,
     required this.fromMask,
+    this.rightEdge,
+    this.leftEdge,
   });
 
   /// Dự phòng khi không có mặt nạ (iOS, hoặc ML Kit không trả mask):
@@ -103,6 +186,10 @@ class ObjectAnchor {
   final double tangentAngle;
   final Offset centroid;
   final bool fromMask;
+
+  /// Mép phải và mép trái trích từ mặt nạ (toạ độ ảnh gốc) để cắn cạnh bên.
+  final TopEdge? rightEdge;
+  final TopEdge? leftEdge;
 }
 
 /// Ánh xạ ảnh gốc -> khung preview vuông theo `BoxFit.cover` (cắt giữa).
@@ -205,7 +292,7 @@ class StickerGeometry {
   }
 }
 
-enum PlacementKind { topEdge, hug, scene, corner }
+enum PlacementKind { topEdge, sideEdge, hug, scene, corner }
 
 class StickerPlacement {
   const StickerPlacement({
@@ -213,6 +300,8 @@ class StickerPlacement {
     required this.position,
     required this.scale,
     required this.rotation,
+    this.targetInFrame,
+    this.side,
   });
 
   final PlacementKind kind;
@@ -223,10 +312,19 @@ class StickerPlacement {
 
   /// Radian, gán cho `stickerRotation`.
   final double rotation;
+
+  /// Điểm neo mục tiêu trên khung hiển thị (px, hệ toạ độ Stack), dùng cho `kDebugBite`.
+  final Offset? targetInFrame;
+
+  /// Cạnh được chọn khi neo theo mép (`top`, `right`, `left`).
+  final EdgeSide? side;
 }
 
 class AnchorMath {
   const AnchorMath._();
+
+  /// Đọc [kDebugBite] qua getter để trình phân tích tĩnh không cảnh báo dead_code khi cờ tắt.
+  static bool get debugBiteEnabled => kDebugBite;
 
   /// Bước 2: tìm đỉnh + tiếp tuyến mép trên của mặt nạ.
   ///
@@ -381,6 +479,99 @@ class AnchorMath {
     return best;
   }
 
+  /// Xoay mặt nạ để tái sử dụng [findTopEdge] cho mép phải và mép trái:
+  /// - `top`   -> giữ nguyên.
+  /// - `right` -> xoay 90° ngược chiều kim đồng hồ (mép phải trở thành mép trên).
+  /// - `left`  -> xoay 90° theo chiều kim đồng hồ (mép trái trở thành mép trên).
+  static BinaryMask rotateMask(BinaryMask m, EdgeSide side) {
+    switch (side) {
+      case EdgeSide.top:
+        return m;
+      case EdgeSide.right:
+        final w = m.width;
+        final h = m.height;
+        final rotW = h;
+        final rotH = w;
+        final out = Uint8List(rotW * rotH);
+        for (var y = 0; y < h; y++) {
+          for (var x = 0; x < w; x++) {
+            final rx = y;
+            final ry = (w - 1) - x;
+            out[ry * rotW + rx] = m.data[y * w + x];
+          }
+        }
+        return BinaryMask(rotW, rotH, out);
+      case EdgeSide.left:
+        final w = m.width;
+        final h = m.height;
+        final rotW = h;
+        final rotH = w;
+        final out = Uint8List(rotW * rotH);
+        for (var y = 0; y < h; y++) {
+          for (var x = 0; x < w; x++) {
+            final rx = (h - 1) - y;
+            final ry = x;
+            out[ry * rotW + rx] = m.data[y * w + x];
+          }
+        }
+        return BinaryMask(rotW, rotH, out);
+    }
+  }
+
+  /// Tìm đỉnh + góc tiếp tuyến + pháp tuyến hướng ra ngoài cho cạnh [side] bất kỳ.
+  static TopEdge? findEdge(
+    BinaryMask mask,
+    EdgeSide side, {
+    double windowFraction = 0.2,
+    double minRowFraction = 0.02,
+    double maxLocalSlope = 1.2,
+    double maxAngle = 0.61,
+  }) {
+    final e = findTopEdge(
+      rotateMask(mask, side),
+      windowFraction: windowFraction,
+      minRowFraction: minRowFraction,
+      maxLocalSlope: maxLocalSlope,
+      maxAngle: maxAngle,
+    );
+    if (e == null) return null;
+    switch (side) {
+      case EdgeSide.top:
+        return e;
+      case EdgeSide.right:
+        return TopEdge(
+          apex: Offset((mask.width - 1) - e.apex.dy, e.apex.dx),
+          angle: e.angle + math.pi / 2,
+        );
+      case EdgeSide.left:
+        return TopEdge(
+          apex: Offset(e.apex.dy, (mask.height - 1) - e.apex.dx),
+          angle: e.angle - math.pi / 2,
+        );
+    }
+  }
+
+  /// Trích cạnh bên cho [anchorFromMask]: nếu cạnh nghiêng làm điểm cực trị rơi
+  /// sát góc trên/dưới của mặt nạ (< 35% hoặc > 75% chiều cao), lấy điểm viền thật
+  /// ở dải giữa (42%..72% chiều cao - ngang tầm má / thân bánh) và giữ góc tiếp tuyến.
+  static TopEdge? _sideEdgeForAnchor(BinaryMask mask, EdgeSide side) {
+    final full = findEdge(mask, side);
+    if (full == null || mask.height < 20) return full;
+    if (full.apex.dy >= mask.height * 0.35 && full.apex.dy <= mask.height * 0.75) {
+      return full;
+    }
+    final y0 = (mask.height * 0.42).floor().clamp(0, mask.height - 2);
+    final y1 = (mask.height * 0.72).ceil().clamp(y0 + 2, mask.height);
+    final subH = y1 - y0;
+    final subData = Uint8List.sublistView(mask.data, y0 * mask.width, y1 * mask.width);
+    final mid = findEdge(BinaryMask(mask.width, subH, subData), side);
+    if (mid == null) return full;
+    return TopEdge(
+      apex: Offset(mid.apex.dx, y0 + mid.apex.dy),
+      angle: full.angle,
+    );
+  }
+
   /// Dựng [ObjectAnchor] từ mặt nạ của vật thể có khung [bounds] (toạ độ ảnh).
   /// Mặt nạ rỗng thì quay về [ObjectAnchor.fromBounds].
   static ObjectAnchor anchorFromMask({
@@ -388,9 +579,11 @@ class AnchorMath {
     required Rect bounds,
     required BinaryMask mask,
   }) {
-    final edge = findTopEdge(mask);
+    final edge = findEdge(mask, EdgeSide.top);
     final c = centroid(mask);
     if (edge == null || c == null) return ObjectAnchor.fromBounds(imageSize, bounds);
+    final right = _sideEdgeForAnchor(mask, EdgeSide.right);
+    final left = _sideEdgeForAnchor(mask, EdgeSide.left);
     return ObjectAnchor(
       imageSize: imageSize,
       bounds: bounds,
@@ -398,6 +591,12 @@ class AnchorMath {
       tangentAngle: edge.angle,
       centroid: bounds.topLeft + c,
       fromMask: true,
+      rightEdge: right == null
+          ? null
+          : TopEdge(apex: bounds.topLeft + right.apex, angle: right.angle),
+      leftEdge: left == null
+          ? null
+          : TopEdge(apex: bounds.topLeft + left.apex, angle: left.angle),
     );
   }
 }
@@ -413,12 +612,32 @@ class StickerPlacementSolver {
   static const double minDisplayFraction = 0.22;
   static const double maxDisplayFraction = 0.36;
 
+  /// Độ lún vào trong vật thể để mép lọt vào miệng meme (tỉ lệ theo chiều rộng vật thể).
+  static const double defaultBiteDepthFraction = 0.04;
+
+  /// Giới hạn góc xoay (~±50°) để meme không bị lộn ngược.
+  static const double maxBiteRotation = 0.9;
+
+  static double _wrapAngle(double a) {
+    var r = a;
+    while (r <= -math.pi) {
+      r += 2 * math.pi;
+    }
+    while (r > math.pi) {
+      r -= 2 * math.pi;
+    }
+    return r;
+  }
+
   static StickerPlacement solve({
     required AnchorMode mode,
     required ObjectAnchor? anchor,
     required Offset bitePoint,
     required Size stickerPixelSize,
     required double photoBoxSize,
+    Offset biteDirection = BiteMeta.defaultDir,
+    double? widthFactor,
+    double biteDepthFraction = 0.0,
   }) {
     final side = StickerGeometry.frameSide(photoBoxSize);
 
@@ -449,10 +668,12 @@ class StickerPlacementSolver {
         position: geo.positionFor(topLeft),
         scale: scale,
         rotation: 0,
+        targetInFrame: target,
       );
     }
 
-    final factor = mode == AnchorMode.hug ? hugWidthFactor : edgeWidthFactor;
+    final factor = widthFactor ??
+        (mode == AnchorMode.hug ? hugWidthFactor : edgeWidthFactor);
     final displayWidth = (visible.width * factor)
         .clamp(side * minDisplayFraction, side * maxDisplayFraction)
         .toDouble();
@@ -465,9 +686,10 @@ class StickerPlacementSolver {
         );
 
     if (mode == AnchorMode.hug) {
+      final target = clampToFrame(mapping.toFrame(anchor.centroid));
       final topLeft = solveByBite(
         geometry: geo,
-        target: clampToFrame(mapping.toFrame(anchor.centroid)),
+        target: target,
         angle: 0,
         bitePoint: bitePoint,
         stickerPixelSize: stickerPixelSize,
@@ -477,29 +699,65 @@ class StickerPlacementSolver {
         position: geo.positionFor(topLeft),
         scale: scale,
         rotation: 0,
+        targetInFrame: target,
       );
     }
 
-    // topEdge: kiểm tra còn chỗ phía trên đỉnh cho phần sticker nhô lên.
-    final apex = mapping.toFrame(anchor.apex);
-    final imageRect = geo.imageRectInBox(stickerPixelSize);
-    final aboveContact = bitePoint.dy * imageRect.height;
-    final hasHeadroom = apex.dy - aboveContact >= -0.1 * imageRect.height;
+    // topEdge: thử theo thứ tự top → right → left. Chọn cạnh đầu tiên mà hộp meme
+    // sau khi đặt nằm trọn trong khung ảnh (chừa reservedBottom như hiện tại).
+    final dir = biteDirection.distanceSquared > 1e-12
+        ? biteDirection / biteDirection.distance
+        : BiteMeta.defaultDir;
+    final dirAngle = math.atan2(dir.dy, dir.dx);
 
-    if (hasHeadroom) {
+    final candidates = <(EdgeSide, TopEdge)>[
+      (EdgeSide.top, TopEdge(apex: anchor.apex, angle: anchor.tangentAngle)),
+      if (anchor.rightEdge != null) (EdgeSide.right, anchor.rightEdge!),
+      if (anchor.leftEdge != null) (EdgeSide.left, anchor.leftEdge!),
+    ];
+
+    for (final (edgeSide, edgeInImage) in candidates) {
+      final apexInFrame = mapping.toFrame(edgeInImage.apex);
+      if (apexInFrame.dx < 0 ||
+          apexInFrame.dx > side ||
+          apexInFrame.dy < 0 ||
+          apexInFrame.dy > side) {
+        continue;
+      }
+
+      final outward = edgeInImage.outwardNormal;
+      final inward = Offset(-outward.dx, -outward.dy);
+      final rotation = _wrapAngle(math.atan2(inward.dy, inward.dx) - dirAngle)
+          .clamp(-maxBiteRotation, maxBiteRotation)
+          .toDouble();
+      final target = clampToFrame(
+        apexInFrame + inward * (biteDepthFraction * visible.width),
+      );
       final topLeft = solveByBite(
         geometry: geo,
-        target: clampToFrame(apex),
-        angle: anchor.tangentAngle,
+        target: target,
+        angle: rotation,
         bitePoint: bitePoint,
         stickerPixelSize: stickerPixelSize,
       );
-      return StickerPlacement(
-        kind: PlacementKind.topEdge,
-        position: geo.positionFor(topLeft),
-        scale: scale,
-        rotation: anchor.tangentAngle,
-      );
+
+      final fitsInFrame = topLeft.dx >= 0.0 &&
+          topLeft.dx + geo.size <= side &&
+          topLeft.dy >= 0.0 &&
+          topLeft.dy <= geo.maxTop;
+
+      if (fitsInFrame) {
+        return StickerPlacement(
+          kind: edgeSide == EdgeSide.top
+              ? PlacementKind.topEdge
+              : PlacementKind.sideEdge,
+          position: geo.positionFor(topLeft),
+          scale: scale,
+          rotation: rotation,
+          targetInFrame: target,
+          side: edgeSide,
+        );
+      }
     }
 
     return _cornerFallback(

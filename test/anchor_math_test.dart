@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icnative/services/anchor_math.dart';
+import 'package:icnative/services/sticker_anchoring_engine.dart';
 
 /// Dựng mặt nạ từ cột -> y cao nhất của vật thể (phần dưới đó đều đặc).
 BinaryMask maskFromTopProfile(List<int?> topY, int height) {
@@ -400,5 +401,262 @@ void main() {
         expect(onScreen, offsetMoreOrLessEquals(target, epsilon: 1e-3));
       });
     }
+  });
+
+  group('Bite Snapping - rotateMask & findEdge', () {
+    test('mặt nạ hình chữ nhật: apex đúng cạnh, pháp tuyến hướng ra ngoài, sai số góc < 0.05', () {
+      const w = 90;
+      const h = 110;
+      final data = Uint8List(w * h);
+      for (var y = 20; y <= 80; y++) {
+        for (var x = 15; x <= 64; x++) {
+          data[y * w + x] = 1;
+        }
+      }
+      final mask = BinaryMask(w, h, data);
+
+      final top = AnchorMath.findEdge(mask, EdgeSide.top)!;
+      expect(top.apex.dy, closeTo(20, 1.0));
+      expect(top.apex.dx, closeTo(39.5, 1.5));
+      expect(top.angle, closeTo(0.0, 0.05));
+      expect(top.outwardNormal.dx, closeTo(0.0, 0.05));
+      expect(top.outwardNormal.dy, closeTo(-1.0, 0.05));
+
+      final right = AnchorMath.findEdge(mask, EdgeSide.right)!;
+      expect(right.apex.dx, closeTo(64, 1.0));
+      expect(right.apex.dy, closeTo(50, 1.5));
+      expect(right.angle, closeTo(math.pi / 2, 0.05));
+      expect(right.outwardNormal.dx, closeTo(1.0, 0.05));
+      expect(right.outwardNormal.dy, closeTo(0.0, 0.05));
+
+      final left = AnchorMath.findEdge(mask, EdgeSide.left)!;
+      expect(left.apex.dx, closeTo(15, 1.0));
+      expect(left.apex.dy, closeTo(50, 1.5));
+      expect(left.angle, closeTo(-math.pi / 2, 0.05));
+      expect(left.outwardNormal.dx, closeTo(-1.0, 0.05));
+      expect(left.outwardNormal.dy, closeTo(0.0, 0.05));
+    });
+
+    test('mặt nạ hình thang nghiêng: tiếp tuyến & pháp tuyến hai cạnh bên chính xác (< 0.05 rad)', () {
+      const w = 140;
+      const h = 140;
+      final data = Uint8List(w * h);
+      // Cạnh phải nghiêng: xRight(y) = 115 - 0.25*y; cạnh trái nghiêng: xLeft(y) = 25 + 0.20*y
+      for (var y = 0; y < h; y++) {
+        final xLeft = (25 + 0.20 * y).round();
+        final xRight = (115 - 0.25 * y).round();
+        for (var x = xLeft; x <= xRight; x++) {
+          data[y * w + x] = 1;
+        }
+      }
+      final mask = BinaryMask(w, h, data);
+
+      final right = AnchorMath.findEdge(mask, EdgeSide.right)!;
+      final expectedRightAngle = math.pi / 2 + math.atan(0.25);
+      expect(right.angle, closeTo(expectedRightAngle, 0.05));
+      expect(right.apex.dx, closeTo(115, 2.0));
+      // Pháp tuyến hướng sang phải và hơi chếch xuống (ra ngoài hình thang thu đáy)
+      expect(right.outwardNormal.dx, greaterThan(0.9));
+      expect(right.outwardNormal.dy, greaterThan(0.18));
+
+      final left = AnchorMath.findEdge(mask, EdgeSide.left)!;
+      final expectedLeftAngle = -math.pi / 2 - math.atan(0.20);
+      expect(left.angle, closeTo(expectedLeftAngle, 0.05));
+      expect(left.apex.dx, closeTo(25, 2.0));
+      // Pháp tuyến hướng sang trái và hơi chếch xuống
+      expect(left.outwardNormal.dx, lessThan(-0.9));
+      expect(left.outwardNormal.dy, greaterThan(0.14));
+    });
+  });
+
+  group('Bite Snapping - BiteMeta & chọn cạnh cắn (top -> right -> left)', () {
+    test('BiteMeta đọc JSON và trả fallback khi không khai báo', () {
+      final map = BiteMeta.parseJsonMap({
+        'bite_hachi_01.png': {
+          'bite': [0.50, 0.82],
+          'dir': [0.0, 2.0],
+          'width': 0.40,
+        },
+      });
+      final found = BiteMeta.lookup(map, 'assets/memes/bite/bite_hachi_01.png');
+      expect(found.bite, const Offset(0.50, 0.82));
+      expect(found.dir.dx, closeTo(0.0, 1e-9));
+      expect(found.dir.dy, closeTo(1.0, 1e-9));
+      expect(found.width, closeTo(0.40, 1e-9));
+
+      final fallback = BiteMeta.lookup(map, 'assets/memes/meme_cat_01.png');
+      expect(fallback.bite, BiteMeta.defaultBite);
+      expect(fallback.dir, BiteMeta.defaultDir);
+      expect(fallback.width, BiteMeta.defaultWidth);
+    });
+
+    test('hết chỗ mép trên -> tự chuyển sang cắn mép phải; hết cả phải -> cắn mép trái', () {
+      const w = 160;
+      const h = 220;
+      final solid = BinaryMask(w, h, Uint8List(w * h)..fillRange(0, w * h, 1));
+
+      // 1. Vật thể sát mép trên, nằm lệch trái -> mép trên hết chỗ, mép phải đủ chỗ
+      final anchorRightRoom = AnchorMath.anchorFromMask(
+        imageSize: const Size(480, 480),
+        bounds: const Rect.fromLTWH(60, 0, 160, 220),
+        mask: solid,
+      );
+      final pRight = StickerPlacementSolver.solve(
+        mode: AnchorMode.topEdge,
+        anchor: anchorRightRoom,
+        bitePoint: const Offset(0.5, 0.82),
+        biteDirection: const Offset(0, 1),
+        widthFactor: 0.40,
+        biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
+        stickerPixelSize: const Size(512, 512),
+        photoBoxSize: 360,
+      );
+      expect(pRight.kind, PlacementKind.sideEdge);
+      expect(pRight.side, EdgeSide.right);
+      expect(pRight.rotation, greaterThan(0.5));
+
+      // 2. Vật thể sát cả mép trên lẫn mép phải -> mép trên & phải hết chỗ, cắn mép trái
+      final anchorLeftRoom = AnchorMath.anchorFromMask(
+        imageSize: const Size(480, 480),
+        bounds: const Rect.fromLTWH(290, 0, 160, 220),
+        mask: solid,
+      );
+      final pLeft = StickerPlacementSolver.solve(
+        mode: AnchorMode.topEdge,
+        anchor: anchorLeftRoom,
+        bitePoint: const Offset(0.5, 0.82),
+        biteDirection: const Offset(0, 1),
+        widthFactor: 0.40,
+        biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
+        stickerPixelSize: const Size(512, 512),
+        photoBoxSize: 360,
+      );
+      expect(pLeft.kind, PlacementKind.sideEdge);
+      expect(pLeft.side, EdgeSide.left);
+      expect(pLeft.rotation, lessThan(-0.5));
+    });
+
+    testWidgets('RenderBox.localToGlobal: mặt nạ có mép phải nghiêng -> bitePoint trùng điểm neo (< 1px) và dir hướng vào vật thể', (tester) async {
+      const maskW = 160;
+      const maskH = 220;
+      final data = Uint8List(maskW * maskH);
+      for (var y = 0; y < maskH; y++) {
+        final xRight = (150 - 0.22 * y).round().clamp(10, maskW - 1);
+        for (var x = 0; x <= xRight; x++) {
+          data[y * maskW + x] = 1;
+        }
+      }
+      final mask = BinaryMask(maskW, maskH, data);
+      final anchor = AnchorMath.anchorFromMask(
+        imageSize: const Size(480, 480),
+        bounds: const Rect.fromLTWH(60, 0, 160, 220), // Sát đỉnh để chọn cạnh phải
+        mask: mask,
+      );
+
+      const photoBoxSize = 360.0;
+      final side = StickerGeometry.frameSide(photoBoxSize);
+      const bite = Offset(0.50, 0.82);
+      const dir = Offset(0.0, 1.0);
+      const stickerPx = Size(512, 512);
+
+      final placement = StickerPlacementSolver.solve(
+        mode: AnchorMode.topEdge,
+        anchor: anchor,
+        bitePoint: bite,
+        biteDirection: dir,
+        widthFactor: 0.40,
+        biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
+        stickerPixelSize: stickerPx,
+        photoBoxSize: photoBoxSize,
+      );
+
+      expect(placement.kind, PlacementKind.sideEdge);
+      expect(placement.side, EdgeSide.right);
+      expect(placement.targetInFrame, isNotNull);
+
+      final geo = StickerGeometry(photoBoxSize: photoBoxSize, scale: placement.scale);
+      final topLeft = geo.topLeftFor(placement.position);
+      final boxKey = GlobalKey();
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: side,
+              height: side,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: topLeft.dx,
+                    top: topLeft.dy,
+                    child: Transform.rotate(
+                      angle: placement.rotation,
+                      child: SizedBox(key: boxKey, width: geo.size, height: geo.size),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final box = tester.renderObject<RenderBox>(find.byKey(boxKey));
+      final onScreenBite = box.localToGlobal(geo.biteLocal(bite, stickerPx));
+      expect((onScreenBite - placement.targetInFrame!).distance, lessThan(1.0));
+
+      // Kiểm tra vector hướng miệng `dir` sau khi xoay góc `placement.rotation` hướng VÀO TRONG vật thể
+      final cosA = math.cos(placement.rotation);
+      final sinA = math.sin(placement.rotation);
+      final rotatedDir = Offset(dir.dx * cosA - dir.dy * sinA, dir.dx * sinA + dir.dy * cosA);
+      final outward = anchor.rightEdge!.outwardNormal;
+      final inward = Offset(-outward.dx, -outward.dy);
+      final dot = rotatedDir.dx * inward.dx + rotatedDir.dy * inward.dy;
+      expect(dot, greaterThan(0.5));
+    });
+
+    test('StickerAnchoringEngine: có pool bite -> beverage đổi sang topEdge & lấy BiteMeta; rỗng -> fallback cũ', () {
+      final metaMap = BiteMeta.parseJsonMap({
+        'bite_hachi_01.png': {
+          'bite': [0.50, 0.82],
+          'dir': [-1.0, 0.0],
+          'width': 0.40,
+        },
+      });
+      const pool = ['assets/memes/bite/bite_hachi_01.png'];
+
+      // Khi có pool bite: đồ uống cũng cắn mép ly (topEdge) thay vì hug
+      final drinkBite = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.beverage,
+        bitePool: pool,
+        biteMetaMap: metaMap,
+      );
+      expect(drinkBite.assetPath, 'assets/memes/bite/bite_hachi_01.png');
+      expect(drinkBite.anchorMode, AnchorMode.topEdge);
+      expect(drinkBite.bitePoint, const Offset(0.50, 0.82));
+      expect(drinkBite.biteDirection, const Offset(-1.0, 0.0));
+      expect(drinkBite.widthFactor, closeTo(0.40, 1e-9));
+
+      // Phong cảnh vẫn giữ nguyên Capybara scene (không cắn)
+      final scene = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.scene,
+        bitePool: pool,
+        biteMetaMap: metaMap,
+      );
+      expect(scene.anchorMode, AnchorMode.scene);
+
+      // Khi pool bite rỗng: fallback về hành vi cũ, không lỗi
+      final drinkFallback = StickerAnchoringEngine.pickStickerForCategory(
+        StickerCategory.beverage,
+      );
+      expect(drinkFallback.anchorMode, AnchorMode.hug);
+    });
+
+    testWidgets('Thư mục assets/memes/bite/ chưa có ảnh PNG -> getAvailableBiteAssets không crash', (tester) async {
+      final available = await StickerAnchoringEngine.getAvailableBiteAssets();
+      expect(available, isA<List<String>>());
+    });
   });
 }
