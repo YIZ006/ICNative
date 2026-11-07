@@ -5,6 +5,20 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 18:01:00] - Phát Hành Orbit v1.4.9 Dual-Release: Khôi Phục Subject Segmentation & Viền Neon Đa Cạnh Cho Demo
+* **Thời gian (Timestamp):** 2026-11-07 18:01:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Đóng gói và xuất bản chính thức phiên bản **Orbit v1.4.9** (`1.4.9+13`) lên GitHub Releases tuân thủ nghiêm ngặt luật Dual-Release:
+  1. Đã đóng gói đủ cả 2 tệp APK:
+     - `Orbit-v1.4.9-clean-release.apk` (169,155,293 bytes).
+     - `Orbit-v1.4.9-demo-showcase.apk` (169,155,293 bytes).
+  2. Xuất bản chính thức tại: https://github.com/YIZ006/ICNative/releases/tag/v1.4.9 với đầy đủ ghi chú phát hành chuẩn UTF-8.
+  3. Cập nhật version `1.4.9+13` đồng bộ trong `pubspec.yaml` và `lib/services/update_service.dart`.
+
+---
+
 ### [2026-11-07 17:44:00] - Khôi Phục Cơ Chế Nhận Diện Phân Tách Điểm Ảnh (Subject Segmentation) & Hiển Thị Đường Viền Neon Phát Sáng Cho Bản Demo (0 VNĐ & 100% Offline)
 * **Thời gian (Timestamp):** 2026-11-07 17:44:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
