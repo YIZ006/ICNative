@@ -5,6 +5,38 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-07 18:45:00] - Hoàn Thiện Cắn Mép Góc (Corner Bite Snapping), Tự Động Lật Meme (FlipX) & Phát Hành Orbit v1.4.10 Dual-Release
+* **Thời gian (Timestamp):** 2026-11-07 18:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết triệt để phản hồi của người dùng kèm ảnh chụp selfie thực tế ("Chưa hoàn hảo, meme bite vẫn không khớp, phải đặt sao cho nó cắn hợp lí ở góc cơ"):
+  1. **Nguyên nhân kỹ thuật được làm rõ:**
+     - Khi chụp selfie cận cảnh, đỉnh đầu chạm sát mép trên ảnh (`apexInFrame.dy` rất nhỏ) khiến sticker ở đỉnh bị tràn ra ngoài màn hình (`topLeft.dy < 0`).
+     - Thuật toán cũ chỉ thử 3 điểm cố định (top apex, right edge, left edge). Khi đỉnh bị tràn và 2 cạnh bên chạm viền, solver rơi thẳng xuống `_cornerFallback` và đặt meme lơ lửng ở góc khung ảnh mà không neo vào đầu người.
+     - Đồng thời, toàn bộ 18 meme cắn trong `bite_meta.json` bị cấu hình sai toạ độ đáy `[0.5, 0.82]` và hướng cắm thẳng xuống đất `dir: [0.0, 1.0]`. Thực tế Usagi có miệng ở cạnh phải `[0.62, 0.55]` hướng sang phải (`dir: [1.0, 0.0]`). Khi đặt ở góc phải đầu người, Usagi quay lưng vào đầu và há mồm ra khoảng không.
+  2. **Giải pháp & Nâng cấp toàn diện:**
+     - **Cơ chế Cắn Mép Góc (Corner Bite Snapping & Head Slope Anchoring):** Khi đỉnh đầu quá sát mép trên khung ảnh, AI tự động quét dọc theo các điểm viền thực tế (`contourPoints`) ở sườn góc trên bên phải (Top-Right head slope) và góc trên bên trái (Top-Left head slope) từ đỉnh đầu xuống vai, tìm điểm đầu tiên trên đường cong mà meme vừa vặn trong khung hình.
+     - **Tự Động Lật Gương Ngang (Smart FlipX Alignment):** Bổ sung thuộc tính `flipX` vào `StickerPlacement`. Thuật toán tự động đối soát vector pháp tuyến hướng vào trong vật thể với hướng mở miệng của từng meme. Khi neo ở sườn bên phải, meme há miệng sang phải (như Usagi) tự động bật `flipX = true` để miệng quay sang trái ngoạm thẳng vào tóc/đầu người với góc nghiêng tự nhiên ($\approx -45^\circ$).
+     - **Chuẩn hoá toạ độ 18 meme cắn (`assets/memes/bite/bite_meta.json`):** Quét quang học và hiệu chỉnh tâm khoang miệng và hướng cắn thực tế cho toàn bộ kho meme (Usagi, Chiikawa, Hachiware, Doraemon, Pikachu, v.v.).
+     - **Đồng bộ tuyệt đối Preview & Khắc ảnh canvas:** Áp dụng phép biến đổi affine quanh tâm sticker cho cả widget hiển thị và canvas xuất ảnh (`_burnStickerAndCaptionToImage`), bọc riêng sticker để chữ nhãn Meme Caption luôn hiển thị xuôi chiều không bị lộn ngược.
+     - **Kiểm thử tự động:** Bổ sung unit test chuyên biệt trong `test/anchor_math_test.dart` kiểm chứng ảnh selfie cận cảnh sát mép trên, xác nhận tự động neo vào sườn góc trên bên phải và bật `flipX = true`. Toàn bộ 36/36 unit test đều PASSED.
+     - **Build & Xuất xưởng Dual-Release v1.4.10:** Đóng gói đủ 2 bản APK (`Orbit-v1.4.10-clean-release.apk` và `Orbit-v1.4.10-demo-showcase.apk`) và xuất bản chính thức lên GitHub Releases.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/anchor_math.dart`](../lib/services/anchor_math.dart): Thêm `flipX` vào `StickerPlacement`, nâng cấp `StickerPlacementSolver.solve` quét sườn góc contour (Top-Right / Top-Left slope) và tự động lật `flipX`.
+  - [MODIFY] [`assets/memes/bite/bite_meta.json`](../assets/memes/bite/bite_meta.json): Hiệu chỉnh toạ độ tâm miệng và hướng cắn chuẩn xác cho 18 meme cắn.
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart): Áp dụng `flipX` trong widget preview và canvas khắc ảnh `_burnStickerAndCaptionToImage`.
+  - [MODIFY] [`pubspec.yaml`](../pubspec.yaml): Nâng version lên `1.4.10+2006`.
+  - [MODIFY] [`test/anchor_math_test.dart`](../test/anchor_math_test.dart): Bổ sung unit test selfie góc cắn mép (36/36 test passed).
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 issues found** (100% sạch).
+  - `flutter test`: **36/36 tests PASSED**.
+  - `git commit`: Đã commit và push lên `main` (`b112067`).
+  - GitHub Release v1.4.10: https://github.com/YIZ006/ICNative/releases/tag/v1.4.10 (Upload đủ 2 file APK chuẩn UTF-8).
+  - Thiết bị MEIZU 21 Note: Đã cài đặt thành công trực tiếp `Orbit-v1.4.10-demo-showcase.apk` qua ADB và khởi chạy `MainActivity`. Ứng dụng chạy mượt mà không crash.
+
+---
+
 ### [2026-11-07 18:16:00] - Khắc Phục Lỗi INSTALL_FAILED_VERSION_DOWNGRADE & Cài Đặt Trực Tiếp Lên MEIZU 21 Note
 * **Thời gian (Timestamp):** 2026-11-07 18:16:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
