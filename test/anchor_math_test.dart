@@ -680,5 +680,57 @@ void main() {
       final available = await StickerAnchoringEngine.getAvailableBiteAssets();
       expect(available, isA<List<String>>());
     });
+
+    test('Selfie cận cảnh sát mép trên: neo vào sườn góc trên bên phải & tự động bật flipX để Usagi cắn vào đầu', () {
+      // Giả lập ảnh selfie 1080x1612:
+      // bounds: person từ x=100 đến x=980, y=280 đến y=1500 (chiếm gần trọn màn hình)
+      // Với ảnh 1080x1612, BoxFit.cover cắt giữa giữ lại y từ 266 đến 1346.
+      // apex ở (540, 280) -> trong frame chỉ cách đỉnh ~4.5px (quá sát mép trên khung hình)!
+      // sườn dốc góc trên bên phải: từ (540, 280) qua (650, 340), (750, 480), (800, 580)...
+      final contour = <Offset>[
+        const Offset(540, 280),
+        const Offset(600, 300),
+        const Offset(650, 340),
+        const Offset(700, 400),
+        const Offset(750, 480),
+        const Offset(800, 580),
+        const Offset(850, 700),
+      ];
+
+      final anchor = ObjectAnchor(
+        imageSize: const Size(1080, 1612),
+        bounds: const Rect.fromLTWH(100, 280, 880, 1200),
+        apex: const Offset(540, 280),
+        tangentAngle: 0.0,
+        centroid: const Offset(540, 800),
+        fromMask: true,
+        contourPoints: contour,
+      );
+
+      // Meme Usagi: miệng há sang phải [1.0, 0.0], tâm miệng ở [0.62, 0.55]
+      const bite = Offset(0.62, 0.55);
+      const dir = Offset(1.0, 0.0);
+      const stickerPx = Size(616, 663);
+
+      final placement = StickerPlacementSolver.solve(
+        mode: AnchorMode.topEdge,
+        anchor: anchor,
+        bitePoint: bite,
+        biteDirection: dir,
+        widthFactor: 0.42,
+        biteDepthFraction: StickerPlacementSolver.defaultBiteDepthFraction,
+        stickerPixelSize: stickerPx,
+        photoBoxSize: 360,
+      );
+
+      // Kết quả phải neo vào sườn góc bên phải (EdgeSide.right), không bị rơi vào corner fallback vô căn cứ
+      expect(placement.side, EdgeSide.right);
+      // Usagi miệng há sang phải phải được lật ngang (flipX = true) để cắn vào đầu người từ góc phải
+      expect(placement.flipX, isTrue);
+      // Góc xoay nghiêng tự nhiên hướng vào đầu (khoảng -60 độ đến -30 độ)
+      expect(placement.rotation, lessThan(-0.4));
+      // Điểm neo targetInFrame nằm trên đường viền thực tế
+      expect(placement.targetInFrame, isNotNull);
+    });
   });
 }

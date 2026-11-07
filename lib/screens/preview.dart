@@ -42,6 +42,7 @@ class _ImagePreviewState extends State<ImagePreview> {
   Offset stickerPosition = const Offset(0.55, 0.15); // Ti le 0.0 -> 1.0 tren khung anh
   double stickerScale = 1.0;
   double stickerRotation = 0.05;
+  bool stickerFlipX = false;
   ObjectAnchor? _anchor;
   AnchorMode _detectedMode = AnchorMode.topEdge;
   Offset _activeBitePoint = BiteMeta.defaultBite;
@@ -182,6 +183,7 @@ class _ImagePreviewState extends State<ImagePreview> {
           stickerPosition = placement?.position ?? const Offset(0.08, 0.35);
           stickerScale = placement?.scale ?? 1.0;
           stickerRotation = placement?.rotation ?? 0.04;
+          stickerFlipX = placement?.flipX ?? false;
         });
       }
     } catch (e) {
@@ -254,6 +256,7 @@ class _ImagePreviewState extends State<ImagePreview> {
       stickerPosition = placement.position;
       stickerScale = placement.scale;
       stickerRotation = placement.rotation;
+      stickerFlipX = placement.flipX;
     });
   }
 
@@ -338,7 +341,15 @@ class _ImagePreviewState extends State<ImagePreview> {
           localImageRect.width * k,
           localImageRect.height * k,
         );
+
+        canvas.save();
+        if (stickerFlipX) {
+          canvas.translate(boxSide / 2, boxSide / 2);
+          canvas.scale(-1.0, 1.0);
+          canvas.translate(-boxSide / 2, -boxSide / 2);
+        }
         canvas.drawImageRect(stickerImg, srcRect, dstRect, ui.Paint()..filterQuality = ui.FilterQuality.high);
+        canvas.restore();
 
         // Khắc kèm nhãn Meme Caption nếu sticker có caption
         if (sticker.caption != null && sticker.caption!.trim().isNotEmpty) {
@@ -701,8 +712,11 @@ class _ImagePreviewState extends State<ImagePreview> {
                           final Offset stickerTopLeft = geo.topLeftFor(stickerPosition);
                           final double left = stickerTopLeft.dx;
                           final double top = stickerTopLeft.dy;
+                          final Offset effBite = stickerFlipX
+                              ? Offset(1.0 - _activeBitePoint.dx, _activeBitePoint.dy)
+                              : _activeBitePoint;
                           final Offset debugBiteLocal = geo.biteLocal(
-                            _activeBitePoint,
+                            effBite,
                             _activeStickerPixelSize,
                           );
 
@@ -718,21 +732,29 @@ class _ImagePreviewState extends State<ImagePreview> {
                                     Stack(
                                       clipBehavior: Clip.none,
                                       children: [
-                                        Container(
-                                          width: stickerPixelSize,
-                                          height: stickerPixelSize,
-                                          padding: const EdgeInsets.all(4),
-                                          child: activeCustomSticker!.isAsset
-                                              ? Image.asset(
-                                                  activeCustomSticker!.path,
-                                                  fit: BoxFit.contain,
-                                                  filterQuality: FilterQuality.high,
-                                                )
-                                              : Image.file(
-                                                  File(activeCustomSticker!.path),
-                                                  fit: BoxFit.contain,
-                                                  filterQuality: FilterQuality.high,
-                                                ),
+                                        Transform(
+                                          transform: Matrix4.diagonal3Values(
+                                            stickerFlipX ? -1.0 : 1.0,
+                                            1.0,
+                                            1.0,
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Container(
+                                            width: stickerPixelSize,
+                                            height: stickerPixelSize,
+                                            padding: const EdgeInsets.all(4),
+                                            child: activeCustomSticker!.isAsset
+                                                ? Image.asset(
+                                                    activeCustomSticker!.path,
+                                                    fit: BoxFit.contain,
+                                                    filterQuality: FilterQuality.high,
+                                                  )
+                                                : Image.file(
+                                                    File(activeCustomSticker!.path),
+                                                    fit: BoxFit.contain,
+                                                    filterQuality: FilterQuality.high,
+                                                  ),
+                                          ),
                                         ),
                                         if (AnchorMath.debugBiteEnabled)
                                           Positioned(

@@ -297,7 +297,7 @@ class StickerGeometry {
   }
 }
 
-enum PlacementKind { topEdge, sideEdge, hug, scene, corner }
+enum PlacementKind { topEdge, sideEdge, cornerEdge, hug, scene, corner }
 
 class StickerPlacement {
   const StickerPlacement({
@@ -305,6 +305,7 @@ class StickerPlacement {
     required this.position,
     required this.scale,
     required this.rotation,
+    this.flipX = false,
     this.targetInFrame,
     this.side,
   });
@@ -317,6 +318,9 @@ class StickerPlacement {
 
   /// Radian, gán cho `stickerRotation`.
   final double rotation;
+
+  /// Có lật gương ngang sticker hay không (để miệng luôn hướng vào vật thể).
+  final bool flipX;
 
   /// Điểm neo mục tiêu trên khung hiển thị (px, hệ toạ độ Stack), dùng cho `kDebugBite`.
   final Offset? targetInFrame;
@@ -735,61 +739,173 @@ class StickerPlacementSolver {
       );
     }
 
-    // topEdge: thử theo thứ tự top → right → left. Chọn cạnh đầu tiên mà hộp meme
-    // sau khi đặt nằm trọn trong khung ảnh (chừa reservedBottom như hiện tại).
+    // topEdge: thử theo thứ tự top → corners (Top-Right / Top-Left slope từ contour) → right → left.
+    // Tại mỗi điểm neo, tự động tính góc xoay và lật ngang (flipX) nếu cần để miệng luôn hướng vào vật thể.
     final dir = biteDirection.distanceSquared > 1e-12
         ? biteDirection / biteDirection.distance
         : BiteMeta.defaultDir;
-    final dirAngle = math.atan2(dir.dy, dir.dx);
 
-    final candidates = <(EdgeSide, TopEdge)>[
-      (EdgeSide.top, TopEdge(apex: anchor.apex, angle: anchor.tangentAngle)),
-      if (anchor.rightEdge != null) (EdgeSide.right, anchor.rightEdge!),
-      if (anchor.leftEdge != null) (EdgeSide.left, anchor.leftEdge!),
-    ];
-
-    for (final (edgeSide, edgeInImage) in candidates) {
-      final apexInFrame = mapping.toFrame(edgeInImage.apex);
+    StickerPlacement? tryPlacementAt({
+      required Offset apexInFrame,
+      required Offset inward,
+      required PlacementKind kind,
+      required EdgeSide edgeSide,
+      bool allowFlip = true,
+    }) {
       if (apexInFrame.dx < 0 ||
           apexInFrame.dx > side ||
           apexInFrame.dy < 0 ||
           apexInFrame.dy > side) {
-        continue;
+        return null;
+      }
+      final inLen = inward.distance;
+      if (inLen < 1e-6) return null;
+      final unitInward = inward / inLen;
+
+      final flipsToTry = <bool>[];
+      if (allowFlip && dir.dx.abs() > 0.15) {
+        // unitInward hướng vào trong vật thể:
+        // Nếu unitInward.dx < -0.1 (hướng sang trái -> sticker ở bên phải vật thể):
+        //   Nếu dir.dx > 0 (miệng gốc quay sang phải), lật để quay sang trái: flipX = true.
+        //   Nếu dir.dx < 0 (miệng gốc quay sang trái), giữ nguyên: flipX = false.
+        // Ngược lại nếu unitInward.dx > 0.1 (hướng sang phải -> sticker ở bên trái vật thể):
+        //   Nếu dir.dx > 0, giữ nguyên: flipX = false.
+        //   Nếu dir.dx < 0, lật để quay sang phải: flipX = true.
+        if (unitInward.dx < -0.1) {
+          flipsToTry.addAll([dir.dx > 0, dir.dx <= 0]);
+        } else if (unitInward.dx > 0.1) {
+          flipsToTry.addAll([dir.dx < 0, dir.dx >= 0]);
+        } else {
+          flipsToTry.addAll([false, true]);
+        }
+      } else {
+        flipsToTry.add(false);
       }
 
-      final outward = edgeInImage.outwardNormal;
-      final inward = Offset(-outward.dx, -outward.dy);
-      final rotation = _wrapAngle(math.atan2(inward.dy, inward.dx) - dirAngle)
-          .clamp(-maxBiteRotation, maxBiteRotation)
-          .toDouble();
-      final target = clampToFrame(
-        apexInFrame + inward * (biteDepthFraction * visible.width),
-      );
-      final topLeft = solveByBite(
-        geometry: geo,
-        target: target,
-        angle: rotation,
-        bitePoint: bitePoint,
-        stickerPixelSize: stickerPixelSize,
-      );
+      for (final flipX in flipsToTry) {
+        final effDir = Offset(flipX ? -dir.dx : dir.dx, dir.dy);
+        final effBite = Offset(flipX ? 1.0 - bitePoint.dx : bitePoint.dx, bitePoint.dy);
+        final effDirAngle = math.atan2(effDir.dy, effDir.dx);
+        final inwardAngle = math.atan2(unitInward.dy, unitInward.dx);
 
-      final fitsInFrame = topLeft.dx >= 0.0 &&
-          topLeft.dx + geo.size <= side &&
-          topLeft.dy >= 0.0 &&
-          topLeft.dy <= geo.maxTop;
+        final rotation = _wrapAngle(inwardAngle - effDirAngle)
+            .clamp(-maxBiteRotation, maxBiteRotation)
+            .toDouble();
 
-      if (fitsInFrame) {
-        return StickerPlacement(
-          kind: edgeSide == EdgeSide.top
-              ? PlacementKind.topEdge
-              : PlacementKind.sideEdge,
-          position: geo.positionFor(topLeft),
-          scale: scale,
-          rotation: rotation,
-          targetInFrame: target,
-          side: edgeSide,
+        final target = clampToFrame(
+          apexInFrame + unitInward * (biteDepthFraction * visible!.width),
         );
+
+        final topLeft = solveByBite(
+          geometry: geo,
+          target: target,
+          angle: rotation,
+          bitePoint: effBite,
+          stickerPixelSize: stickerPixelSize,
+        );
+
+        final fitsInFrame = topLeft.dx >= 0.0 &&
+            topLeft.dx + geo.size <= side &&
+            topLeft.dy >= 0.0 &&
+            topLeft.dy <= geo.maxTop;
+
+        if (fitsInFrame) {
+          return StickerPlacement(
+            kind: kind,
+            position: geo.positionFor(topLeft),
+            scale: scale,
+            rotation: rotation,
+            flipX: flipX,
+            targetInFrame: target,
+            side: edgeSide,
+          );
+        }
       }
+      return null;
+    }
+
+    // 1. Thử điểm đỉnh mép trên (top apex)
+    final topOutward = TopEdge(apex: anchor.apex, angle: anchor.tangentAngle).outwardNormal;
+    final topRes = tryPlacementAt(
+      apexInFrame: mapping.toFrame(anchor.apex),
+      inward: Offset(-topOutward.dx, -topOutward.dy),
+      kind: PlacementKind.topEdge,
+      edgeSide: EdgeSide.top,
+      allowFlip: false,
+    );
+    if (topRes != null) return topRes;
+
+    // 2. Nếu đỉnh bị tràn mép trên (selfie, góc chụp cận), quét dọc theo các điểm sườn góc trên
+    // (Top-Right slope và Top-Left slope) trích từ contour thực tế của mặt nạ AI.
+    if (anchor.contourPoints != null && anchor.contourPoints!.isNotEmpty) {
+      final centerInFrame = mapping.toFrame(anchor.centroid);
+      final spaceRight = math.max(0.0, side - visible.right);
+      final spaceLeft = math.max(0.0, visible.left);
+
+      final rightSlope = <Offset>[];
+      final leftSlope = <Offset>[];
+
+      for (final p in anchor.contourPoints!) {
+        final pf = mapping.toFrame(p);
+        if (pf.dx >= 0 && pf.dx <= side && pf.dy >= 0 && pf.dy <= side) {
+          if (pf.dy < centerInFrame.dy) {
+            if (pf.dx > centerInFrame.dx) {
+              rightSlope.add(pf);
+            } else if (pf.dx < centerInFrame.dx) {
+              leftSlope.add(pf);
+            }
+          }
+        }
+      }
+
+      rightSlope.sort((a, b) => a.dy.compareTo(b.dy));
+      leftSlope.sort((a, b) => a.dy.compareTo(b.dy));
+
+      final slopeOrder = spaceRight >= spaceLeft
+          ? [(rightSlope, EdgeSide.right), (leftSlope, EdgeSide.left)]
+          : [(leftSlope, EdgeSide.left), (rightSlope, EdgeSide.right)];
+
+      for (final (slope, edgeSide) in slopeOrder) {
+        if (slope.isEmpty) continue;
+        final step = math.max(1, (slope.length / 20).ceil());
+        for (var i = 0; i < slope.length; i += step) {
+          final pt = slope[i];
+          final inward = centerInFrame - pt;
+          final res = tryPlacementAt(
+            apexInFrame: pt,
+            inward: inward,
+            kind: PlacementKind.sideEdge,
+            edgeSide: edgeSide,
+            allowFlip: true,
+          );
+          if (res != null) return res;
+        }
+      }
+    }
+
+    // 3. Thử tiếp cạnh bên phải và cạnh bên trái nếu có
+    if (anchor.rightEdge != null) {
+      final outward = anchor.rightEdge!.outwardNormal;
+      final res = tryPlacementAt(
+        apexInFrame: mapping.toFrame(anchor.rightEdge!.apex),
+        inward: Offset(-outward.dx, -outward.dy),
+        kind: PlacementKind.sideEdge,
+        edgeSide: EdgeSide.right,
+        allowFlip: true,
+      );
+      if (res != null) return res;
+    }
+
+    if (anchor.leftEdge != null) {
+      final outward = anchor.leftEdge!.outwardNormal;
+      final res = tryPlacementAt(
+        apexInFrame: mapping.toFrame(anchor.leftEdge!.apex),
+        inward: Offset(-outward.dx, -outward.dy),
+        kind: PlacementKind.sideEdge,
+        edgeSide: EdgeSide.left,
+        allowFlip: true,
+      );
+      if (res != null) return res;
     }
 
     return _cornerFallback(
