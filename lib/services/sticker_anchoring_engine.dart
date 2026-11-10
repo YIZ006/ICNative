@@ -81,27 +81,179 @@ class StickerAnchoringEngine {
   static const String biteDirPrefix = 'assets/memes/bite/';
   static const String biteMetaAssetPath = 'assets/memes/bite/bite_meta.json';
 
-  // Toàn bộ 115 meme đã được đánh số và phân loại ngữ cảnh chính xác:
-  // 1. Mèo meme (29 ảnh): Dành cho vật nuôi, động vật, biểu cảm dễ thương
-  static final List<String> catMemes = List.generate(
-    29,
-    (i) => 'assets/memes/meme_cat_${(i + 1).toString().padLeft(2, '0')}.png',
-  );
+  // Danh mục meme thực tế 100% có tệp trên máy (Tổng cộng 144 meme chất lượng cao):
+  // 1. Mèo meme (28 ảnh thực tế): Dành cho vật nuôi, động vật, biểu cảm dễ thương
+  static const List<String> catMemes = [
+    'assets/memes/meme_cat_01.png',
+    'assets/memes/meme_cat_02.png',
+    'assets/memes/meme_cat_03.png',
+    'assets/memes/meme_cat_04.png',
+    'assets/memes/meme_cat_06.png',
+    'assets/memes/meme_cat_07.png',
+    'assets/memes/meme_cat_08.png',
+    'assets/memes/meme_cat_09.png',
+    'assets/memes/meme_cat_10.png',
+    'assets/memes/meme_cat_11.png',
+    'assets/memes/meme_cat_12.png',
+    'assets/memes/meme_cat_13.png',
+    'assets/memes/meme_cat_14.png',
+    'assets/memes/meme_cat_15.png',
+    'assets/memes/meme_cat_17.png',
+    'assets/memes/meme_cat_18.png',
+    'assets/memes/meme_cat_19.png',
+    'assets/memes/meme_cat_20.png',
+    'assets/memes/meme_cat_21.png',
+    'assets/memes/meme_cat_22.png',
+    'assets/memes/meme_cat_23.png',
+    'assets/memes/meme_cat_24.png',
+    'assets/memes/meme_cat_25.png',
+    'assets/memes/meme_cat_26.png',
+    'assets/memes/meme_cat_27.png',
+    'assets/memes/meme_cat_28.png',
+    'assets/memes/meme_cat_29.png',
+    'assets/memes/meme_cat_scream.png',
+  ];
 
-  // 2. Capybara meme (22 ảnh): Dành cho phong cảnh, ăn uống chill, thư giãn ngoài trời
-  static final List<String> capybaraMemes = List.generate(
-    22,
-    (i) => 'assets/memes/meme_capybara_${(i + 1).toString().padLeft(2, '0')}.png',
-  );
+  // 2. Capybara meme (22 ảnh thực tế): Dành cho phong cảnh, ăn uống chill, thư giãn ngoài trời
+  static const List<String> capybaraMemes = [
+    'assets/memes/meme_capybara_01.png',
+    'assets/memes/meme_capybara_02.png',
+    'assets/memes/meme_capybara_03.png',
+    'assets/memes/meme_capybara_04.png',
+    'assets/memes/meme_capybara_05.png',
+    'assets/memes/meme_capybara_06.png',
+    'assets/memes/meme_capybara_07.png',
+    'assets/memes/meme_capybara_08.png',
+    'assets/memes/meme_capybara_09.png',
+    'assets/memes/meme_capybara_10.png',
+    'assets/memes/meme_capybara_11.png',
+    'assets/memes/meme_capybara_12.png',
+    'assets/memes/meme_capybara_13.png',
+    'assets/memes/meme_capybara_14.png',
+    'assets/memes/meme_capybara_15.png',
+    'assets/memes/meme_capybara_16.png',
+    'assets/memes/meme_capybara_17.png',
+    'assets/memes/meme_capybara_18.png',
+    'assets/memes/meme_capybara_19.png',
+    'assets/memes/meme_capybara_20.png',
+    'assets/memes/meme_capybara_21.png',
+    'assets/memes/meme_capybara_22.png',
+  ];
 
-  // 3. Biểu cảm & hài hước (64 ảnh): Dành cho con người, cảm xúc, đồ uống, công nghệ
-  static final List<String> funnyMemes = List.generate(
-    64,
-    (i) => 'assets/memes/meme_react_${(i + 1).toString().padLeft(2, '0')}.png',
-  );
+  // 3. Biểu cảm & hài hước (60 ảnh thực tế): Dành cho con người, cảm xúc, đồ uống, công nghệ
+  static const List<String> funnyMemes = [
+    'assets/memes/meme_react_01.png',
+    'assets/memes/meme_react_02.png',
+    'assets/memes/meme_react_03.png',
+    'assets/memes/meme_react_04.png',
+    'assets/memes/meme_react_05.png',
+    'assets/memes/meme_react_06.png',
+    'assets/memes/meme_react_07.png',
+    'assets/memes/meme_react_08.png',
+    'assets/memes/meme_react_09.png',
+    'assets/memes/meme_react_10.png',
+    'assets/memes/meme_react_11.png',
+    'assets/memes/meme_react_12.png',
+    'assets/memes/meme_react_13.png',
+    'assets/memes/meme_react_14.png',
+    'assets/memes/meme_react_15.png',
+    'assets/memes/meme_react_16.png',
+    'assets/memes/meme_react_17.png',
+    'assets/memes/meme_react_18.png',
+    'assets/memes/meme_react_19.png',
+    'assets/memes/meme_react_20.png',
+    'assets/memes/meme_react_21.png',
+    'assets/memes/meme_react_22.png',
+    'assets/memes/meme_react_23.png',
+    'assets/memes/meme_react_24.png',
+    'assets/memes/meme_react_25.png',
+    'assets/memes/meme_react_26.png',
+    'assets/memes/meme_react_27.png',
+    'assets/memes/meme_react_28.png',
+    'assets/memes/meme_react_29.png',
+    'assets/memes/meme_react_30.png',
+    'assets/memes/meme_react_31.png',
+    'assets/memes/meme_react_32.png',
+    'assets/memes/meme_react_33.png',
+    'assets/memes/meme_react_35.png',
+    'assets/memes/meme_react_36.png',
+    'assets/memes/meme_react_37.png',
+    'assets/memes/meme_react_38.png',
+    'assets/memes/meme_react_39.png',
+    'assets/memes/meme_react_40.png',
+    'assets/memes/meme_react_41.png',
+    'assets/memes/meme_react_42.png',
+    'assets/memes/meme_react_46.png',
+    'assets/memes/meme_react_47.png',
+    'assets/memes/meme_react_48.png',
+    'assets/memes/meme_react_49.png',
+    'assets/memes/meme_react_50.png',
+    'assets/memes/meme_react_51.png',
+    'assets/memes/meme_react_52.png',
+    'assets/memes/meme_react_53.png',
+    'assets/memes/meme_react_54.png',
+    'assets/memes/meme_react_55.png',
+    'assets/memes/meme_react_56.png',
+    'assets/memes/meme_react_57.png',
+    'assets/memes/meme_react_58.png',
+    'assets/memes/meme_react_59.png',
+    'assets/memes/meme_react_60.png',
+    'assets/memes/meme_react_61.png',
+    'assets/memes/meme_react_62.png',
+    'assets/memes/meme_react_63.png',
+    'assets/memes/meme_react_64.png',
+  ];
 
-  // Danh mục hợp nhất toàn bộ 115 meme
-  static final List<String> allMemes = [...catMemes, ...capybaraMemes, ...funnyMemes];
+  // 4. Mèo gấu đáng yêu (24 ảnh thực tế): Thú cưng, dễ thương, cảm xúc ngọt ngào
+  static const List<String> meoGauMemes = [
+    'assets/memes/meo_gau_01.png',
+    'assets/memes/meo_gau_02.png',
+    'assets/memes/meo_gau_03.png',
+    'assets/memes/meo_gau_04.png',
+    'assets/memes/meo_gau_05.png',
+    'assets/memes/meo_gau_06.png',
+    'assets/memes/meo_gau_07.png',
+    'assets/memes/meo_gau_08.png',
+    'assets/memes/meo_gau_09.png',
+    'assets/memes/meo_gau_10.png',
+    'assets/memes/meo_gau_11.png',
+    'assets/memes/meo_gau_12.png',
+    'assets/memes/meo_gau_13.png',
+    'assets/memes/meo_gau_14.png',
+    'assets/memes/meo_gau_15.png',
+    'assets/memes/meo_gau_16.png',
+    'assets/memes/meo_gau_17.png',
+    'assets/memes/meo_gau_18.png',
+    'assets/memes/meo_gau_19.png',
+    'assets/memes/meo_gau_20.png',
+    'assets/memes/meo_gau_21.png',
+    'assets/memes/meo_gau_22.png',
+    'assets/memes/meo_gau_23.png',
+    'assets/memes/meo_gau_24.png',
+  ];
+
+  // 5. Shin cậu bé bút chì (10 ảnh thực tế): Hài hước, tinh nghịch, lém lỉnh
+  static const List<String> shinMemes = [
+    'assets/memes/shin_01.png',
+    'assets/memes/shin_05.png',
+    'assets/memes/shin_06.png',
+    'assets/memes/shin_08.png',
+    'assets/memes/shin_09.png',
+    'assets/memes/shin_10.png',
+    'assets/memes/shin_13.png',
+    'assets/memes/shin_14.png',
+    'assets/memes/shin_19.png',
+    'assets/memes/shin_20.png',
+  ];
+
+  // Danh mục hợp nhất toàn bộ 144 meme thực tế, 100% tồn tại và không rỗng
+  static final List<String> allMemes = [
+    ...catMemes,
+    ...capybaraMemes,
+    ...funnyMemes,
+    ...meoGauMemes,
+    ...shinMemes,
+  ];
 
   static Map<String, BiteMeta>? _cachedBiteMeta;
   static List<String>? _cachedBitePool;
@@ -213,7 +365,7 @@ class StickerAnchoringEngine {
           widthFactor: meta.width,
         );
       }
-      return fromLegacyPool(id, [...funnyMemes, ...catMemes]);
+      return fromLegacyPool(id, [...funnyMemes, ...catMemes, ...shinMemes]);
     }
 
     switch (category) {
@@ -222,14 +374,14 @@ class StickerAnchoringEngine {
         if (bitePool.isNotEmpty) {
           return fromBitePool('food_bite');
         }
-        return fromLegacyPool('food_meme', funnyMemes, pref: AnchorPreference.center);
+        return fromLegacyPool('food_meme', [...funnyMemes, ...shinMemes], pref: AnchorPreference.center);
 
       case StickerCategory.beverage:
         // Đồ uống (ly trà sữa, cốc nước, tách cafe...) -> Meme cắn miệng ly khi có pool bite, rỗng -> hug
         if (bitePool.isNotEmpty) {
           return fromBitePool('drink_bite');
         }
-        final drinkPool = [...funnyMemes, ...catMemes];
+        final drinkPool = [...funnyMemes, ...catMemes, ...shinMemes];
         final path = drinkPool[rand.nextInt(drinkPool.length)];
         return StickerMetadata(
           id: 'drink_meme',
@@ -246,11 +398,11 @@ class StickerAnchoringEngine {
         if (bitePool.isNotEmpty) {
           return fromBitePool('selfie_bite');
         }
-        return fromLegacyPool('person_funny', funnyMemes, pref: AnchorPreference.center);
+        return fromLegacyPool('person_funny', [...funnyMemes, ...shinMemes], pref: AnchorPreference.center);
 
       case StickerCategory.animal:
-        // Thú cưng, chó mèo -> Chọn từ kho 29 meme mèo bựa & cute (TUYỆT ĐỐI không cắn, ôm nhẹ giữa vật thể)
-        return fromLegacyPool('animal_cat', catMemes, pref: AnchorPreference.center);
+        // Thú cưng, chó mèo -> Chọn từ kho meme mèo bựa & gấu cute (TUYỆT ĐỐI không cắn, ôm nhẹ giữa vật thể)
+        return fromLegacyPool('animal_cat', [...catMemes, ...meoGauMemes], pref: AnchorPreference.center);
 
       case StickerCategory.electronics:
         // Công nghệ, laptop, máy tính, điện thoại -> Meme mèo gõ phím / tech, ôm giữa vật thể
@@ -258,7 +410,7 @@ class StickerAnchoringEngine {
 
       case StickerCategory.general:
         // Đồ vật thông thường (bàn, ghế, giá đỡ, móc khóa, đồ chơi, sách vở...)
-        // -> Chọn ngẫu nhiên phong phú từ toàn bộ 115 meme (Mèo, Capybara, Reaction), ôm giữa hoặc đặt cạnh, KHÔNG cắn mép
+        // -> Chọn ngẫu nhiên phong phú từ toàn bộ 144 meme (Mèo, Capybara, Reaction, Mèo Gấu, Shin), ôm giữa hoặc đặt cạnh, KHÔNG cắn mép
         return fromLegacyPool('general_meme', allMemes, pref: AnchorPreference.center);
 
       case StickerCategory.scene:

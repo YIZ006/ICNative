@@ -137,7 +137,7 @@ class _ImagePreviewState extends State<ImagePreview> {
       final List<String> trayPool = isBiteEligible && biteAssets.isNotEmpty
           ? biteAssets
           : (resolved.category == StickerCategory.animal
-              ? StickerAnchoringEngine.catMemes
+              ? [...StickerAnchoringEngine.catMemes, ...StickerAnchoringEngine.meoGauMemes]
               : (resolved.category == StickerCategory.scene
                   ? StickerAnchoringEngine.capybaraMemes
                   : StickerAnchoringEngine.allMemes));
@@ -748,11 +748,13 @@ class _ImagePreviewState extends State<ImagePreview> {
                                                     activeCustomSticker!.path,
                                                     fit: BoxFit.contain,
                                                     filterQuality: FilterQuality.high,
+                                                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                                                   )
                                                 : Image.file(
                                                     File(activeCustomSticker!.path),
                                                     fit: BoxFit.contain,
                                                     filterQuality: FilterQuality.high,
+                                                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                                                   ),
                                           ),
                                         ),
@@ -1320,11 +1322,25 @@ class _ImagePreviewState extends State<ImagePreview> {
                                       item.path,
                                       fit: BoxFit.contain,
                                       filterQuality: FilterQuality.high,
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Icon(
+                                          Icons.broken_image_rounded,
+                                          size: 20,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
                                     )
                                   : Image.file(
                                       File(item.path),
                                       fit: BoxFit.contain,
                                       filterQuality: FilterQuality.high,
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Icon(
+                                          Icons.broken_image_rounded,
+                                          size: 20,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
                                     ),
                             ),
                           );

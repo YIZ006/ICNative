@@ -5,6 +5,52 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-10 17:30:00] - Khắc Phục Triệt Để Lỗi Sticker Vô Hình & Xuất Bản Orbit v1.4.14 Dual-Release
+* **Thời gian (Timestamp):** 2026-11-10 17:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Khắc phục dứt điểm hiện tượng "Sticker vô hình" và các ô chọn sticker bị trống rỗng trong khay dán meme khi xem trước ảnh chụp, đồng thời đóng gói và phát hành chính thức **Orbit v1.4.14 Dual-Release**:
+  1. **Truy tìm nguyên nhân gốc rễ (Root Cause Analysis):**
+     - Tại `StickerAnchoringEngine`, các danh mục meme trước đây dùng `List.generate(29, ...)` và `List.generate(64, ...)` giả định mọi số thứ tự đều có tệp tương ứng.
+     - Trong thực tế, ở các phiên bản trước có **6 tệp meme đã bị xoá khỏi kho `assets/memes/`**:
+       * `meme_cat_05.png`, `meme_cat_16.png` (2 tệp)
+       * `meme_react_34.png`, `meme_react_43.png`, `meme_react_44.png`, `meme_react_45.png` (4 tệp)
+     - Khi chụp ảnh (đặc biệt các danh mục chung như `general_meme`, `funnyMemes`, `catMemes`), thuật toán ngẫu nhiên bốc trúng 1 trong 6 tệp này, dẫn đến `activeCustomSticker` mang đường dẫn không tồn tại. Flutter không tìm thấy tài nguyên nên render ô trong suốt rỗng ruột (như ô số 2 có viền xanh trong ảnh người dùng cung cấp) và ảnh xem trước không thấy sticker nào ("sticker vô hình").
+  2. **Giải pháp xử lý triệt để:**
+     - **Chuẩn hoá danh mục tĩnh 100% tệp thực tế:** Thay thế toàn bộ `List.generate` bằng danh sách mảng tường minh chứa các tệp đã được kiểm chứng tồn tại:
+       * `catMemes`: 28 ảnh (đã loại 05, 16 và thêm `meme_cat_scream.png`).
+       * `capybaraMemes`: 22 ảnh.
+       * `funnyMemes`: 60 ảnh (đã loại 34, 43, 44, 45).
+       * Bổ sung **24 meme Mèo Gấu (`meo_gau_01` -> `24`)** và **10 meme Shin Cậu Bé Bút Chì (`shin_*`)** sẵn có trong assets.
+       * `allMemes`: Tổng hợp **144 sticker meme chất lượng cao**, 100% có file thật trên đĩa.
+     - **Phòng thủ đa tầng `errorBuilder`:** Bổ sung callback `errorBuilder` trên cả `activeCustomSticker` tại khung ảnh chính và các item trong khay sticker của `PreviewScreen`, triệt tiêu hoàn toàn nguy cơ hiển thị ô ma / hộp trống nếu gặp lỗi tệp.
+  3. **Kiểm thử tự động & Phân tích tĩnh:**
+     - Bổ sung nhóm test `StickerAnchoringEngine - Sticker Integrity & Anti-Ghost Tests` trong `test/models_and_services_test.dart`:
+       * Duyệt toàn bộ 144 tệp trong `allMemes`, kiểm tra `File.existsSync() == true` và `file.lengthSync() > 0`.
+       * Chạy thử 20 lượt ngẫu nhiên cho từng `StickerCategory` để đảm bảo không bao giờ sinh ra tài nguyên rỗng hoặc thiếu.
+     - `flutter test`: **82/82 tests PASSED** (100% thành công).
+     - `flutter analyze`: **0 issues found** (100% sạch).
+  4. **Đóng gói & Xuất bản Dual-Release v1.4.14 (MANDATORY DUAL-RELEASE RULE):**
+     - Nâng số hiệu phiên bản lên `1.4.14+2010` trong `pubspec.yaml` và `UpdateService.currentVersion`.
+     - Build thành công Bản Chuẩn / Sạch: `Orbit-v1.4.14-clean-release.apk` (169,614,469 bytes).
+     - Build thành công Bản Trải Nghiệm Mẫu: `Orbit-v1.4.14-demo-showcase.apk` (169,614,469 bytes).
+     - Xuất bản chính thức lên GitHub Releases v1.4.14 tuân thủ nghiêm ngặt chuẩn UTF-8 chống vỡ font tiếng Việt.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/services/sticker_anchoring_engine.dart`](../lib/services/sticker_anchoring_engine.dart): Khai báo tường minh 144 meme hợp lệ, bổ sung `meoGauMemes` và `shinMemes`.
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart): Bổ sung `errorBuilder` bảo vệ chống ô ma, đưa `meoGauMemes` vào khay động vật.
+  - [MODIFY] [`lib/services/update_service.dart`](../lib/services/update_service.dart): Nâng `_currentVersion` lên `'1.4.14'`.
+  - [MODIFY] [`pubspec.yaml`](../pubspec.yaml): Nâng phiên bản lên `1.4.14+2010`.
+  - [MODIFY] [`test/models_and_services_test.dart`](../test/models_and_services_test.dart): Bổ sung 2 bài test tự động xác thực toàn vẹn 144 tệp meme.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: **0 issues found** (100% sạch).
+  - `flutter test`: **82/82 tests PASSED**.
+  - GitHub Releases v1.4.14: https://github.com/YIZ006/ICNative/releases/tag/v1.4.14
+  - APK Clean: `Orbit-v1.4.14-clean-release.apk`
+  - APK Demo: `Orbit-v1.4.14-demo-showcase.apk`
+
+---
+
 ### [2026-11-10 14:30:00] - Nâng Cấp Toàn Diện Cặp Đôi (Soulmate Orbit), 20 Story Templates Động & Xuất Bản Orbit v1.4.13 Dual-Release
 * **Thời gian (Timestamp):** 2026-11-10 14:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

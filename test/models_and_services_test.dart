@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
@@ -7,6 +8,7 @@ import 'package:icnative/services/locale_service.dart';
 import 'package:icnative/services/location_service.dart';
 import 'package:icnative/services/secret_photo_service.dart';
 import 'package:icnative/services/soulmate_service.dart';
+import 'package:icnative/services/sticker_anchoring_engine.dart';
 
 void main() {
   group('Friend & FriendRequest Models', () {
@@ -304,6 +306,34 @@ void main() {
       expect(service.t('non_existing_key_xyz'), 'non_existing_key_xyz');
 
       service.currentLanguage.value = AppLanguage.vi;
+    });
+  });
+
+  group('StickerAnchoringEngine - Sticker Integrity & Anti-Ghost Tests', () {
+    test('All 144 meme sticker assets actually exist on disk and are non-empty', () {
+      expect(StickerAnchoringEngine.allMemes.length, equals(144));
+      expect(StickerAnchoringEngine.catMemes.length, equals(28));
+      expect(StickerAnchoringEngine.capybaraMemes.length, equals(22));
+      expect(StickerAnchoringEngine.funnyMemes.length, equals(60));
+      expect(StickerAnchoringEngine.meoGauMemes.length, equals(24));
+      expect(StickerAnchoringEngine.shinMemes.length, equals(10));
+
+      for (final assetPath in StickerAnchoringEngine.allMemes) {
+        final file = File(assetPath);
+        expect(file.existsSync(), isTrue, reason: 'Meme asset missing from disk: $assetPath');
+        expect(file.lengthSync(), greaterThan(0), reason: 'Meme asset is empty (0 bytes): $assetPath');
+      }
+    });
+
+    test('pickStickerForCategory returns valid non-empty assets for every category', () {
+      for (final cat in StickerCategory.values) {
+        for (int i = 0; i < 20; i++) {
+          final suggested = StickerAnchoringEngine.pickStickerForCategory(cat);
+          expect(suggested.assetPath, isNotEmpty);
+          final file = File(suggested.assetPath);
+          expect(file.existsSync(), isTrue, reason: 'Suggested asset ${suggested.assetPath} for $cat missing from disk');
+        }
+      }
     });
   });
 }
