@@ -47,7 +47,7 @@ class UpdateService {
   /// Phân định bản build hiện tại (Clean Release vs Demo Showcase)
   static const bool isDemoBuild = bool.fromEnvironment('DEFAULT_DEMO_MODE', defaultValue: false);
 
-  static String _currentVersion = '1.4.9';
+  static String _currentVersion = '1.4.13';
   static String get currentVersion => _currentVersion;
   static const String repoOwner = 'YIZ006';
   static const String repoName = 'ICNative';
@@ -119,78 +119,15 @@ class UpdateService {
         final htmlUrl = (data['html_url'] as String? ??
                 'https://github.com/$repoOwner/$repoName/releases/tag/$tagName')
             .trim();
-        String? targetDownloadUrl;
-        String? ipaUrl;
-        int targetSize = 0;
-
-        if (Platform.isIOS) {
-          // iOS asset matching: tìm kiếm tệp cài đặt .ipa
-          for (final asset in assets) {
-            final assetName = (asset['name'] as String? ?? '').toLowerCase();
-            if (assetName.endsWith('.ipa')) {
-              ipaUrl = asset['browser_download_url'] as String?;
-              targetDownloadUrl = ipaUrl;
-              targetSize = asset['size'] as int? ?? 0;
-              break;
-            }
-          }
-          // Fallback về URL trang release trên GitHub nếu chưa tìm thấy link ipa trực tiếp
-          targetDownloadUrl ??= htmlUrl;
-        } else {
-          // QUY TẮC CHỐNG TẢI NHẦM BẢN (ANTI-MISMATCH ASSET MATCHING CHO ANDROID)
-          if (!isDemoBuild) {
-            // 1. Bản Chuẩn (Clean Release): Tuyệt đối KHÔNG BAO GIỜ tải bản demo
-            for (final asset in assets) {
-              final assetName = (asset['name'] as String? ?? '').toLowerCase();
-              if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
-                targetDownloadUrl = asset['browser_download_url'] as String?;
-                targetSize = asset['size'] as int? ?? 0;
-                break;
-              }
-            }
-            if (targetDownloadUrl == null) {
-              for (final asset in assets) {
-                final assetName = (asset['name'] as String? ?? '').toLowerCase();
-                if (assetName.endsWith('.apk') && !assetName.contains('demo')) {
-                  targetDownloadUrl = asset['browser_download_url'] as String?;
-                  targetSize = asset['size'] as int? ?? 0;
-                  break;
-                }
-              }
-            }
-          } else {
-            // 2. Bản Trải Nghiệm (Demo Showcase): Ưu tiên tải bản demo
-            for (final asset in assets) {
-              final assetName = (asset['name'] as String? ?? '').toLowerCase();
-              if (assetName.contains('demo-showcase') && assetName.endsWith('.apk')) {
-                targetDownloadUrl = asset['browser_download_url'] as String?;
-                targetSize = asset['size'] as int? ?? 0;
-                break;
-              }
-            }
-            if (targetDownloadUrl == null) {
-              for (final asset in assets) {
-                final assetName = (asset['name'] as String? ?? '').toLowerCase();
-                if (assetName.contains('demo') && assetName.endsWith('.apk')) {
-                  targetDownloadUrl = asset['browser_download_url'] as String?;
-                  targetSize = asset['size'] as int? ?? 0;
-                  break;
-                }
-              }
-            }
-            if (targetDownloadUrl == null) {
-              // Fallback nếu GitHub chưa có demo build
-              for (final asset in assets) {
-                final assetName = (asset['name'] as String? ?? '').toLowerCase();
-                if (assetName.endsWith('.apk')) {
-                  targetDownloadUrl = asset['browser_download_url'] as String?;
-                  targetSize = asset['size'] as int? ?? 0;
-                  break;
-                }
-              }
-            }
-          }
-        }
+        final matched = matchReleaseAsset(
+          assets: assets,
+          isDemo: isDemoBuild,
+          isIos: Platform.isIOS,
+          htmlUrl: htmlUrl,
+        );
+        final targetDownloadUrl = matched.targetDownloadUrl;
+        final ipaUrl = matched.ipaUrl;
+        final targetSize = matched.targetSize;
 
         // CHẶN BÁO CẬP NHẬT SỚM KHI CHƯA HOÀN TẤT ĐÓNG GÓI TRÊN GITHUB:
         // Nếu file cài đặt chưa upload xong (size <= 0 hoặc url null) thì không làm phiền người dùng
@@ -325,7 +262,12 @@ class UpdateService {
       await sink.close();
       client.close();
 
-      debugPrint('APK downloaded to: ${targetFile.path} (${targetFile.lengthSync()} bytes)');
+      final fileSize = targetFile.lengthSync();
+      debugPrint('APK downloaded to: ${targetFile.path} ($fileSize bytes)');
+      if (fileSize < 1024 * 1024) {
+        debugPrint('Download error: file size too small ($fileSize bytes)');
+        return false;
+      }
 
       // Kích hoạt Native Android Package Installer qua MethodChannel
       return await installDownloadedApk(targetFile.path);
@@ -349,8 +291,96 @@ class UpdateService {
     }
   }
 
+  /// Bộ so khớp tệp cài đặt Release theo chuẩn Dual-Release và Anti-Mismatch
+  @visibleForTesting
+  static ({String? targetDownloadUrl, String? ipaUrl, int targetSize}) matchReleaseAsset({
+    required List<dynamic> assets,
+    required bool isDemo,
+    required bool isIos,
+    required String htmlUrl,
+  }) {
+    String? targetDownloadUrl;
+    String? ipaUrl;
+    int targetSize = 0;
+
+    if (isIos) {
+      // iOS asset matching: tìm kiếm tệp cài đặt .ipa
+      for (final asset in assets) {
+        final assetName = (asset['name'] as String? ?? '').toLowerCase();
+        if (assetName.endsWith('.ipa')) {
+          ipaUrl = asset['browser_download_url'] as String?;
+          targetDownloadUrl = ipaUrl;
+          targetSize = asset['size'] as int? ?? 0;
+          break;
+        }
+      }
+      targetDownloadUrl ??= htmlUrl;
+    } else {
+      // QUY TẮC CHỐNG TẢI NHẦM BẢN (ANTI-MISMATCH ASSET MATCHING CHO ANDROID)
+      if (!isDemo) {
+        // 1. Bản Chuẩn (Clean Release): Tuyệt đối KHÔNG BAO GIỜ tải bản demo
+        for (final asset in assets) {
+          final assetName = (asset['name'] as String? ?? '').toLowerCase();
+          if (assetName.contains('clean-release') && assetName.endsWith('.apk')) {
+            targetDownloadUrl = asset['browser_download_url'] as String?;
+            targetSize = asset['size'] as int? ?? 0;
+            break;
+          }
+        }
+        if (targetDownloadUrl == null) {
+          for (final asset in assets) {
+            final assetName = (asset['name'] as String? ?? '').toLowerCase();
+            if (assetName.endsWith('.apk') && !assetName.contains('demo')) {
+              targetDownloadUrl = asset['browser_download_url'] as String?;
+              targetSize = asset['size'] as int? ?? 0;
+              break;
+            }
+          }
+        }
+      } else {
+        // 2. Bản Trải Nghiệm (Demo Showcase): Ưu tiên tải bản demo
+        for (final asset in assets) {
+          final assetName = (asset['name'] as String? ?? '').toLowerCase();
+          if (assetName.contains('demo-showcase') && assetName.endsWith('.apk')) {
+            targetDownloadUrl = asset['browser_download_url'] as String?;
+            targetSize = asset['size'] as int? ?? 0;
+            break;
+          }
+        }
+        if (targetDownloadUrl == null) {
+          for (final asset in assets) {
+            final assetName = (asset['name'] as String? ?? '').toLowerCase();
+            if (assetName.contains('demo') && assetName.endsWith('.apk')) {
+              targetDownloadUrl = asset['browser_download_url'] as String?;
+              targetSize = asset['size'] as int? ?? 0;
+              break;
+            }
+          }
+        }
+        if (targetDownloadUrl == null) {
+          // Fallback nếu GitHub chưa có demo build
+          for (final asset in assets) {
+            final assetName = (asset['name'] as String? ?? '').toLowerCase();
+            if (assetName.endsWith('.apk')) {
+              targetDownloadUrl = asset['browser_download_url'] as String?;
+              targetSize = asset['size'] as int? ?? 0;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return (
+      targetDownloadUrl: targetDownloadUrl,
+      ipaUrl: ipaUrl,
+      targetSize: targetSize,
+    );
+  }
+
   /// So sánh hai chuỗi version (ví dụ: v1.4.1 vs 1.4.0)
-  bool _isNewerVersion(String remoteTag, String currentVer) {
+  @visibleForTesting
+  static bool isNewerVersion(String remoteTag, String currentVer) {
     try {
       // Tách bỏ build number (+5) và build suffix (-beta) trước khi so sánh
       final semVerRemote = remoteTag.split('+').first.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
@@ -376,4 +406,6 @@ class UpdateService {
       return false;
     }
   }
+
+  bool _isNewerVersion(String remoteTag, String currentVer) => isNewerVersion(remoteTag, currentVer);
 }

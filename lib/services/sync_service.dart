@@ -72,6 +72,15 @@ class SyncService {
     } catch (_) {}
   }
 
+  /// Xóa ảnh bộ nhớ đệm của một người bạn khi hủy kết bạn
+  static void removeFriendPhoto(String friendUid) {
+    if (friendLatestPhotos.containsKey(friendUid)) {
+      friendLatestPhotos.remove(friendUid);
+      _saveFriendLatestPhotos();
+      friendPhotosChangeNotifier.value++;
+    }
+  }
+
   /// Nén ảnh về kích thước chuẩn sắc nét cho Widget (cạnh max 640px, JPEG q=75)
   /// và chuyển thành chuỗi Base64 nhẹ nhàng (~40KB - 70KB) để gửi qua Firestore (0 VNĐ, không cần Storage)
   static Future<String?> _compressImageToBase64(String localImagePath) async {

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
+import 'sync_service.dart';
 
 class Friend {
   final String uid;
@@ -219,6 +220,7 @@ class FriendService {
   }) async {
     final myProfile = AuthService.instance.currentUser;
     if (myProfile == null) return FriendAddResult.networkError;
+    if (friendUid.trim().isEmpty) return FriendAddResult.networkError;
     if (friendUid == myProfile.uid) return FriendAddResult.selfError;
 
     // 1. Kiểm tra nếu đã là bạn bè từ trước
@@ -402,6 +404,7 @@ class FriendService {
     _friends.removeWhere((f) => f.uid == friendUid);
     friendsCountNotifier.value = _friends.length;
     await _saveToCache();
+    SyncService.removeFriendPhoto(friendUid);
 
     final myUid = AuthService.instance.currentUser?.uid;
     if (myUid != null && AuthService.isCloudConfigured) {

@@ -233,6 +233,10 @@ class LocationService {
     return null;
   }
 
+  @visibleForTesting
+  double calculateDistanceMeters(double lat1, double lon1, double lat2, double lon2) =>
+      _calculateDistanceMeters(lat1, lon1, lat2, lon2);
+
   double _calculateDistanceMeters(double lat1, double lon1, double lat2, double lon2) {
     const double earthRadius = 6371000; // mét
     final double dLat = _degToRad(lat2 - lat1);
@@ -244,7 +248,8 @@ class LocationService {
             math.sin(dLon / 2) *
             math.sin(dLon / 2);
 
-    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    final double clampedA = a.clamp(0.0, 1.0);
+    final double c = 2 * math.atan2(math.sqrt(clampedA), math.sqrt(1.0 - clampedA));
     return earthRadius * c;
   }
 

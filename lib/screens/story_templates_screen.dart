@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/auth_service.dart';
@@ -35,14 +37,50 @@ class StoryTemplateItem {
 class StoryTemplatesScreen extends StatefulWidget {
   const StoryTemplatesScreen({super.key});
 
+  static List<StoryTemplateItem> get templates => _StoryTemplatesScreenState.templates;
+  static String cleanDisplayName(String? raw) => _StoryTemplatesScreenState.cleanDisplayName(raw);
+
   @override
   State<StoryTemplatesScreen> createState() => _StoryTemplatesScreenState();
 }
 
-class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
+class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with TickerProviderStateMixin {
   final GlobalKey _repaintBoundaryKey = GlobalKey();
   int _selectedTemplateIndex = 0;
   bool _isExporting = false;
+
+  late final AnimationController _colorFlowController;
+  late final AnimationController _spinController;
+  late final AnimationController _pulseController;
+
+  final Map<String, String> _customPhotos = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _colorFlowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat(reverse: true);
+
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _colorFlowController.dispose();
+    _spinController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   static const List<StoryTemplateItem> templates = [
     // --- PACK 1 ---
@@ -345,8 +383,74 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
     return raw.replaceAll(RegExp(r'\s*#\d+.*$'), '').trim();
   }
 
+  /// Hiệu ứng dòng chảy gradient động (Dynamic Living Colors)
+  /// Giữ nguyên 100% bảng màu gốc của từng template, dao động mượt mà theo thời gian
+  Gradient _getDynamicGradient(Gradient baseGradient) {
+    final phase = _colorFlowController.value * 2 * math.pi;
+    if (baseGradient is LinearGradient) {
+      final originalBegin = (baseGradient.begin as Alignment?) ?? Alignment.topLeft;
+      final originalEnd = (baseGradient.end as Alignment?) ?? Alignment.bottomRight;
+
+      final dx = 0.35 * math.sin(phase);
+      final dy = 0.35 * math.cos(phase);
+
+      return LinearGradient(
+        begin: Alignment(
+          (originalBegin.x + dx).clamp(-1.2, 1.2),
+          (originalBegin.y + dy).clamp(-1.2, 1.2),
+        ),
+        end: Alignment(
+          (originalEnd.x - dx).clamp(-1.2, 1.2),
+          (originalEnd.y - dy).clamp(-1.2, 1.2),
+        ),
+        colors: baseGradient.colors,
+        stops: baseGradient.stops,
+      );
+    } else if (baseGradient is RadialGradient) {
+      final originalCenter = (baseGradient.center as Alignment?) ?? Alignment.center;
+      final cx = (originalCenter.x + 0.15 * math.sin(phase)).clamp(-1.0, 1.0);
+      final cy = (originalCenter.y + 0.12 * math.cos(phase)).clamp(-1.0, 1.0);
+      final r = (baseGradient.radius + 0.15 * math.sin(phase)).clamp(0.6, 2.0);
+
+      return RadialGradient(
+        center: Alignment(cx, cy),
+        radius: r,
+        colors: baseGradient.colors,
+        stops: baseGradient.stops,
+      );
+    }
+    return baseGradient;
+  }
+
+  /// Chọn ảnh từ thư viện cho slot tương tác
+  Future<void> _pickPhotoForSlot(String slotKey) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 88,
+      );
+      if (picked != null) {
+        setState(() {
+          _customPhotos[slotKey] = picked.path;
+        });
+      }
+    } catch (e) {
+      debugPrint('StoryTemplate: Lỗi khi chọn ảnh: $e');
+    }
+  }
+
+  void _clearPhotoForSlot(String slotKey) {
+    setState(() {
+      _customPhotos.remove(slotKey);
+    });
+  }
+
   Future<void> _exportAndSaveStory() async {
     setState(() => _isExporting = true);
+    await Future.delayed(const Duration(milliseconds: 50));
     try {
       final boundary = _repaintBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return;
@@ -419,7 +523,7 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
       ),
       body: Column(
         children: [
-          // 9:16 Story Preview Card
+          // 9:16 Story Preview Card bọc bởi AnimatedBuilder cho dòng chảy màu động
           Expanded(
             child: Center(
               child: Padding(
@@ -430,11 +534,16 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                     borderRadius: BorderRadius.circular(28),
                     child: RepaintBoundary(
                       key: _repaintBoundaryKey,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: currentTpl.backgroundGradient,
-                        ),
-                        child: _buildStoryCardContent(currentTpl, user),
+                      child: AnimatedBuilder(
+                        animation: _colorFlowController,
+                        builder: (context, _) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: _getDynamicGradient(currentTpl.backgroundGradient),
+                            ),
+                            child: _buildStoryCardContent(currentTpl, user),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -443,7 +552,7 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
             ),
           ),
 
-          // Template Selector Bottom Carousel
+          // Template Selector Bottom Carousel & Toolbar
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
@@ -468,9 +577,27 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                           style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
                         ),
                       ),
+                      if (_customPhotos.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => setState(() => _customPhotos.clear()),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white12,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.refresh, size: 12, color: Colors.white70),
+                                SizedBox(width: 4),
+                                Text('Đặt lại ảnh', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -528,37 +655,37 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
     final displayNameClean = cleanDisplayName(user?.displayName);
     final userUid = user?.uid ?? 'orbit_user';
 
-    // 1. Mẫu 3: Retro Polaroid 90s (Khung ảnh Polaroid nghiêng + Washi tape + Chữ ký)
+    // 1. Mẫu 3: Retro Polaroid 90s
     if (tpl.id == 3) {
       return _buildPolaroidStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 2. Mẫu 11: Korean 4-Cut Photobooth (Dải ảnh Life4Cuts Hàn Quốc + Barcode)
+    // 2. Mẫu 11: Korean 4-Cut Photobooth (Life4Cuts)
     if (tpl.id == 11) {
       return _buildPhotoboothStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 3. Mẫu 15: iOS Lock Screen Drop (Màn hình khóa iPhone 11:11 + Banner thông báo kính mờ)
+    // 3. Mẫu 15: iOS Lock Screen Drop
     if (tpl.id == 15) {
       return _buildIosLockScreenStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 4. Mẫu 18: Spotify Music Duo (Đĩa than xoay tròn + Thanh phát nhạc Spotify + Nút Play)
+    // 4. Mẫu 18: Spotify Music Duo
     if (tpl.id == 18) {
       return _buildSpotifyStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 5. Mẫu 9 & 20: Soulmate Duo & Sợi chỉ đỏ (Hai hành tinh kết nối vô cực + Dành cho Bestie #1)
+    // 5. Mẫu 9 & 20: Soulmate Duo & Sợi chỉ đỏ
     if (tpl.id == 9 || tpl.id == 20) {
       return _buildSoulmateStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 6. Mẫu 2 & 12: Y2K Cyber Chrome (Ngôi sao kim loại ✦ + Vòng xoay holographic)
+    // 6. Mẫu 2 & 12: Y2K Cyber Chrome
     if (tpl.id == 2 || tpl.id == 12) {
       return _buildY2kStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 7. Mẫu 6 & 19: Golden Hour & Sunset Beach (Hoàng hôn thơ mộng + Typography thanh lịch)
+    // 7. Mẫu 6 & 19: Golden Hour & Sunset Beach
     if (tpl.id == 6 || tpl.id == 19) {
       return _buildGoldenHourStory(tpl, user, displayNameClean, userUid);
     }
@@ -572,51 +699,56 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildPolaroidStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         children: [
-          // Băng dính Washi Tape phía trên
-          Container(
-            width: 90,
-            height: 22,
-            decoration: BoxDecoration(
-              color: const Color(0xFFC4A482).withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(3),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4),
-              ],
-            ),
-            child: const Center(
-              child: Text('✦ ORBIT ✦', style: TextStyle(color: Colors.white, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
-            ),
+          // Top Bar with Washi tape & Sender Header Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 82,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC4A482).withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(3),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4),
+                  ],
+                ),
+                child: const Center(
+                  child: Text('✦ ORBIT ✦', style: TextStyle(color: Colors.white, fontSize: 9.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: false),
+            ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // Lời mời nhẹ nhàng phong cách Story Instagram
           const Text(
             'drop a memory on my screen ☕',
             style: TextStyle(
               color: Color(0xFF4A3E30),
-              fontSize: 16,
+              fontSize: 15.5,
               fontWeight: FontWeight.w600,
               fontStyle: FontStyle.italic,
               fontFamily: 'serif',
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           const Text(
             'chụp 1 tấm ảnh xinh gửi vào widget của tui nhé',
-            style: TextStyle(color: Color(0xFF7A6E60), fontSize: 12),
+            style: TextStyle(color: Color(0xFF7A6E60), fontSize: 11.5),
           ),
 
           const Spacer(),
 
-          // Khung ảnh Polaroid nghiêng 2 độ
+          // Khung ảnh Polaroid nghiêng
           Transform.rotate(
             angle: -0.035,
             child: Container(
               width: 220,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 22),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
               decoration: BoxDecoration(
                 color: const Color(0xFFFCFBF9),
                 borderRadius: BorderRadius.circular(4),
@@ -630,36 +762,42 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
               ),
               child: Column(
                 children: [
-                  // Ảnh chính
-                  Container(
+                  _buildInteractivePhotoSlot(
+                    slotKey: 'polaroid',
                     width: 192,
                     height: 192,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF201B15),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: _buildAvatarImage(user, name, 192, 192, borderRadius: 2),
+                    borderRadius: 2,
+                    placeholderLabel: 'Bấm để thêm ảnh kỷ niệm',
+                    placeholderEmoji: '☕',
+                    isDark: false,
+                    fallbackWidget: _buildAvatarImage(user, name, 192, 192, borderRadius: 2),
                   ),
-                  const SizedBox(height: 12),
-                  // Dòng chữ viết tay & ngày tháng film
+                  const SizedBox(height: 10),
+                  // Dòng chữ ký & Sender avatar mini & ngày tháng
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '$name :)',
-                        style: const TextStyle(
-                          color: Color(0xFF2C2218),
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          fontStyle: FontStyle.italic,
-                          fontFamily: 'serif',
-                        ),
+                      Row(
+                        children: [
+                          _buildAvatarImage(user, name, 20, 20, borderRadius: 10),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$name :)',
+                            style: const TextStyle(
+                              color: Color(0xFF2C2218),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                              fontStyle: FontStyle.italic,
+                              fontFamily: 'serif',
+                            ),
+                          ),
+                        ],
                       ),
                       const Text(
                         "'26 11 05",
                         style: TextStyle(
                           color: Color(0xFFFF5500),
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'monospace',
                         ),
@@ -673,13 +811,13 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
 
           const Spacer(),
 
-          // Instagram Link Sticker & Stamp quét mã tinh tế
+          // Instagram Link Sticker & Stamp quét mã
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildInstagramLinkSticker('orbit.app/connect', label: 'Thêm vào màn hình tui ↗'),
-              const SizedBox(width: 10),
-              _buildMiniQrBadge(uid),
+              const SizedBox(width: 8),
+              _buildMiniQrBadge(uid, isDark: false),
             ],
           ),
         ],
@@ -692,13 +830,20 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildPhotoboothStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       child: Column(
         children: [
+          // Header Sender Badge
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildSenderHeaderBadge(user, name, tpl, isDark: false),
+          ),
+          const SizedBox(height: 8),
+
           // Dải ảnh Life4Cuts trắng tinh tế
           Container(
             width: 220,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(6),
@@ -713,58 +858,66 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
             child: Column(
               children: [
                 // Header Photobooth
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('PHOTOISM', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2, color: Colors.black)),
-                    Text('ORBIT STUDIO', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black54)),
+                    const Text('PHOTOISM', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2, color: Colors.black)),
+                    Text('ORBIT STUDIO', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black.withValues(alpha: 0.6))),
                   ],
-                ),
-                const SizedBox(height: 10),
-
-                // Ô ảnh 1: Avatar thật người gửi
-                Container(
-                  width: 196,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F4F8),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: _buildAvatarImage(user, name, 196, 120, borderRadius: 3),
                 ),
                 const SizedBox(height: 8),
 
-                // Ô ảnh 2: Slot chờ bạn thân
-                Container(
-                  width: 196,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7FAFC),
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: const Color(0xFF5499C7).withValues(alpha: 0.4), style: BorderStyle.solid),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('🎀', style: TextStyle(fontSize: 26)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '[ + ] Chừa slot cho bạn thân',
-                          style: TextStyle(color: const Color(0xFF1B4F72).withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                // Ô ảnh 1: Avatar thật người gửi
+                Stack(
+                  children: [
+                    Container(
+                      width: 196,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F4F8),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: _buildAvatarImage(user, name, 196, 110, borderRadius: 3),
                     ),
-                  ),
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '@$name',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+
+                // Ô ảnh 2: Slot tương tác cho bạn thân
+                _buildInteractivePhotoSlot(
+                  slotKey: 'photobooth_slot2',
+                  width: 196,
+                  height: 110,
+                  borderRadius: 3,
+                  placeholderLabel: 'Chừa slot cho bạn thân',
+                  placeholderEmoji: '🎀',
+                  isDark: false,
+                  borderColor: const Color(0xFF5499C7).withValues(alpha: 0.4),
+                  backgroundColor: const Color(0xFFF7FAFC),
+                ),
+                const SizedBox(height: 8),
 
                 // Barcode kiểu photobooth Hàn Quốc
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('||||| |||| || ||||| |', style: TextStyle(fontSize: 16, letterSpacing: 1.5, fontFamily: 'monospace', color: Colors.black)),
-                    Text('SEOUL · ${DateTime.now().year}', style: const TextStyle(fontSize: 9, color: Colors.black45)),
+                    const Text('||||| |||| || ||||| |', style: TextStyle(fontSize: 15, letterSpacing: 1.5, fontFamily: 'monospace', color: Colors.black)),
+                    Text('SEOUL · ${DateTime.now().year}', style: const TextStyle(fontSize: 8.5, color: Colors.black45)),
                   ],
                 ),
               ],
@@ -773,10 +926,9 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
 
           const Spacer(),
 
-          // Instagram Link Sticker
           _buildInstagramLinkSticker('orbit.app/photobooth', label: 'Chụp ảnh đôi cùng tui nè 📸'),
           const SizedBox(height: 8),
-          _buildMiniQrBadge(uid, text: 'Quét kết bạn ngay'),
+          _buildMiniQrBadge(uid, isDark: false, text: 'Quét kết bạn ngay'),
         ],
       ),
     );
@@ -787,29 +939,52 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildIosLockScreenStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         children: [
-          // Ổ khóa iPhone
-          const Icon(Icons.lock, color: Colors.white, size: 16),
-          const SizedBox(height: 4),
+          // Ổ khóa iPhone & Header sender badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Icon(Icons.lock, color: Colors.white, size: 16),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: true),
+            ],
+          ),
+          const SizedBox(height: 2),
 
-          // Đồng hồ màn hình khóa lớn phong cách iOS
-          const Text(
-            '11:11',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 56,
-              fontWeight: FontWeight.w200,
-              letterSpacing: -2,
-            ),
+          // Đồng hồ màn hình khóa lớn phong cách iOS với dấu hai chấm nhấp nháy mượt
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, _) {
+              final colonOpacity = 0.4 + 0.6 * _pulseController.value;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    '11',
+                    style: TextStyle(color: Colors.white, fontSize: 54, fontWeight: FontWeight.w200, letterSpacing: -2),
+                  ),
+                  Opacity(
+                    opacity: colonOpacity,
+                    child: const Text(
+                      ':',
+                      style: TextStyle(color: Colors.white, fontSize: 54, fontWeight: FontWeight.w200),
+                    ),
+                  ),
+                  const Text(
+                    '11',
+                    style: TextStyle(color: Colors.white, fontSize: 54, fontWeight: FontWeight.w200, letterSpacing: -2),
+                  ),
+                ],
+              );
+            },
           ),
           const Text(
             'Thứ Hai, 5 tháng 11',
-            style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w400),
+            style: TextStyle(color: Colors.white70, fontSize: 13.5, fontWeight: FontWeight.w400),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 18),
 
           // Apple Frosted Glass Notification Banner
           ClipRRect(
@@ -817,17 +992,34 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
               child: Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
+                  color: Colors.white.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildAvatarImage(user, name, 46, 46, borderRadius: 23),
-                    const SizedBox(width: 12),
+                    Stack(
+                      children: [
+                        _buildAvatarImage(user, name, 46, 46, borderRadius: 23),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF34C759),
+                              border: Border.all(color: Colors.black, width: 2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -838,36 +1030,61 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                               Row(
                                 children: [
                                   Container(
-                                    width: 16,
-                                    height: 16,
+                                    width: 15,
+                                    height: 15,
                                     decoration: const BoxDecoration(
                                       shape: BoxShape.circle,
                                       gradient: LinearGradient(colors: [Color(0xFF00F0FF), Color(0xFFD000FF)]),
                                     ),
                                     child: const Center(child: Text('🪐', style: TextStyle(fontSize: 8))),
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Text('ORBIT', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 5),
+                                  const Text('ORBIT', style: TextStyle(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
                                 ],
                               ),
-                              const Text('Vừa xong', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                              const Text('Vừa xong', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
                             name,
-                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 2),
                           const Text(
-                            'Vừa gửi 1 khoảnh khắc mới lên màn hình chính của bạn 📸',
-                            style: TextStyle(color: Colors.white, fontSize: 12.5),
+                            'Vừa gửi 1 khoảnh khắc mới lên màn hình chính 📸',
+                            style: TextStyle(color: Colors.white, fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Interactive Photo Slot: iOS Photo Widget Preview
+          _buildInteractivePhotoSlot(
+            slotKey: 'ios_lockscreen',
+            width: 210,
+            height: 125,
+            borderRadius: 18,
+            placeholderLabel: 'Chạm để gắn ảnh widget vào màn hình khóa',
+            placeholderEmoji: '🖼️',
+            borderColor: Colors.white.withValues(alpha: 0.25),
+            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            fallbackWidget: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_photo_alternate_outlined, color: Colors.white70, size: 28),
+                  const SizedBox(height: 4),
+                  const Text('Thêm ảnh Widget', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                  Text('Bấm để chọn từ thư viện', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 9.5)),
+                ],
               ),
             ),
           ),
@@ -883,9 +1100,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Sticker liên kết
           _buildInstagramLinkSticker('orbit.app/lockscreen', label: 'Bấm để nhận ảnh trên Widget ↗'),
         ],
       ),
@@ -897,103 +1113,124 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildSpotifyStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       child: Column(
         children: [
-          // Header Spotify Story
+          // Header Spotify Story + Sender Badge
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 20,
-                height: 20,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1DB954),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(child: Icon(Icons.music_note, color: Colors.black, size: 12)),
+              Row(
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF1DB954),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(child: Icon(Icons.music_note, color: Colors.black, size: 12)),
+                  ),
+                  const SizedBox(width: 7),
+                  const Text('PLAYING ON ORBIT', style: TextStyle(color: Color(0xFF1DB954), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Text('PLAYING ON ORBIT', style: TextStyle(color: Color(0xFF1DB954), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: true),
             ],
           ),
 
           const Spacer(),
 
-          // Đĩa than Vinyl trượt ra từ bìa album
+          // Đĩa than xoay tròn + Bìa album tương tác
           SizedBox(
             width: 240,
             height: 160,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // Đĩa than phía sau
+                // Đĩa than xoay tròn phía sau
                 Positioned(
                   right: 0,
                   top: 10,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF0A0A0A),
-                      border: Border.all(color: Colors.white12, width: 2),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 15),
-                      ],
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF1DB954),
+                  child: RotationTransition(
+                    turns: _spinController,
+                    child: Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF0A0A0A),
+                        border: Border.all(color: Colors.white12, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 15),
+                        ],
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF1DB954), width: 2),
+                          ),
+                          child: _buildAvatarImage(user, name, 48, 48, borderRadius: 24),
                         ),
-                        child: const Center(child: Text('🪐', style: TextStyle(fontSize: 20))),
                       ),
                     ),
                   ),
                 ),
-                // Bìa Album thật hiển thị ảnh Avatar
+                // Bìa Album thật - Cho phép chạm để thêm/đổi ảnh
                 Positioned(
                   left: 0,
                   top: 0,
                   child: Container(
-                    width: 160,
-                    height: 160,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: [
                         BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 20, offset: const Offset(0, 6)),
                       ],
                     ),
-                    child: _buildAvatarImage(user, name, 160, 160, borderRadius: 10),
+                    child: _buildInteractivePhotoSlot(
+                      slotKey: 'spotify',
+                      width: 160,
+                      height: 160,
+                      borderRadius: 10,
+                      placeholderLabel: 'Chạm để gắn ảnh Album đôi',
+                      placeholderEmoji: '🎵',
+                      isDark: true,
+                      fallbackWidget: _buildAvatarImage(user, name, 160, 160, borderRadius: 10),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // Tên bài hát & Tên người bạn
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Our Orbit Track 🪐',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          // Tên bài hát & Tên người bạn & Animated Equalizer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Our Orbit Track 🪐',
+                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Curated by $name',
+                      style: const TextStyle(color: Colors.white60, fontSize: 13),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  name,
-                  style: const TextStyle(color: Colors.white60, fontSize: 14),
-                ),
-              ],
-            ),
+              ),
+              _buildEqualizer(),
+            ],
           ),
 
           const SizedBox(height: 12),
@@ -1041,7 +1278,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
 
           const Spacer(),
 
-          // Link Sticker
           _buildInstagramLinkSticker('spotify.link/orbit', label: 'Bấm nghe chung trên Widget ↗'),
         ],
       ),
@@ -1053,49 +1289,55 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildSoulmateStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         children: [
-          // Header Cận tâm
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: tpl.primaryColor.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(tpl.centerIcon, style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 6),
-                Text(
-                  'DUO ORBIT · ONLY FOR #1',
-                  style: TextStyle(color: tpl.primaryColor, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.5),
+          // Header Cận tâm + Sender Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: tpl.primaryColor.withValues(alpha: 0.5)),
                 ),
-              ],
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(tpl.centerIcon, style: const TextStyle(fontSize: 13)),
+                    const SizedBox(width: 5),
+                    Text(
+                      'DUO ORBIT · #1',
+                      style: TextStyle(color: tpl.primaryColor, fontWeight: FontWeight.bold, fontSize: 10.5, letterSpacing: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: true),
+            ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           const Text(
             'waiting for my other half 🤍',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600, fontStyle: FontStyle.italic, fontFamily: 'serif'),
+            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, fontStyle: FontStyle.italic, fontFamily: 'serif'),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             'Quỹ đạo Cận tâm độc quyền dành riêng cho 2 đứa mình',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11.5),
           ),
 
           const Spacer(),
 
-          // Sân khấu Sao Đôi: Node bạn và Node chờ đối phương
+          // Sân khấu Sao Đôi: Node người gửi & Node tương tác cho bạn thân
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Node bạn
+              // Node 1: SENDER'S AVATAR
               Column(
                 children: [
                   Container(
@@ -1110,23 +1352,32 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                     child: _buildAvatarImage(user, name, 85, 85, borderRadius: 45),
                   ),
                   const SizedBox(height: 8),
-                  Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5)),
                 ],
               ),
 
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
-              // Biểu tượng Vô cực trái tim
-              Column(
-                children: [
-                  Text('∞', style: TextStyle(color: tpl.primaryColor, fontSize: 32, fontWeight: FontWeight.w200)),
-                  Text('~0 km', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11)),
-                ],
+              // Biểu tượng Vô cực nhịp đập
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, _) {
+                  final scale = 0.92 + 0.16 * _pulseController.value;
+                  return Transform.scale(
+                    scale: scale,
+                    child: Column(
+                      children: [
+                        Text('∞', style: TextStyle(color: tpl.primaryColor, fontSize: 32, fontWeight: FontWeight.w200)),
+                        Text('~0 km', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 10.5)),
+                      ],
+                    ),
+                  );
+                },
               ),
 
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
-              // Node chờ bạn thân
+              // Node 2: Interactive Photo Slot cho Bạn Thân
               Column(
                 children: [
                   Container(
@@ -1134,21 +1385,24 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                     height: 85,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.08),
-                      border: Border.all(color: tpl.primaryColor.withValues(alpha: 0.6), width: 2, style: BorderStyle.solid),
+                      boxShadow: [
+                        BoxShadow(color: tpl.accentColor.withValues(alpha: 0.35), blurRadius: 18),
+                      ],
                     ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add, color: Colors.white, size: 28),
-                          Text('Bạn thân', style: TextStyle(color: Colors.white70, fontSize: 10)),
-                        ],
-                      ),
+                    child: _buildInteractivePhotoSlot(
+                      slotKey: 'soulmate_friend',
+                      width: 85,
+                      height: 85,
+                      borderRadius: 45,
+                      placeholderLabel: 'Gắn ảnh',
+                      placeholderEmoji: '🤍',
+                      isDark: true,
+                      borderColor: tpl.primaryColor.withValues(alpha: 0.7),
+                      backgroundColor: Colors.white.withValues(alpha: 0.08),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Bạn số #1', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const Text('Bạn số #1', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12.5)),
                 ],
               ),
             ],
@@ -1156,7 +1410,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
 
           const Spacer(),
 
-          // Link Sticker
           _buildInstagramLinkSticker('orbit.app/soulmate', label: 'Nhận vị trí trên Widget của tui ↗'),
         ],
       ),
@@ -1170,25 +1423,32 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
     final textColor = tpl.isDark ? Colors.white : const Color(0xFF1F1A3A);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('✦ ✧ ⋆', style: TextStyle(color: tpl.accentColor, fontSize: 16)),
-              Text('Y2K ORBIT', style: TextStyle(color: textColor, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 12)),
-              Text('⋆ ✧ ✦', style: TextStyle(color: tpl.accentColor, fontSize: 16)),
+              Row(
+                children: [
+                  _buildPulsingStar('✦', tpl.accentColor, fontSize: 16),
+                  const SizedBox(width: 4),
+                  _buildPulsingStar('✧', tpl.accentColor, fontSize: 12),
+                  const SizedBox(width: 4),
+                  _buildPulsingStar('⋆', tpl.accentColor, fontSize: 14),
+                ],
+              ),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: tpl.isDark),
             ],
           ),
 
           const Spacer(),
 
-          // Vòng tròn Liquid Chrome Holographic
+          // Vòng tròn Liquid Chrome Holographic - Interactive Photo Slot
           Container(
-            width: 180,
-            height: 180,
-            padding: const EdgeInsets.all(6),
+            width: 182,
+            height: 182,
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const LinearGradient(
@@ -1197,22 +1457,31 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
-                BoxShadow(color: const Color(0xFF7A70A0).withValues(alpha: 0.4), blurRadius: 28, spreadRadius: 4),
+                BoxShadow(color: const Color(0xFF7A70A0).withValues(alpha: 0.45), blurRadius: 28, spreadRadius: 4),
               ],
             ),
-            child: _buildAvatarImage(user, name, 168, 168, borderRadius: 84),
+            child: _buildInteractivePhotoSlot(
+              slotKey: 'y2k',
+              width: 172,
+              height: 172,
+              borderRadius: 86,
+              placeholderLabel: 'Bấm để thêm ảnh phong cách Y2K',
+              placeholderEmoji: '🛸',
+              isDark: tpl.isDark,
+              fallbackWidget: _buildAvatarImage(user, name, 172, 172, borderRadius: 86),
+            ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           Text(
             'PING MY ORBIT 🛸',
             style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 1),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             'Bắn ảnh thẳng lên màn hình chính',
-            style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 13),
+            style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 12.5),
           ),
 
           const Spacer(),
@@ -1230,51 +1499,69 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // ==========================================
   Widget _buildGoldenHourStory(StoryTemplateItem tpl, UserProfile? user, String name, String uid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       child: Column(
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('ORBIT 17:00 🌅', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: true),
+            ],
+          ),
+          const SizedBox(height: 10),
+
           const Text(
             'golden hour with me 🌅',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 21,
               fontWeight: FontWeight.bold,
               fontStyle: FontStyle.italic,
               fontFamily: 'serif',
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             'mỗi buổi chiều gửi hoàng hôn cho nhau qua màn hình',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12),
           ),
 
           const Spacer(),
 
-          // Widget vòng tròn phát sáng ánh hoàng hôn
+          // Widget vòng tròn phát sáng ánh hoàng hôn - Interactive Photo Slot
           Container(
-            width: 175,
-            height: 175,
+            width: 176,
+            height: 176,
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withValues(alpha: 0.25),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF7E5F).withValues(alpha: 0.6),
+                  color: const Color(0xFFFF7E5F).withValues(alpha: 0.65),
                   blurRadius: 35,
                   spreadRadius: 6,
                 ),
               ],
             ),
-            child: _buildAvatarImage(user, name, 165, 165, borderRadius: 85),
+            child: _buildInteractivePhotoSlot(
+              slotKey: 'golden_hour',
+              width: 166,
+              height: 166,
+              borderRadius: 83,
+              placeholderLabel: 'Bấm để thêm ảnh hoàng hôn',
+              placeholderEmoji: '🌅',
+              isDark: true,
+              fallbackWidget: _buildAvatarImage(user, name, 166, 166, borderRadius: 83),
+            ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           Text(
             name,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
           ),
 
           const Spacer(),
@@ -1292,63 +1579,69 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
     final textColor = tpl.isDark ? Colors.white : const Color(0xFF1F1A3A);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       child: Column(
         children: [
-          // Header Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: tpl.isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: tpl.primaryColor.withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(tpl.centerIcon, style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 6),
-                Text(
-                  'ORBIT WIDGET',
-                  style: TextStyle(
-                    color: tpl.primaryColor,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                    fontSize: 11,
-                  ),
+          // Header Badge + Sender Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: tpl.isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: tpl.primaryColor.withValues(alpha: 0.4)),
                 ),
-              ],
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(tpl.centerIcon, style: const TextStyle(fontSize: 13)),
+                    const SizedBox(width: 5),
+                    Text(
+                      'ORBIT WIDGET',
+                      style: TextStyle(
+                        color: tpl.primaryColor,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildSenderHeaderBadge(user, name, tpl, isDark: tpl.isDark),
+            ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           Text(
             tpl.headline,
             style: TextStyle(
               color: textColor,
               fontWeight: FontWeight.w900,
-              fontSize: 20,
+              fontSize: 19,
               letterSpacing: -0.5,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             tpl.subHeadline,
             style: TextStyle(
               color: textColor.withValues(alpha: 0.75),
-              fontSize: 12.5,
+              fontSize: 12,
             ),
             textAlign: TextAlign.center,
           ),
 
           const Spacer(),
 
-          // Center Avatar Widget tròn
+          // Center Interactive Photo Slot
           Container(
-            width: 175,
-            height: 175,
+            width: 176,
+            height: 176,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(colors: [tpl.primaryColor, tpl.accentColor]),
@@ -1361,27 +1654,39 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
               ],
             ),
             padding: const EdgeInsets.all(5),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: tpl.isDark ? const Color(0xFF120524) : Colors.white,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildAvatarImage(user, name, 85, 85, borderRadius: 45),
-                  const SizedBox(height: 8),
-                  Text(
-                    name,
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+            child: _buildInteractivePhotoSlot(
+              slotKey: 'editorial_${tpl.id}',
+              width: 166,
+              height: 166,
+              borderRadius: 83,
+              placeholderLabel: 'Chạm để gắn ảnh widget',
+              placeholderEmoji: tpl.centerIcon,
+              isDark: tpl.isDark,
+              fallbackWidget: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tpl.isDark ? const Color(0xFF120524) : Colors.white,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildAvatarImage(user, name, 80, 80, borderRadius: 40),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12.5,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1400,6 +1705,230 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
   // HELPER WIDGETS
   // ==========================================
 
+  Widget _buildEqualizer() {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, _) {
+        final v = _pulseController.value;
+        final h1 = 5.0 + 13.0 * math.sin(v * math.pi);
+        final h2 = 15.0 - 10.0 * math.cos(v * math.pi);
+        final h3 = 7.0 + 12.0 * math.sin((v + 0.3) * math.pi);
+        final h4 = 16.0 - 9.0 * math.cos((v + 0.5) * math.pi);
+        final h5 = 6.0 + 11.0 * math.sin((v + 0.7) * math.pi);
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [h1, h2, h3, h4, h5].map((h) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              width: 3.5,
+              height: h.clamp(4.0, 20.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1DB954),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildPulsingStar(String char, Color color, {double fontSize = 16}) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, _) {
+        final scale = 0.88 + 0.24 * _pulseController.value;
+        return Transform.scale(
+          scale: scale,
+          child: Text(char, style: TextStyle(color: color, fontSize: fontSize)),
+        );
+      },
+    );
+  }
+
+  Widget _buildSenderHeaderBadge(UserProfile? user, String name, StoryTemplateItem tpl, {bool isDark = true}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.22) : Colors.black.withValues(alpha: 0.12),
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildAvatarImage(user, name, 22, 22, borderRadius: 11),
+          const SizedBox(width: 7),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 100),
+            child: Text(
+              '@$name',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 11.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFF00FF66),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInteractivePhotoSlot({
+    required String slotKey,
+    required double width,
+    required double height,
+    required double borderRadius,
+    required String placeholderLabel,
+    required String placeholderEmoji,
+    Color? borderColor,
+    Color? backgroundColor,
+    bool isDark = true,
+    Widget? fallbackWidget,
+  }) {
+    final photoPath = _customPhotos[slotKey];
+    final hasCustomPhoto = photoPath != null && File(photoPath).existsSync();
+
+    return GestureDetector(
+      onTap: () => _pickPhotoForSlot(slotKey),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+              color: backgroundColor ??
+                  (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.04)),
+              border: Border.all(
+                color: borderColor ??
+                    (hasCustomPhoto
+                        ? const Color(0xFF00FF66).withValues(alpha: 0.7)
+                        : (isDark ? Colors.white24 : Colors.black12)),
+                width: hasCustomPhoto ? 2.0 : 1.2,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(math.max(0, borderRadius - 1)),
+              child: hasCustomPhoto
+                  ? Image.file(
+                      File(photoPath),
+                      width: width,
+                      height: height,
+                      fit: BoxFit.cover,
+                    )
+                  : (fallbackWidget ??
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(placeholderEmoji, style: const TextStyle(fontSize: 26)),
+                              const SizedBox(height: 6),
+                              Text(
+                                placeholderLabel,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white70 : Colors.black54,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00FF66).withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF00FF66), width: 0.8),
+                                ),
+                                child: const Text(
+                                  '+ Thêm ảnh',
+                                  style: TextStyle(
+                                    color: Color(0xFF00FF66),
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+            ),
+          ),
+
+          // Action badge when custom photo is active (hidden when exporting)
+          if (hasCustomPhoto && !_isExporting)
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => _clearPhotoForSlot(slotKey),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white30),
+                      ),
+                      child: const Icon(Icons.close, size: 10, color: Colors.white70),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white30),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit, size: 10, color: Color(0xFF00FF66)),
+                        SizedBox(width: 3),
+                        Text(
+                          'Đổi',
+                          style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAvatarImage(UserProfile? user, String cleanName, double width, double height, {double borderRadius = 0}) {
     if (user?.avatarPath != null && File(user!.avatarPath!).existsSync()) {
       return ClipRRect(
@@ -1412,7 +1941,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> {
         ),
       );
     }
-    // Fallback nếu người dùng chưa đặt avatar
     final initial = cleanName.isNotEmpty ? cleanName[0].toUpperCase() : 'O';
     return Container(
       width: width,

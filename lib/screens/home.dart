@@ -10,12 +10,14 @@ import 'package:icnative/screens/friends_screen.dart';
 import 'package:icnative/screens/history.dart';
 import 'package:icnative/screens/preview.dart';
 import 'package:icnative/screens/profile_screen.dart';
+import 'package:icnative/screens/soulmate_screen.dart';
 import 'package:icnative/screens/update_dialog.dart';
 import 'package:icnative/screens/widget_guide_screen.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
 import 'package:icnative/services/locale_service.dart';
+import 'package:icnative/services/soulmate_service.dart';
 import 'package:icnative/services/sync_service.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:icnative/services/update_service.dart';
@@ -191,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.addListener(_onFriendPhotosChanged);
+    SoulmateService.instance.incomingInteractionNotifier.addListener(_onSoulmateInteractionReceived);
 
     if (_isDemoMode) {
       _startDemoReactions();
@@ -351,6 +354,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.removeListener(_onFriendPhotosChanged);
+    SoulmateService.instance.incomingInteractionNotifier.removeListener(_onSoulmateInteractionReceived);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
     _demoReactionTimer?.cancel();
     _orbitTicker.dispose();
@@ -413,6 +417,58 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           ),
           backgroundColor: OrbitColors.deepOlive,
           duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  void _onSoulmateInteractionReceived() {
+    final interaction = SoulmateService.instance.incomingInteractionNotifier.value;
+    if (interaction != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF2C0A1E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+          ),
+          content: Row(
+            children: [
+              Text(interaction.typeEmoji, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${interaction.senderName}: ${interaction.typeTitle}',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    if (interaction.message != null && interaction.message!.isNotEmpty)
+                      Text(
+                        interaction.message!,
+                        style: const TextStyle(color: Color(0xFFFFB3CC), fontSize: 11.5),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'Mở Soulmate',
+            textColor: const Color(0xFFFF3366),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SoulmateScreen()),
+              );
+            },
+          ),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
