@@ -2395,3 +2395,29 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 * **Chi tiết thay đổi (Changes Made):**
   - [MODIFY] `android/app/src/main/kotlin/com/abom/utas/utas/StoryShareHelper.kt`
   - [MODIFY] `lib/screens/story_templates_screen.dart`
+
+
+---
+
+### [2026-11-11 15:47:00] - Xuất Bản Chính Thức Phiên Bản Orbit v1.5.0 Dual-Release Lên GitHub Releases
+* **Thời gian (Timestamp):** 2026-11-11 15:47:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  - Nâng cấp phiên bản toàn diện lên **v1.5.0** (`1.5.0+2020` trong `pubspec.yaml`, `UpdateService`, `AppDelegate.swift`).
+  - Kiểm tra toàn bộ mã nguồn đạt chuẩn: `flutter analyze` 0 issues found, `flutter test` 87/87 tests passed.
+  - Biên dịch và phát hành thành công cả 2 tệp APK theo **Luật Kép Dual-Release Bắt Buộc**:
+    1. `Orbit-v1.5.0-clean-release.apk` (169,746,661 bytes) - Bản Sạch không mock data, Demo Mode tắt mặc định.
+    2. `Orbit-v1.5.0-demo-showcase.apk` (169,746,661 bytes) - Bản Trải Nghiệm Mẫu có sẵn bạn bè mẫu và feed ảnh sinh động.
+  - Tải lên GitHub Releases qua quy trình an toàn `draft: true` -> upload 2 assets -> xuất bản `draft: false`.
+  - Tuân thủ 100% chuẩn mã hoá tiếng Việt UTF-8 byte array chống lỗi font Mojibake và cơ chế chống tải nhầm bản cập nhật.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `pubspec.yaml` - Nâng `version: 1.5.0+2020`.
+  - [MODIFY] `lib/services/update_service.dart` - Nâng `_currentVersion = '1.5.0'`.
+  - [MODIFY] `ios/Runner/AppDelegate.swift` - Cập nhật version fallback `1.5.0`.
+  - [NEW] `scratch/publish_v150.ps1` - Script phát hành GitHub Release v1.5.0 tự động.
+  - [RELEASE] Đã phát hành chính thức tại: https://github.com/YIZ006/ICNative/releases/tag/v1.5.0
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Bản release v1.5.0 đã sẵn sàng công khai trên GitHub Releases cho người dùng tải về hoặc cập nhật tự động trong app.
+* **Bước tiếp theo (Next Steps):**
+  1. Bàn giao link tải và thông báo cho người dùng.
