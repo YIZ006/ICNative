@@ -4,8 +4,23 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Lưu Story vào Thư viện trên Android 9 trở xuống (Android 10+ dùng MediaStore, không cần quyền) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- Android 11+: cho phép app nhìn thấy Instagram & các app nhận chia sẻ ảnh/video -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="video/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
 
     <application
         android:label="@string/app_name"
@@ -27,6 +42,25 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Deep Link: Custom URI Schemes (orbit://invite?uid=... & icnative://invite?uid=...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="orbit" />
+                <data android:scheme="icnative" />
+            </intent-filter>
+
+            <!-- Android App Links (HTTPS): Tự động nhận diện và mở thẳng ứng dụng Orbit khi bấm vào link kết bạn -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="ncnative-bcf6d.web.app" android:pathPrefix="/invite" />
+                <data android:scheme="https" android:host="ncnative-bcf6d.firebaseapp.com" android:pathPrefix="/invite" />
+                <data android:scheme="https" android:host="yiz006.github.io" android:pathPrefix="/ICNative/invite" />
             </intent-filter>
         </activity>
 

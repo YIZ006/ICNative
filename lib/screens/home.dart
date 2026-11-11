@@ -16,6 +16,7 @@ import 'package:icnative/screens/widget_guide_screen.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
+import 'package:icnative/services/invite_service.dart';
 import 'package:icnative/services/locale_service.dart';
 import 'package:icnative/services/soulmate_service.dart';
 import 'package:icnative/services/sync_service.dart';
@@ -191,9 +192,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     // Lắng nghe thông báo bạn bè chấp nhận kết bạn, số lượng bạn bè & ảnh mới nhận từ bạn bè
     FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
+    InviteService.instance.inviteEventNotifier.addListener(_onInviteEventReceived);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.addListener(_onFriendPhotosChanged);
     SoulmateService.instance.incomingInteractionNotifier.addListener(_onSoulmateInteractionReceived);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (InviteService.instance.inviteEventNotifier.value != null) {
+        _onInviteEventReceived();
+      }
+    });
 
     if (_isDemoMode) {
       _startDemoReactions();
@@ -266,6 +274,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       if (!_isCapturing) {
         _initCameraSafe();
       }
+      // Tự động kiểm tra nếu người dùng vừa sao chép link mời kết bạn từ trình duyệt ngoài rồi mở app
+      unawaited(InviteService.instance.checkClipboardForInvite(silent: true));
     }
   }
 
@@ -352,6 +362,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     WidgetsBinding.instance.removeObserver(this);
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
+    InviteService.instance.inviteEventNotifier.removeListener(_onInviteEventReceived);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.removeListener(_onFriendPhotosChanged);
     SoulmateService.instance.incomingInteractionNotifier.removeListener(_onSoulmateInteractionReceived);
@@ -368,6 +379,80 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   void _onFriendsChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onInviteEventReceived() {
+    final event = InviteService.instance.inviteEventNotifier.value;
+    if (event == null || !mounted) return;
+    // Xóa event để tránh hiện lại nhiều lần
+    InviteService.instance.inviteEventNotifier.value = null;
+
+    if (event.result == FriendAddResult.selfError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔗 Đây là liên kết kết bạn của chính bạn! Hãy gửi link này cho bạn bè nhé.'),
+          backgroundColor: OrbitColors.deepOlive,
+        ),
+      );
+      return;
+    }
+
+    if (event.result == FriendAddResult.alreadyFriends) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🤝 Bạn và "${event.displayName}" đã là bạn bè trên vòng tròn Orbit từ trước!'),
+          backgroundColor: OrbitColors.buttonPrimary,
+        ),
+      );
+      return;
+    }
+
+    if (event.result == FriendAddResult.acceptedImmediately ||
+        event.result == FriendAddResult.requestSent) {
+      setState(() {});
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: OrbitColors.surfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.link_rounded, color: Color(0xFFFFD54F), size: 28),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Kết Bạn Qua Link Thành Công! 🪐',
+                  style: TextStyle(
+                    color: OrbitColors.deepOlive,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Đã tự động kết nối 2 chiều với "${event.displayName}" (UID: ${event.uid})!\n\nCả hai bạn hiện đã cùng xuất hiện trên vòng tròn quỹ đạo của nhau để chia sẻ ảnh chụp và tương tác lên Widget màn hình chính.',
+            style: TextStyle(
+              color: OrbitColors.deepOlive.withValues(alpha: 0.85),
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: OrbitColors.buttonPrimary,
+                foregroundColor: OrbitColors.textLight,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Tuyệt vời 🚀', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _onFriendPhotosChanged() {

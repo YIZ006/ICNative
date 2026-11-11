@@ -5,5 +5,42 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "hosting_invite",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "!**/.well-known/**"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/invite/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/invite",
+        "destination": "/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }

@@ -7,6 +7,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/auth_service.dart';
+import '../services/story_share_service.dart';
+
+/// Các lựa chọn khi bấm "Lưu Story".
+enum _StoryExportAction { instagramStory, saveVideo, saveImage, shareOther }
 
 class StoryTemplateItem {
   final int id;
@@ -48,6 +52,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
   final GlobalKey _repaintBoundaryKey = GlobalKey();
   int _selectedTemplateIndex = 0;
   bool _isExporting = false;
+  double _exportProgress = 0;
+  String _exportLabel = '';
 
   late final AnimationController _colorFlowController;
   late final AnimationController _spinController;
@@ -448,50 +454,245 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
     });
   }
 
-  Future<void> _exportAndSaveStory() async {
-    setState(() => _isExporting = true);
-    await Future.delayed(const Duration(milliseconds: 50));
+  // ==========================================
+  // XUẤT STORY: VIDEO ĐỘNG (MP4) / ẢNH TĨNH (PNG)
+  // ==========================================
+
+  /// Kích thước video Story chuẩn 9:16 cho Instagram / TikTok (vòng lặp 4s liền mạch).
+  static const int _videoWidth = 720;
+  static const int _videoHeight = 1280;
+  static const int _videoFps = 24;
+  static const int _videoSeconds = 4;
+
+  /// Sóng tam giác 0→1→0 mô phỏng `repeat(reverse: true)` của AnimationController.
+  static double _triangleWave(double cycles) {
+    final f = cycles % 2.0;
+    return f <= 1.0 ? f : 2.0 - f;
+  }
+
+  void _restartAnimations() {
+    if (!mounted) return;
+    _colorFlowController.repeat(reverse: true);
+    _spinController.repeat();
+    _pulseController.repeat(reverse: true);
+  }
+
+  /// Dựng toàn bộ template động đang chọn (`templates[_selectedTemplateIndex]`) thành video MP4
+  /// bằng cách tự điều khiển từng khung hình animation (vòng lặp khép kín mượt mà)
+  /// và mã hoá bằng MediaCodec của Android.
+  Future<File> _renderStoryVideo() async {
+    // Chờ 1 nhịp để UI ẩn các nút "+ Thêm ảnh" / "Đổi" trước khi chụp khung hình đầu tiên
+    await WidgetsBinding.instance.endOfFrame;
+
+    final boundary = _repaintBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) throw Exception('Không tìm thấy khung Story');
+
+    final currentTpl = templates[_selectedTemplateIndex];
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/orbit_story_tpl${currentTpl.id}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    final pixelRatio = _videoWidth / boundary.size.width;
+    const totalFrames = _videoFps * _videoSeconds;
+
+    // Dừng animation thời gian thực để tự "tua" từng khung hình chính xác
+    _colorFlowController.stop();
+    _spinController.stop();
+    _pulseController.stop();
+
+    await StoryShareService.startVideo(
+      path: path,
+      width: _videoWidth,
+      height: _videoHeight,
+      fps: _videoFps,
+    );
     try {
-      final boundary = _repaintBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
+      for (int i = 0; i < totalFrames; i++) {
+        if (!mounted) throw Exception('Đã huỷ xuất video');
+        final progress = i / totalFrames; // 0.0 -> 1.0 trong suốt thời lượng video
+        // Chu kỳ khép kín hoàn hảo để khi Instagram lặp lại video không bị giật khớp:
+        // - Đĩa than xoay tròn đủ 1 vòng 360°
+        // - Nhịp đập (equalizer / tim / sao) đập 2 chu kỳ đầy đủ
+        // - Dòng chảy màu nền chuyển động 1 chu kỳ khép kín
+        _spinController.value = progress % 1.0;
+        _pulseController.value = _triangleWave(progress * 4.0);
+        _colorFlowController.value = _triangleWave(progress * 2.0);
 
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
+        WidgetsBinding.instance.scheduleFrame();
+        await WidgetsBinding.instance.endOfFrame;
 
-      final bytes = byteData.buffer.asUint8List();
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/orbit_story_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(bytes);
+        final image = await boundary.toImage(pixelRatio: pixelRatio);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        final w = image.width;
+        final h = image.height;
+        image.dispose();
+        if (byteData == null) throw Exception('Không đọc được khung hình');
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFF00FF66),
-            content: Row(
+        await StoryShareService.addFrame(byteData.buffer.asUint8List(), w, h);
+        if (mounted) setState(() => _exportProgress = (i + 1) / totalFrames);
+      }
+      final out = await StoryShareService.finishVideo();
+      if (out == null) throw Exception('Mã hoá video thất bại');
+      return File(out);
+    } catch (e) {
+      await StoryShareService.cancelVideo();
+      rethrow;
+    } finally {
+      _restartAnimations();
+    }
+  }
+
+  /// Chụp ảnh tĩnh PNG Full HD của toàn bộ template đang chọn.
+  Future<File> _renderStoryImage() async {
+    await WidgetsBinding.instance.endOfFrame;
+    await Future.delayed(const Duration(milliseconds: 30));
+    final boundary = _repaintBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) throw Exception('Không tìm thấy khung Story');
+
+    final currentTpl = templates[_selectedTemplateIndex];
+    final image = await boundary.toImage(pixelRatio: 1080 / boundary.size.width);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (byteData == null) throw Exception('Không đọc được ảnh');
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/orbit_story_tpl${currentTpl.id}_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(byteData.buffer.asUint8List());
+    return file;
+  }
+
+  void _showSnack(String message, {bool success = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: success ? const Color(0xFF00FF66) : const Color(0xFFFF4D4D),
+        content: Row(
+          children: [
+            Icon(success ? Icons.check_circle : Icons.error_outline, color: Colors.black),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runExport(_StoryExportAction action) async {
+    final isVideo = action != _StoryExportAction.saveImage;
+    setState(() {
+      _isExporting = true;
+      _exportProgress = 0;
+      _exportLabel = isVideo ? 'Đang dựng video' : 'Đang xuất ảnh';
+    });
+
+    try {
+      final file = isVideo ? await _renderStoryVideo() : await _renderStoryImage();
+      final mime = isVideo ? StoryShareService.mimeVideo : StoryShareService.mimeImage;
+
+      switch (action) {
+        case _StoryExportAction.instagramStory:
+          // Lưu bản sao vào Thư viện để dùng lại sau, rồi nhảy thẳng sang Instagram Story
+          await StoryShareService.saveToGallery(file.path, mime);
+          final res = await StoryShareService.shareToInstagramStory(file.path, mime);
+          if (res == InstagramShareResult.chooser) {
+            _showSnack('Máy chưa cài Instagram – đã lưu video vào Thư viện (Movies/Orbit).');
+          }
+          break;
+        case _StoryExportAction.saveVideo:
+          final ok = await StoryShareService.saveToGallery(file.path, mime);
+          ok
+              ? _showSnack('Đã lưu video Story động vào Thư viện (Movies/Orbit)!')
+              : _showSnack('Không lưu được vào Thư viện trên máy này.', success: false);
+          break;
+        case _StoryExportAction.saveImage:
+          final ok = await StoryShareService.saveToGallery(file.path, mime);
+          ok
+              ? _showSnack('Đã lưu ảnh Story HD vào Thư viện (Pictures/Orbit)!')
+              : _showSnack('Không lưu được vào Thư viện trên máy này.', success: false);
+          break;
+        case _StoryExportAction.shareOther:
+          await StoryShareService.shareGeneric(file.path, mime);
+          break;
+      }
+    } catch (e) {
+      _showSnack('Lỗi khi xuất Story: $e', success: false);
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  void _showExportSheet() {
+    final currentTpl = templates[_selectedTemplateIndex];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF141414),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        Widget option(IconData icon, Color color, String title, String subtitle, _StoryExportAction action) {
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.15),
+              child: Icon(icon, color: color),
+            ),
+            title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _runExport(action);
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.check_circle, color: Colors.black),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Đã lưu ảnh Story HD (9:16) sẵn sàng đăng lên Instagram / TikTok!',
-                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Row(
+                    children: [
+                      Text(currentTpl.centerIcon, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mẫu ${_selectedTemplateIndex + 1}/20: ${currentTpl.name}',
+                          style: const TextStyle(color: Color(0xFF00FF66), fontWeight: FontWeight.bold, fontSize: 13.5),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                option(
+                    Icons.camera_alt_rounded,
+                    const Color(0xFFE1306C),
+                    'Đăng mẫu "${currentTpl.name}" lên Instagram Story',
+                    'Đính kèm nguyên template động (${_videoSeconds}s) mở thẳng vào Story',
+                    _StoryExportAction.instagramStory),
+                option(Icons.movie_creation_outlined, const Color(0xFF00F0FF), 'Lưu video template động vào Thư viện',
+                    'MP4 9:16 – đăng TikTok, Reels, Zalo…', _StoryExportAction.saveVideo),
+                option(Icons.image_outlined, const Color(0xFF00FF66), 'Lưu ảnh tĩnh vào Thư viện',
+                    'PNG Full HD 1080×1920', _StoryExportAction.saveImage),
+                option(Icons.share_rounded, Colors.white70, 'Chia sẻ template qua ứng dụng khác',
+                    'Gửi video động qua Messenger, Zalo, TikTok…', _StoryExportAction.shareOther),
               ],
             ),
           ),
         );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi khi xuất ảnh: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isExporting = false);
-    }
+      },
+    );
   }
 
   @override
@@ -499,153 +700,160 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
     final currentTpl = templates[_selectedTemplateIndex];
     final user = AuthService.instance.currentUser;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Mẫu Story Orbit 🪐',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: _isExporting ? null : _exportAndSaveStory,
-            icon: _isExporting
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.ios_share, color: Color(0xFF00F0FF)),
-            label: const Text(
-              'Lưu Story',
-              style: TextStyle(color: Color(0xFF00F0FF), fontWeight: FontWeight.bold),
-            ),
+    // Chặn thoát màn hình khi đang dựng video để tránh hỏng file
+    return PopScope(
+      canPop: !_isExporting,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text(
+            'Mẫu Story Orbit 🪐',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 9:16 Story Preview Card bọc bởi AnimatedBuilder cho dòng chảy màu động
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: RepaintBoundary(
-                      key: _repaintBoundaryKey,
-                      child: AnimatedBuilder(
-                        animation: _colorFlowController,
-                        builder: (context, _) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              gradient: _getDynamicGradient(currentTpl.backgroundGradient),
-                            ),
-                            child: _buildStoryCardContent(currentTpl, user),
-                          );
-                        },
+          actions: [
+            TextButton.icon(
+              onPressed: _isExporting ? null : _showExportSheet,
+              icon: _isExporting
+                  ? const SizedBox(
+                      width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.ios_share, color: Color(0xFF00F0FF)),
+              label: Text(
+                _isExporting
+                    ? (_exportProgress > 0 ? '$_exportLabel ${(_exportProgress * 100).round()}%' : '$_exportLabel…')
+                    : 'Lưu Story',
+                style: const TextStyle(color: Color(0xFF00F0FF), fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // 9:16 Story Preview Card bọc bởi AnimatedBuilder cho dòng chảy màu động
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: AspectRatio(
+                    aspectRatio: 9 / 16,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: RepaintBoundary(
+                        key: _repaintBoundaryKey,
+                        child: AnimatedBuilder(
+                          animation: _colorFlowController,
+                          builder: (context, _) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                gradient: _getDynamicGradient(currentTpl.backgroundGradient),
+                              ),
+                              child: _buildStoryCardContent(currentTpl, user),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Template Selector Bottom Carousel & Toolbar
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Mẫu ${_selectedTemplateIndex + 1}/20: ${currentTpl.name}',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          currentTpl.theme,
-                          style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+            // Template Selector Bottom Carousel & Toolbar
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Mẫu ${_selectedTemplateIndex + 1}/20: ${currentTpl.name}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
-                      ),
-                      if (_customPhotos.isNotEmpty)
-                        GestureDetector(
-                          onTap: () => setState(() => _customPhotos.clear()),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.white12,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.refresh, size: 12, color: Colors.white70),
-                                SizedBox(width: 4),
-                                Text('Đặt lại ảnh', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
-                              ],
-                            ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            currentTpl.theme,
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 74,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: templates.length,
-                    itemBuilder: (ctx, idx) {
-                      final t = templates[idx];
-                      final isSelected = idx == _selectedTemplateIndex;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedTemplateIndex = idx),
-                        child: Container(
-                          width: 58,
-                          margin: const EdgeInsets.symmetric(horizontal: 5),
-                          decoration: BoxDecoration(
-                            gradient: t.backgroundGradient,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFF00FF66) : Colors.white24,
-                              width: isSelected ? 3 : 1,
-                            ),
-                            boxShadow: isSelected
-                                ? [BoxShadow(color: const Color(0xFF00FF66).withValues(alpha: 0.4), blurRadius: 10)]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${t.id}',
-                              style: TextStyle(
-                                color: t.isDark ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                        if (_customPhotos.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => setState(() => _customPhotos.clear()),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white12,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.refresh, size: 12, color: Colors.white70),
+                                  SizedBox(width: 4),
+                                  Text('Đặt lại ảnh', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 74,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: templates.length,
+                      itemBuilder: (ctx, idx) {
+                        final t = templates[idx];
+                        final isSelected = idx == _selectedTemplateIndex;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedTemplateIndex = idx),
+                          child: Container(
+                            width: 58,
+                            margin: const EdgeInsets.symmetric(horizontal: 5),
+                            decoration: BoxDecoration(
+                              gradient: t.backgroundGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF00FF66) : Colors.white24,
+                                width: isSelected ? 3 : 1,
+                              ),
+                              boxShadow: isSelected
+                                  ? [BoxShadow(color: const Color(0xFF00FF66).withValues(alpha: 0.4), blurRadius: 10)]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${t.id}',
+                                style: TextStyle(
+                                  color: t.isDark ? Colors.white : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -717,7 +925,9 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                   ],
                 ),
                 child: const Center(
-                  child: Text('✦ ORBIT ✦', style: TextStyle(color: Colors.white, fontSize: 9.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                  child: Text('✦ ORBIT ✦',
+                      style:
+                          TextStyle(color: Colors.white, fontSize: 9.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
                 ),
               ),
               _buildSenderHeaderBadge(user, name, tpl, isDark: false),
@@ -861,8 +1071,12 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('PHOTOISM', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2, color: Colors.black)),
-                    Text('ORBIT STUDIO', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black.withValues(alpha: 0.6))),
+                    const Text('PHOTOISM',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2, color: Colors.black)),
+                    Text('ORBIT STUDIO',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black.withValues(alpha: 0.6))),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -916,8 +1130,11 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('||||| |||| || ||||| |', style: TextStyle(fontSize: 15, letterSpacing: 1.5, fontFamily: 'monospace', color: Colors.black)),
-                    Text('SEOUL · ${DateTime.now().year}', style: const TextStyle(fontSize: 8.5, color: Colors.black45)),
+                    const Text('||||| |||| || ||||| |',
+                        style:
+                            TextStyle(fontSize: 15, letterSpacing: 1.5, fontFamily: 'monospace', color: Colors.black)),
+                    Text('SEOUL · ${DateTime.now().year}',
+                        style: const TextStyle(fontSize: 8.5, color: Colors.black45)),
                   ],
                 ),
               ],
@@ -1039,7 +1256,9 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                                     child: const Center(child: Text('🪐', style: TextStyle(fontSize: 8))),
                                   ),
                                   const SizedBox(width: 5),
-                                  const Text('ORBIT', style: TextStyle(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  const Text('ORBIT',
+                                      style: TextStyle(
+                                          color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                               const Text('Vừa xong', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
@@ -1076,17 +1295,21 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
             placeholderEmoji: '🖼️',
             borderColor: Colors.white.withValues(alpha: 0.25),
             backgroundColor: Colors.white.withValues(alpha: 0.08),
-            fallbackWidget: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.add_photo_alternate_outlined, color: Colors.white70, size: 28),
-                  const SizedBox(height: 4),
-                  const Text('Thêm ảnh Widget', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                  Text('Bấm để chọn từ thư viện', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 9.5)),
-                ],
-              ),
-            ),
+            fallbackWidget: _isExporting
+                ? _buildAvatarImage(user, name, 210, 125, borderRadius: 18)
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.add_photo_alternate_outlined, color: Colors.white70, size: 28),
+                        const SizedBox(height: 4),
+                        const Text('Thêm ảnh Widget',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        Text('Bấm để chọn từ thư viện',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 9.5)),
+                      ],
+                    ),
+                  ),
           ),
 
           const Spacer(),
@@ -1132,7 +1355,9 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                     child: const Center(child: Icon(Icons.music_note, color: Colors.black, size: 12)),
                   ),
                   const SizedBox(width: 7),
-                  const Text('PLAYING ON ORBIT', style: TextStyle(color: Color(0xFF1DB954), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                  const Text('PLAYING ON ORBIT',
+                      style: TextStyle(
+                          color: Color(0xFF1DB954), fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                 ],
               ),
               _buildSenderHeaderBadge(user, name, tpl, isDark: true),
@@ -1187,7 +1412,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 20, offset: const Offset(0, 6)),
+                        BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.6), blurRadius: 20, offset: const Offset(0, 6)),
                       ],
                     ),
                     child: _buildInteractivePhotoSlot(
@@ -1310,7 +1536,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                     const SizedBox(width: 5),
                     Text(
                       'DUO ORBIT · #1',
-                      style: TextStyle(color: tpl.primaryColor, fontWeight: FontWeight.bold, fontSize: 10.5, letterSpacing: 1.5),
+                      style: TextStyle(
+                          color: tpl.primaryColor, fontWeight: FontWeight.bold, fontSize: 10.5, letterSpacing: 1.5),
                     ),
                   ],
                 ),
@@ -1323,7 +1550,12 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
 
           const Text(
             'waiting for my other half 🤍',
-            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, fontStyle: FontStyle.italic, fontFamily: 'serif'),
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                fontStyle: FontStyle.italic,
+                fontFamily: 'serif'),
           ),
           const SizedBox(height: 3),
           Text(
@@ -1402,7 +1634,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Bạn số #1', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  const Text('Bạn số #1',
+                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12.5)),
                 ],
               ),
             ],
@@ -1505,7 +1738,9 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('ORBIT 17:00 🌅', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const Text('ORBIT 17:00 🌅',
+                  style:
+                      TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               _buildSenderHeaderBadge(user, name, tpl, isDark: true),
             ],
           ),
@@ -1819,9 +2054,7 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(borderRadius),
               color: backgroundColor ??
-                  (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.04)),
+                  (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04)),
               border: Border.all(
                 color: borderColor ??
                     (hasCustomPhoto
@@ -1857,23 +2090,25 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00FF66).withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF00FF66), width: 0.8),
-                                ),
-                                child: const Text(
-                                  '+ Thêm ảnh',
-                                  style: TextStyle(
-                                    color: Color(0xFF00FF66),
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.bold,
+                              if (!_isExporting) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00FF66).withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFF00FF66), width: 0.8),
+                                  ),
+                                  child: const Text(
+                                    '+ Thêm ảnh',
+                                    style: TextStyle(
+                                      color: Color(0xFF00FF66),
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ),
@@ -1929,7 +2164,8 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
     );
   }
 
-  Widget _buildAvatarImage(UserProfile? user, String cleanName, double width, double height, {double borderRadius = 0}) {
+  Widget _buildAvatarImage(UserProfile? user, String cleanName, double width, double height,
+      {double borderRadius = 0}) {
     if (user?.avatarPath != null && File(user!.avatarPath!).existsSync()) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
@@ -1959,33 +2195,36 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
   }
 
   Widget _buildInstagramLinkSticker(String url, {required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.link_rounded, color: Color(0xFF007AFF), size: 18),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF007AFF),
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
+    return GestureDetector(
+      onTap: _isExporting ? null : () => _runExport(_StoryExportAction.instagramStory),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.link_rounded, color: Color(0xFF007AFF), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF007AFF),
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

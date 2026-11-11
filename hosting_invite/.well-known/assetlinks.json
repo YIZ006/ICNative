@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.abom.utas.utas",
+      "sha256_cert_fingerprints": [
+        "B1:3D:50:57:16:74:2D:AF:11:9B:C2:62:B2:48:F9:74:B4:BE:11:63:DA:4A:60:B8:32:6F:57:B7:6F:C4:4F:CA"
+      ]
+    }
+  }
+]

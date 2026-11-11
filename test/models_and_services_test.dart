@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icnative/services/custom_sticker_service.dart';
 import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
+import 'package:icnative/services/invite_service.dart';
 import 'package:icnative/services/locale_service.dart';
 import 'package:icnative/services/location_service.dart';
 import 'package:icnative/services/secret_photo_service.dart';
@@ -334,6 +335,53 @@ void main() {
           expect(file.existsSync(), isTrue, reason: 'Suggested asset ${suggested.assetPath} for $cat missing from disk');
         }
       }
+    });
+  });
+
+  group('InviteService - Link Generation & Parsing', () {
+    test('parseInviteInput parses HTTPS invite link with uid and Vietnamese name', () {
+      const link = 'https://ncnative-bcf6d.web.app/invite?uid=u_f7bcfb29&name=M%C3%A8o%20B%C3%A9o';
+      final payload = InviteService.parseInviteInput(link);
+      expect(payload, isNotNull);
+      expect(payload!.uid, 'u_f7bcfb29');
+      expect(payload.displayName, 'Mèo Béo');
+    });
+
+    test('parseInviteInput parses custom scheme orbit://invite link', () {
+      const link = 'orbit://invite?uid=u_e6f52c5d&name=Capybara%20Vui%20V%E1%BA%BB';
+      final payload = InviteService.parseInviteInput(link);
+      expect(payload, isNotNull);
+      expect(payload!.uid, 'u_e6f52c5d');
+      expect(payload.displayName, 'Capybara Vui Vẻ');
+    });
+
+    test('parseInviteInput extracts link embedded inside a multi-line chat message', () {
+      const msg = '🪐 Kết bạn với Mèo Béo trên Orbit Widget nhé!\n'
+          '👉 Bấm vào link này để mở app:\n'
+          'https://ncnative-bcf6d.web.app/invite?uid=u_f7bcfb29&name=M%C3%A8o%20B%C3%A9o';
+      final payload = InviteService.parseInviteInput(msg);
+      expect(payload, isNotNull);
+      expect(payload!.uid, 'u_f7bcfb29');
+      expect(payload.displayName, 'Mèo Béo');
+    });
+
+    test('parseInviteInput parses raw UID or QR JSON payload', () {
+      final fromUid = InviteService.parseInviteInput('u_f7bcfb29');
+      expect(fromUid, isNotNull);
+      expect(fromUid!.uid, 'u_f7bcfb29');
+
+      final fromJson = InviteService.parseInviteInput(
+        '{"type":"iconnative_add_friend","uid":"u_12345678","name":"Cún Shiba"}',
+      );
+      expect(fromJson, isNotNull);
+      expect(fromJson!.uid, 'u_12345678');
+      expect(fromJson.displayName, 'Cún Shiba');
+    });
+
+    test('parseInviteInput returns null for invalid or unrelated strings', () {
+      expect(InviteService.parseInviteInput(''), isNull);
+      expect(InviteService.parseInviteInput('hello world'), isNull);
+      expect(InviteService.parseInviteInput('https://google.com'), isNull);
     });
   });
 }

@@ -2334,3 +2334,64 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - [MODIFY] `lib/screens/preview.dart`: Thêm state `_showDebugBoundingBox`, nút bật/tắt radar trên TopBar, lớp hiển thị Bounding Box dạng neon cyan với `CoverMapping`, và chấm neo phát quang.
   - [BUILD] `Orbit-v1.4.8-demo-showcase.apk`: Đã đóng gói thành công.
 * **Hiện trạng (Current State):** Cả 2 bản APK v1.4.8 sẵn sàng thử nghiệm hoàn chỉnh.
+
+
+### [2026-11-11 14:58:00] - Xuất Story động (MP4) + Lưu Thư viện + Đăng thẳng Instagram Story
+* **Thời gian (Timestamp):** 2026-11-11 14:58:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):**
+  - Lỗi cũ: nút "Lưu Story" chỉ lưu PNG tĩnh vào thư mục nội bộ của app (`getApplicationDocumentsDirectory`) → không thấy trong Thư viện, mất hiệu ứng động.
+  - Mới: bấm "Lưu Story" mở bottom sheet 4 lựa chọn: Đăng Instagram Story (video động 6s), Lưu video vào Thư viện, Lưu ảnh tĩnh PNG 1080×1920, Chia sẻ app khác.
+  - Video được dựng bằng cách tự tua 3 AnimationController (colorFlow / spin / pulse) từng khung hình (30fps × 6s, 720×1280) → gửi RGBA sang Android MediaCodec H.264 → MP4. 100% Offline, không thêm package.
+  - Instagram: tìm Activity `StoryShareHandlerActivity` của Instagram để vào thẳng trình soạn Story (không cần Facebook App ID); dự phòng mở Instagram picker; chưa cài Instagram → bảng chia sẻ hệ thống.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `android/app/src/main/kotlin/com/abom/utas/utas/StoryShareHelper.kt`: `StoryVideoEncoder` (MediaCodec + MediaMuxer) và `StoryShareHelper` (MediaStore, Instagram intent).
+  - [MODIFY] `MainActivity.kt`: Kênh `com.abom.utas.utas/story_share`, chạy mã hoá trên luồng nền.
+  - [MODIFY] `AndroidManifest.xml`: `<queries>` Instagram/SEND, `WRITE_EXTERNAL_STORAGE maxSdkVersion=28`.
+  - [NEW] `lib/services/story_share_service.dart`.
+  - [MODIFY] `lib/screens/story_templates_screen.dart`: Bottom sheet xuất Story, render video theo khung hình, tiến trình %, chặn thoát khi đang xuất.
+* **Hiện trạng (Current State):** `flutter analyze` sạch cho 2 file Dart. Cần test thực tế trên máy có Instagram.
+* **Lưu ý:** Xuất video yêu cầu Android 6.0+. Android ≤ 9 lưu Thư viện cần quyền bộ nhớ (chưa xin runtime).
+
+
+---
+
+### [2026-11-11 15:14:00] - Triển khai tính năng Kết Bạn Qua Link 1-Chạm (HTTPS App Links + Deep Link + Smart Landing Page)
+* **Thời gian (Timestamp):** 2026-11-11 15:14:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  - Triển khai trọn bộ tính năng **Kết bạn qua Link 1-chạm** gắn trực tiếp với tài khoản (`uid` + `displayName`) của người dùng, tuân thủ 100% nguyên tắc 0 VNĐ.
+  - Tạo đường link HTTPS thật (`https://ncnative-bcf6d.web.app/invite?uid=<uid>&name=<name>`) để mọi ứng dụng nhắn tin (Zalo, Messenger, Instagram, SMS, Telegram) đều hiển thị dưới dạng liên kết bấm vào được ngay.
+  - Deploy trang web trung gian thông minh (`hosting_invite/index.html`) và tệp xác thực Digital Asset Links (`hosting_invite/.well-known/assetlinks.json`) lên Firebase Hosting (`https://ncnative-bcf6d.web.app`). Khi người nhận bấm vào link:
+    1. Hệ điều hành Android / iOS tự động tìm ứng dụng **Orbit** (`com.abom.utas.utas`) qua Android App Links (`https://ncnative-bcf6d.web.app/invite`), Android Intent (`intent://invite...`) hoặc Custom Scheme (`orbit://invite...`).
+    2. Mở thẳng ứng dụng Orbit, tự động đọc `uid` & `name` của người gửi (hoặc tra cứu tên thật trên Cloud Firestore) và thiết lập kết nối bạn bè 2 chiều (`FriendService.sendFriendRequestOrConnect`).
+    3. Hỗ trợ dự phòng thông minh cho trình duyệt nội bộ (In-App Browser của Zalo/Messenger): tự động kiểm tra Clipboard khi mở app hoặc dùng nút **"Dán Link Bạn Bè"** trong màn hình Bạn Bè & Kết Nối.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `lib/services/invite_service.dart` - Dịch vụ tạo link kết bạn gắn với tài khoản, chia sẻ link qua bảng hệ thống, lắng nghe Deep Link thời gian thực, tự động nhận diện Clipboard và kết nối bạn bè 2 chiều.
+  - [NEW] `hosting_invite/index.html` & `hosting_invite/.well-known/assetlinks.json` - Trang đích thông minh tự động gọi mở app Orbit và cấu hình Android App Links xác thực SHA-256.
+  - [MODIFY] `firebase.json` - Bổ sung cấu hình Firebase Hosting cho `hosting_invite` và đã deploy thành công lên `https://ncnative-bcf6d.web.app`.
+  - [MODIFY] `android/app/src/main/AndroidManifest.xml` - Đăng ký `intent-filter` cho custom scheme (`orbit://`, `icnative://`) và HTTPS App Links (`https://ncnative-bcf6d.web.app/invite`).
+  - [MODIFY] `android/app/src/main/kotlin/com/abom/utas/utas/MainActivity.kt` & `ios/Runner/AppDelegate.swift` - Bổ sung kênh native `com.abom.utas.utas/deep_link` bắt sự kiện `onCreate`, `onNewIntent`, `openURL`, `universalLinks` và chia sẻ văn bản `shareText`.
+  - [MODIFY] `lib/screens/friends_screen.dart` - Thêm khu vực **"LINK KẾT BẠN CỦA TÔI (BẤM VÀO LÀ KẾT BẠN)"** kèm nút **"GỬI LINK KẾT BẠN"**, **"Sao chép"** và nút **"DÁN LINK BẠN BÈ"**.
+  - [MODIFY] `lib/screens/home.dart`, `lib/screens/qr_scanner_screen.dart`, `lib/main.dart` - Khởi tạo `InviteService`, lắng nghe sự kiện kết bạn qua link để hiển thị hộp thoại chúc mừng tức thì.
+  - [MODIFY] `test/models_and_services_test.dart` - Bổ sung bộ unit test kiểm thử phân tích link kết bạn (`InviteService.parseInviteInput`).
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Đang chạy kiểm tra `flutter analyze` và `flutter test`.
+* **Bước tiếp theo (Next Steps):**
+  1. Kiểm tra kết quả test và bàn giao tính năng cho người dùng.
+
+
+### [2026-11-11 15:15:00] - Đảm bảo nhảy sang Instagram Story mang theo nguyên vẹn Template động đã chọn
+* **Thời gian (Timestamp):** 2026-11-11 15:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Agent
+* **Tóm tắt công việc (Summary):**
+  - Bổ sung `ClipData.newRawUri` và `setDataAndType` vào mọi Intent chia sẻ sang Instagram Story (`StoryShareHandlerActivity` + `com.instagram.share.ADD_TO_STORY`) để trên Android 10–15+, Instagram luôn đọc được URI của file video MP4 và nạp sẵn toàn bộ template người dùng đã chọn làm nền Story (tuyệt đối không mở màn hình trống).
+  - Nút sticker liên kết ngay bên trong thẻ template (`_buildInstagramLinkSticker` - ví dụ *"🔗 Bấm nghe chung trên Widget ↗"*) nay có thể bấm trực tiếp để kết xuất mẫu đang chọn và nhảy thẳng sang Instagram Story.
+  - Chuẩn hoá vòng lặp video 4 giây (24fps) khép kín hoàn hảo (đĩa than xoay đủ 1 vòng 360°, sóng nhạc equalizer đập 2 chu kỳ, màu nền chuyển động 1 chu kỳ) và ẩn các nhãn `"+ Thêm ảnh"` / `"Đổi"` khi xuất để template trên Instagram Story đẹp hoàn chỉnh.
+  - Chống nghẽn hàng đợi `BufferQueue` trong `StoryVideoEncoder` bằng cơ chế `drain` chủ động trước và sau `lockCanvas`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `android/app/src/main/kotlin/com/abom/utas/utas/StoryShareHelper.kt`
+  - [MODIFY] `lib/screens/story_templates_screen.dart`

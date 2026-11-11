@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/auth_service.dart';
 import '../services/friend_service.dart';
+import '../services/invite_service.dart';
 import 'package:icnative/settings/theme_colors.dart';
 
 enum ScannerMode {
@@ -93,16 +94,25 @@ class _QRScannerScreenState extends State<QRScannerScreen>
     await _smoothZoomIn();
 
     try {
-      final data = jsonDecode(rawValue) as Map<String, dynamic>;
-      final type = data['type'] as String?;
-
-      if (type == 'iconnative_add_friend') {
-        await _processAddFriend(data);
-      } else if (type == 'iconnative_account_backup') {
-        await _processAccountBackup(rawValue, data);
+      // Hỗ trợ quét cả mã QR chứa đường link mời kết bạn (https://... hoặc orbit://...)
+      final invitePayload = InviteService.parseInviteInput(rawValue);
+      if (invitePayload != null && !rawValue.trim().startsWith('{')) {
+        await _processAddFriend({
+          'uid': invitePayload.uid,
+          'name': invitePayload.displayName,
+        });
       } else {
-        _showSnackbar('Mã QR này không thuộc về ứng dụng ICNative.');
-        await Future.delayed(const Duration(seconds: 2));
+        final data = jsonDecode(rawValue) as Map<String, dynamic>;
+        final type = data['type'] as String?;
+
+        if (type == 'iconnative_add_friend') {
+          await _processAddFriend(data);
+        } else if (type == 'iconnative_account_backup') {
+          await _processAccountBackup(rawValue, data);
+        } else {
+          _showSnackbar('Mã QR này không thuộc về ứng dụng ICNative.');
+          await Future.delayed(const Duration(seconds: 2));
+        }
       }
     } catch (e) {
       // Not a valid JSON payload

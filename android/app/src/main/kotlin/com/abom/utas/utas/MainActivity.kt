@@ -8,19 +8,61 @@ import android.media.AudioAttributes
 import android.media.SoundPool
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 
 class MainActivity: FlutterActivity() {
     private val UPDATER_CHANNEL = "com.abom.utas.utas/app_updater"
     private val WIDGET_PIN_CHANNEL = "com.abom.utas.utas/widget_pin"
     private val SCRATCH_SFX_CHANNEL = "com.abom.utas.utas/scratch_sfx"
+    private val STORY_SHARE_CHANNEL = "com.abom.utas.utas/story_share"
+    private val DEEP_LINK_CHANNEL = "com.abom.utas.utas/deep_link"
+    private val storyExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var storyEncoder: StoryVideoEncoder? = null
     private var soundPool: SoundPool? = null
     private var scratchSoundId: Int = 0
     private var lastPlayTime = 0L
+    private var pendingInviteLink: String? = null
+    private var deepLinkMethodChannel: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        extractInviteLink(intent)?.let { link ->
+            pendingInviteLink = link
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractInviteLink(intent)?.let { link ->
+            pendingInviteLink = link
+            mainHandler.post {
+                try {
+                    deepLinkMethodChannel?.invokeMethod("onDeepLink", link)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun extractInviteLink(intent: Intent?): String? {
+        if (intent == null) return null
+        if (intent.action == Intent.ACTION_VIEW) {
+            val dataUri = intent.dataString
+            if (!dataUri.isNullOrBlank()) {
+                return dataUri
+            }
+        }
+        return null
+    }
 
     private fun initScratchSound() {
         if (soundPool != null) return
@@ -67,6 +109,11 @@ class MainActivity: FlutterActivity() {
         try {
             soundPool?.release()
             soundPool = null
+        } catch (e: Exception) {}
+        try {
+            storyEncoder?.cancel()
+            storyEncoder = null
+            storyExecutor.shutdown()
         } catch (e: Exception) {}
     }
 
@@ -187,6 +234,119 @@ class MainActivity: FlutterActivity() {
                     result.success(true)
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        // 4. Kênh xuất Story động (MP4) + Lưu Thư viện + Chia sẻ thẳng lên Instagram Story
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, STORY_SHARE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startVideo" -> runInBackground(result) {
+                    storyEncoder?.cancel()
+                    storyEncoder = StoryVideoEncoder(
+                        File(call.argument<String>("path")!!),
+                        call.argument<Int>("width")!!,
+                        call.argument<Int>("height")!!,
+                        call.argument<Int>("fps")!!,
+                    )
+                    true
+                }
+                "addFrame" -> runInBackground(result) {
+                    val encoder = storyEncoder ?: throw IllegalStateException("Encoder chưa khởi tạo")
+                    encoder.addFrame(
+                        call.argument<ByteArray>("bytes")!!,
+                        call.argument<Int>("width")!!,
+                        call.argument<Int>("height")!!,
+                    )
+                    true
+                }
+                "finishVideo" -> runInBackground(result) {
+                    val encoder = storyEncoder ?: throw IllegalStateException("Encoder chưa khởi tạo")
+                    storyEncoder = null
+                    encoder.finish()
+                }
+                "cancelVideo" -> runInBackground(result) {
+                    storyEncoder?.cancel()
+                    storyEncoder = null
+                    true
+                }
+                "saveToGallery" -> runInBackground(result) {
+                    StoryShareHelper.saveToGallery(
+                        this,
+                        File(call.argument<String>("path")!!),
+                        call.argument<String>("mime")!!,
+                    )
+                }
+                "isInstagramInstalled" -> result.success(StoryShareHelper.isInstagramInstalled(this))
+                "shareToInstagramStory" -> {
+                    try {
+                        result.success(
+                            StoryShareHelper.shareToInstagramStory(
+                                this,
+                                File(call.argument<String>("path")!!),
+                                call.argument<String>("mime")!!,
+                            )
+                        )
+                    } catch (e: Exception) {
+                        result.error("SHARE_ERROR", e.message, null)
+                    }
+                }
+                "shareGeneric" -> {
+                    try {
+                        StoryShareHelper.shareGeneric(
+                            this,
+                            File(call.argument<String>("path")!!),
+                            call.argument<String>("mime")!!,
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SHARE_ERROR", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 5. Kênh Deep Link Kết Bạn & Chia sẻ liên kết (100% Native, 0 VNĐ)
+        deepLinkMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEEP_LINK_CHANNEL)
+        deepLinkMethodChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialLink" -> {
+                    val link = pendingInviteLink
+                    pendingInviteLink = null
+                    result.success(link)
+                }
+                "shareText" -> {
+                    val text = call.argument<String>("text")
+                    val title = call.argument<String>("title") ?: "Chia sẻ liên kết kết bạn Orbit"
+                    if (!text.isNullOrBlank()) {
+                        try {
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            val chooser = Intent.createChooser(sendIntent, title)
+                            startActivity(chooser)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SHARE_TEXT_ERROR", e.message, null)
+                        }
+                    } else {
+                        result.success(false)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    /** Chạy tác vụ nặng (mã hoá video, ghi file) trên luồng nền, trả kết quả về luồng chính. */
+    private fun runInBackground(result: MethodChannel.Result, block: () -> Any?) {
+        storyExecutor.execute {
+            try {
+                val value = block()
+                mainHandler.post { result.success(value) }
+            } catch (e: Exception) {
+                mainHandler.post { result.error("STORY_ERROR", e.message, null) }
             }
         }
     }

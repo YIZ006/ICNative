@@ -39,7 +39,9 @@ Thumbs.db
 android/.kotlin/
 **/android/.kotlin/
 
-# Binaries & APK releases
+# Firebase cache
+.firebase/
+
 *.apk
 *.exe
 

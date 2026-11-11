@@ -8,6 +8,7 @@ import './screens/home.dart';
 import './services/auth_service.dart';
 import './services/custom_sticker_service.dart';
 import './services/friend_service.dart';
+import './services/invite_service.dart';
 import './services/locale_service.dart';
 import './services/secret_photo_service.dart';
 import './services/soulmate_service.dart';
@@ -51,6 +52,13 @@ Future<void> _warmupBackgroundServices() async {
     SoulmateService.instance.init(),
     SecretPhotoService.instance.init(),
   ]);
+
+  // D2. Khởi tạo InviteService để bắt Deep Link kết bạn (tự động nhận link khi mở app)
+  try {
+    await InviteService.instance.init();
+  } catch (e) {
+    debugPrint('InviteService warmup error: $e');
+  }
 
   // E. Khởi tạo Widget Sync Service và kích hoạt lắng nghe ảnh bạn bè
   try {

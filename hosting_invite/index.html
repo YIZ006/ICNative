@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Kết Bạn Trên Orbit Widget 🪐</title>
+  <meta property="og:title" content="Lời mời kết bạn trên Orbit Widget 🪐" />
+  <meta property="og:description" content="Bấm vào liên kết này để mở ứng dụng Orbit và kết nối thẳng vào vòng tròn Widget của mình nhé!" />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#FEFAE0" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: #FEFAE0;
+      color: #283618;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: #FAF3DD;
+      border: 2px solid #606C38;
+      border-radius: 28px;
+      padding: 28px 22px;
+      text-align: center;
+      box-shadow: 0 10px 28px rgba(40, 54, 24, 0.12);
+    }
+    .badge-top {
+      display: inline-block;
+      background: rgba(96, 108, 56, 0.14);
+      color: #606C38;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+      text-transform: uppercase;
+    }
+    .orbit-ring {
+      width: 104px;
+      height: 104px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      border: 2.5px dashed #DDA15E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: spinSlow 18s linear infinite;
+    }
+    .orbit-dot {
+      width: 14px;
+      height: 14px;
+      background: #BC6C25;
+      border-radius: 50%;
+      position: absolute;
+      top: -7px;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px rgba(188, 108, 37, 0.6);
+    }
+    .avatar {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: #606C38;
+      color: #FEFAE0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 900;
+      box-shadow: 0 4px 12px rgba(40, 54, 24, 0.25);
+      animation: spinReverse 18s linear infinite;
+    }
+    @keyframes spinSlow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes spinReverse {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    .name-pill {
+      display: inline-block;
+      background: #606C38;
+      color: #FEFAE0;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 6px 18px;
+      border-radius: 16px;
+      margin-bottom: 6px;
+    }
+    .uid-text {
+      font-family: monospace;
+      font-size: 12px;
+      color: rgba(40, 54, 24, 0.6);
+      margin-bottom: 14px;
+    }
+    .desc {
+      font-size: 14px;
+      line-height: 1.5;
+      color: rgba(40, 54, 24, 0.85);
+      margin-bottom: 22px;
+    }
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: #606C38;
+      color: #FEFAE0;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 15px 18px;
+      border-radius: 22px;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(40, 54, 24, 0.25);
+      transition: transform 0.15s ease, background 0.15s ease;
+      margin-bottom: 10px;
+    }
+    .btn-primary:active {
+      transform: scale(0.98);
+      background: #283618;
+    }
+    .btn-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: #FEFAE0;
+      color: #283618;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 12px 16px;
+      border-radius: 18px;
+      border: 1.5px solid rgba(96, 108, 56, 0.45);
+      text-decoration: none;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .status-box {
+      font-size: 12px;
+      color: #BC6C25;
+      font-weight: 600;
+      min-height: 18px;
+      margin-bottom: 12px;
+    }
+    .divider {
+      height: 1px;
+      background: rgba(96, 108, 56, 0.2);
+      margin: 16px 0;
+    }
+    .footer-note {
+      font-size: 12px;
+      color: rgba(40, 54, 24, 0.65);
+      line-height: 1.45;
+    }
+    .inapp-hint {
+      display: none;
+      background: #FFF3CD;
+      border: 1px solid #FFECB5;
+      color: #664D03;
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-bottom: 14px;
+      line-height: 1.4;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge-top">🪐 LỜI MỜI KẾT BẠN ORBIT</div>
+    <div class="orbit-ring">
+      <div class="orbit-dot"></div>
+      <div class="avatar" id="avatarInitial">O</div>
+    </div>
+    <div class="name-pill" id="friendName">Bạn Bè Orbit</div>
+    <div class="uid-text" id="friendUid">(UID: đang tải...)</div>
+    <p class="desc" id="inviteDesc">
+      Muốn kết nối với bạn trên vòng tròn <b>Orbit Widget</b> để chia sẻ khoảnh khắc trực tiếp lên màn hình chính!
+    </p>
+
+    <div class="inapp-hint" id="inAppHint">
+      💡 <b>Mẹo nhỏ:</b> Nếu trình duyệt trong Zalo/Messenger chặn mở ứng dụng, hãy bấm <b>"Sao chép mã kết bạn"</b> bên dưới rồi mở app <b>Orbit</b> (app sẽ tự động nhận lời mời!), hoặc bấm dấu <b>⋯ góc trên → Mở bằng trình duyệt</b>.
+    </div>
+
+    <div class="status-box" id="statusText">Đang tìm ứng dụng Orbit trên máy của bạn...</div>
+
+    <button class="btn-primary" id="openAppBtn" onclick="openOrbitApp(true)">
+      🚀 MỞ APP ORBIT & KẾT BẠN NGAY
+    </button>
+
+    <button class="btn-secondary" id="copyBtn" onclick="copyInviteLink()">
+      📋 Sao chép mã kết bạn (Tự nhận khi mở App)
+    </button>
+
+    <div class="divider"></div>
+
+    <p class="footer-note" style="margin-bottom: 10px;">
+      Chưa cài ứng dụng <b>Orbit</b> trên điện thoại?
+    </p>
+    <a class="btn-secondary" href="https://github.com/YIZ006/ICNative/releases/latest" target="_blank" rel="noopener">
+      📥 Tải Orbit Miễn Phí (Android / iOS)
+    </a>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    let uid = (params.get('uid') || params.get('u') || '').trim();
+    let name = (params.get('name') || params.get('n') || '').trim();
+
+    if (!uid) {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const last = parts[parts.length - 1] || '';
+      if (last && last !== 'invite' && last !== 'index.html') {
+        uid = decodeURIComponent(last);
+      }
+    }
+
+    const nameEl = document.getElementById('friendName');
+    const uidEl = document.getElementById('friendUid');
+    const avatarEl = document.getElementById('avatarInitial');
+    const statusEl = document.getElementById('statusText');
+    const inAppHintEl = document.getElementById('inAppHint');
+
+    function updateProfileUI(displayUid, displayName) {
+      const finalName = displayName || 'Bạn Bè Orbit';
+      nameEl.textContent = finalName;
+      uidEl.textContent = displayUid ? `(UID: ${displayUid})` : '';
+      avatarEl.textContent = finalName.charAt(0).toUpperCase();
+      document.title = `Kết bạn với ${finalName} trên Orbit 🪐`;
+    }
+
+    updateProfileUI(uid, name);
+
+    // Nếu link chỉ có uid hoặc muốn lấy tên mới nhất từ Firestore
+    if (uid) {
+      fetch(`https://firestore.googleapis.com/v1/projects/ncnative-bcf6d/databases/(default)/documents/users/${encodeURIComponent(uid)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(doc => {
+          if (doc && doc.fields && doc.fields.displayName && doc.fields.displayName.stringValue) {
+            name = doc.fields.displayName.stringValue;
+            updateProfileUI(uid, name);
+          }
+        })
+        .catch(() => {});
+    }
+
+    const ua = navigator.userAgent || '';
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isInApp = /Zalo|FBAN|FBAV|Instagram|Messenger|Line|TikTok|MicroMessenger/i.test(ua);
+
+    if (isInApp) {
+      inAppHintEl.style.display = 'block';
+    }
+
+    function buildDeepLinkScheme() {
+      const q = new URLSearchParams();
+      if (uid) q.set('uid', uid);
+      if (name) q.set('name', name);
+      return `orbit://invite?${q.toString()}`;
+    }
+
+    function buildAndroidIntentUrl() {
+      const q = new URLSearchParams();
+      if (uid) q.set('uid', uid);
+      if (name) q.set('name', name);
+      const fallback = encodeURIComponent(window.location.href);
+      return `intent://invite?${q.toString()}#Intent;scheme=orbit;package=com.abom.utas.utas;S.browser_fallback_url=${fallback};end`;
+    }
+
+    function copyToClipboardSilent(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+    }
+
+    function openOrbitApp(isUserTap) {
+      if (!uid) {
+        statusEl.textContent = 'Liên kết thiếu mã UID người dùng.';
+        return;
+      }
+
+      const schemeUrl = buildDeepLinkScheme();
+      if (isUserTap) {
+        copyToClipboardSilent(window.location.href);
+      }
+
+      statusEl.textContent = 'Đang mở ứng dụng Orbit...';
+
+      if (isAndroid) {
+        // Thử mở qua custom scheme trước, sau đó fallback qua Android Intent
+        window.location.href = schemeUrl;
+        if (isUserTap) {
+          setTimeout(() => {
+            if (!document.hidden) {
+              window.location.href = buildAndroidIntentUrl();
+            }
+          }, 450);
+        }
+      } else {
+        window.location.href = schemeUrl;
+      }
+
+      setTimeout(() => {
+        if (!document.hidden) {
+          statusEl.textContent = 'Nếu app chưa tự bật, hãy bấm nút "Mở App Orbit" hoặc "Sao chép mã kết bạn" nhé!';
+        }
+      }, 1800);
+    }
+
+    function copyInviteLink() {
+      const textToCopy = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          statusEl.textContent = '✅ Đã sao chép! Hãy mở app Orbit để kết bạn ngay.';
+          document.getElementById('copyBtn').textContent = '✅ Đã sao chép! Đang thử mở Orbit...';
+          window.location.href = buildDeepLinkScheme();
+        }).catch(() => {
+          fallbackCopy(textToCopy);
+        });
+      } else {
+        fallbackCopy(textToCopy);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      statusEl.textContent = '✅ Đã sao chép! Hãy mở app Orbit để kết bạn ngay.';
+      window.location.href = buildDeepLinkScheme();
+    }
+
+    // Tự động kích hoạt mở app ngay khi trang vừa tải xong
+    window.addEventListener('load', () => {
+      if (uid) {
+        setTimeout(() => {
+          openOrbitApp(false);
+        }, 300);
+      } else {
+        statusEl.textContent = 'Hãy mở liên kết kết bạn từ bạn bè của bạn.';
+      }
+    });
+  </script>
+</body>
+</html>
