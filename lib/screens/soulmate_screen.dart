@@ -1,9 +1,10 @@
-import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/friend_service.dart';
 import '../services/soulmate_service.dart';
+import '../utils/avatar_helper.dart';
 
 class SoulmateScreen extends StatefulWidget {
   const SoulmateScreen({super.key});
@@ -12,14 +13,37 @@ class SoulmateScreen extends StatefulWidget {
   State<SoulmateScreen> createState() => _SoulmateScreenState();
 }
 
+class _VisualParticle {
+  final String emoji;
+  final double startX;
+  final double startY;
+  final double targetX;
+  final double targetY;
+  final double scale;
+  final double rotation;
+
+  _VisualParticle({
+    required this.emoji,
+    required this.startX,
+    required this.startY,
+    required this.targetX,
+    required this.targetY,
+    required this.scale,
+    required this.rotation,
+  });
+}
+
 class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _orbitController;
   late AnimationController _radarController;
+  late AnimationController _visualFxController;
 
   double? _calculatedDistanceKm;
   bool _isLoadingLocation = false;
   String? _lastSentInteractionType;
+  Color _activeFxColor = const Color(0xFFFF3366);
+  final List<_VisualParticle> _activeParticles = [];
 
   static String cleanDisplayName(String? name) {
     if (name == null || name.isEmpty) return 'Bạn bè';
@@ -44,15 +68,121 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
       duration: const Duration(milliseconds: 1200),
     );
 
+    _visualFxController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+
     _refreshLocationAndBroadcast();
+
+    // Lắng nghe tương tác đến để kích hoạt hiệu ứng trực quan hoá ngay trên màn hình
+    SoulmateService.instance.incomingInteractionNotifier.addListener(_onIncomingInteractionReceived);
+
+    // Lắng nghe lời mời kết nối Quỹ đạo Cận tâm gửi đến mình
+    SoulmateService.instance.incomingRequestNotifier.addListener(_onIncomingRequestChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIncomingRequestOnOpen();
+    });
   }
 
   @override
   void dispose() {
+    SoulmateService.instance.incomingInteractionNotifier.removeListener(_onIncomingInteractionReceived);
+    SoulmateService.instance.incomingRequestNotifier.removeListener(_onIncomingRequestChanged);
     _pulseController.dispose();
     _orbitController.dispose();
     _radarController.dispose();
+    _visualFxController.dispose();
     super.dispose();
+  }
+
+  void _onIncomingInteractionReceived() {
+    final incoming = SoulmateService.instance.incomingInteractionNotifier.value;
+    if (incoming != null && mounted) {
+      _triggerVisualInteraction(incoming.type, isIncoming: true);
+    }
+  }
+
+  void _onIncomingRequestChanged() {
+    final req = SoulmateService.instance.incomingRequestNotifier.value;
+    if (req != null && mounted) {
+      _showIncomingSoulmateRequestDialog(req);
+    }
+  }
+
+  void _checkIncomingRequestOnOpen() {
+    final req = SoulmateService.instance.incomingRequestNotifier.value;
+    if (req != null && mounted) {
+      _showIncomingSoulmateRequestDialog(req);
+    }
+  }
+
+  /// Trực quan hoá tương tác thời gian thực (Particle wave & Shockwave)
+  void _triggerVisualInteraction(String type, {bool isIncoming = false}) {
+    switch (type) {
+      case 'heartbeat':
+        _activeFxColor = const Color(0xFFFF3366);
+        break;
+      case 'kiss':
+        _activeFxColor = const Color(0xFFFF6699);
+        break;
+      case 'miss_you':
+        _activeFxColor = const Color(0xFF66B2FF);
+        break;
+      case 'hug':
+        _activeFxColor = const Color(0xFFFFB84D);
+        break;
+      case 'poke':
+        _activeFxColor = const Color(0xFF00FF66);
+        break;
+      default:
+        _activeFxColor = const Color(0xFFFF3366);
+    }
+
+    // Sinh 16 hạt hiệu ứng chuyển động đa hướng
+    final rand = math.Random();
+    final emojis = _getEmojisForType(type);
+    _activeParticles.clear();
+
+    for (int i = 0; i < 16; i++) {
+      final emoji = emojis[rand.nextInt(emojis.length)];
+      // Xuất phát từ hành tinh người gửi hướng sang người nhận
+      final startX = isIncoming ? 0.75 + (rand.nextDouble() * 0.1) : 0.25 + (rand.nextDouble() * 0.1);
+      final startY = 0.45 + (rand.nextDouble() * 0.15 - 0.075);
+      final targetX = isIncoming ? 0.15 + (rand.nextDouble() * 0.2) : 0.65 + (rand.nextDouble() * 0.25);
+      final targetY = 0.25 + (rand.nextDouble() * 0.5);
+
+      _activeParticles.add(_VisualParticle(
+        emoji: emoji,
+        startX: startX,
+        startY: startY,
+        targetX: targetX,
+        targetY: targetY,
+        scale: 0.8 + (rand.nextDouble() * 0.8),
+        rotation: (rand.nextDouble() - 0.5) * 2.0,
+      ));
+    }
+
+    _visualFxController.forward(from: 0.0);
+    setState(() {});
+  }
+
+  List<String> _getEmojisForType(String type) {
+    switch (type) {
+      case 'heartbeat':
+        return ['💓', '💖', '💗', '❤️', '💕', '💓', '✨'];
+      case 'kiss':
+        return ['💋', '😘', '💋', '💄', '💖', '💋', '✨'];
+      case 'miss_you':
+        return ['🥺', '🤍', '💭', '🥺', '✨', '⭐', '🥺'];
+      case 'hug':
+        return ['🫂', '🧡', '✨', '🫂', '💛', '🤗', '🫂'];
+      case 'poke':
+        return ['🛸', '⚡', '✨', '🛸', '🟢', '🛸', '💥'];
+      default:
+        return ['✨', '💖', '💓', '🌟'];
+    }
   }
 
   /// Cập nhật GPS chuẩn xác và phát sóng vị trí cho đối phương
@@ -84,10 +214,13 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
     }
   }
 
-  /// Gửi tương tác trực tiếp sang điện thoại của Soulmate
+  /// Gửi tương tác trực tiếp sang điện thoại của Soulmate & trực quan hoá tức thì
   Future<void> _sendInteraction(String type, {String? message}) async {
     HapticFeedback.heavyImpact();
     setState(() => _lastSentInteractionType = type);
+
+    // Kích hoạt trực quan hoá hiệu ứng ngay lập tức trên máy mình
+    _triggerVisualInteraction(type, isIncoming: false);
 
     await SoulmateService.instance.sendInteraction(
       type: type,
@@ -157,205 +290,125 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
     );
   }
 
-  /// Dialog viết lời nhắn yêu thương ghim lên Widget người ấy
-  void _showLoveNoteDialog(SoulmateData soulmate) {
-    final cleanName = cleanDisplayName(soulmate.displayName);
-    final textController = TextEditingController(text: soulmate.lastNote ?? '');
-
-    final quickSuggestions = [
-      'Nhớ uống nước nha 🥤',
-      'Hôm nay làm tốt lắm ❤️',
-      'Tối nay gặp nhau nhé 🛵',
-      'Yêu cậu nhiều 💕',
-      'Đang nhớ bạn nè 🥺',
-      'Cố lên sắp được về rồi ✨',
-    ];
-
-    showModalBottomSheet(
+  /// Hộp thoại nhận lời mời kết nối Quỹ đạo Cận tâm từ bạn bè
+  void _showIncomingSoulmateRequestDialog(SoulmateRequest req) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1F0B18),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1020),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+          side: const BorderSide(color: Color(0xFFFF3366), width: 2),
+        ),
+        title: const Row(
+          children: [
+            Text('🪐', style: TextStyle(fontSize: 24)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'LỜI MỜI QUỸ ĐẠO CẬN TÂM 💕',
+                style: TextStyle(
+                  color: Color(0xFFFF99BB),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AvatarHelper.buildAvatar(
+              displayName: req.senderName,
+              avatarBase64: req.senderAvatarBase64,
+              avatarPath: req.senderAvatar,
+              uid: req.senderUid,
+              size: 72,
+              border: Border.all(color: const Color(0xFFFF3366), width: 2.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              cleanDisplayName(req.senderName),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (req.senderPlaceName != null && req.senderPlaceName!.isNotEmpty) ...[
+              const SizedBox(height: 4),
               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('💌', style: TextStyle(fontSize: 24)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Ghim Lời Nhắn Lên Widget Của $cleanName',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                  const Icon(Icons.location_on, size: 13, color: Color(0xFF00F0FF)),
+                  const SizedBox(width: 4),
+                  Text(
+                    req.senderPlaceName!,
+                    style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Mẩu tin này sẽ nhảy thẳng lên màn hình chính của $cleanName!',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12),
-              ),
-              const SizedBox(height: 14),
-
-              TextField(
-                controller: textController,
-                maxLength: 60,
-                autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Nhập lời nhắn yêu thương (VD: Tối nay ăn gì nà?)...',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.08),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFFF3366)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFFF3366), width: 2),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-              const Text('Gợi ý nhanh:', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: quickSuggestions.map((s) {
-                  return GestureDetector(
-                    onTap: () => textController.text = s,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Text(s, style: const TextStyle(color: Colors.white, fontSize: 11.5)),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              '${cleanDisplayName(req.senderName)} muốn kết nối Quỹ đạo Cận tâm độc quyền (#1) với bạn!\n\n'
+              'Hai bạn sẽ cùng chia sẻ vị trí thực tế, gửi nhịp tim rung máy và tương tác trực tiếp lên Widget màn hình chính.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13, height: 1.45),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              SoulmateService.instance.declineSoulmateRequest(req);
+            },
+            child: Text('Để sau', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3366),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              await SoulmateService.instance.acceptSoulmateRequest(req);
+              if (mounted) {
+                _refreshLocationAndBroadcast();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF2C0A1E),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
                     ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final text = textController.text.trim();
-                    if (text.isNotEmpty) {
-                      Navigator.pop(ctx);
-                      await SoulmateService.instance.updateLoveNote(text);
-                    }
-                  },
-                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                  label: const Text('Ghim lên Widget người ấy 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF3366),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Sheet đổi tâm trạng (Mood Status)
-  void _showMoodSheet(SoulmateData soulmate) {
-    final moods = [
-      'Đang nhớ bạn 💭',
-      'Đang đi học / đi làm 💼',
-      'Đang đi ăn ngon nè 🍜',
-      'Đang chill cà phê ☕',
-      'Hơi mệt một tẹo 🥺',
-      'Đang tập thể dục 🏃',
-      'Chuẩn bị ngủ rồi 🌙',
-      'Hạnh phúc vô cùng 🥰',
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1020),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-              ),
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Chọn tâm trạng chia sẻ cùng người ấy 💬',
-                  style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                ),
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: moods.length,
-                  itemBuilder: (ctx, idx) {
-                    final m = moods[idx];
-                    final isCurrent = m == soulmate.statusMood;
-                    return ListTile(
-                      title: Text(
-                        m,
-                        style: TextStyle(
-                          color: isCurrent ? const Color(0xFFFF3366) : Colors.white,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                    content: Row(
+                      children: [
+                        const Text('🎉', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Đã kết nối thành công với ${cleanDisplayName(req.senderName)}!',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
                         ),
-                      ),
-                      trailing: isCurrent ? const Icon(Icons.check, color: Color(0xFFFF3366)) : null,
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        await SoulmateService.instance.updateMood(m);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+                      ],
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Đồng ý kết nối 💕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  /// Sheet chọn bạn thân / đổi Soulmate
+  /// Sheet chọn bạn thân / đổi Soulmate kèm xác nhận gửi lời mời
   void _showSelectSoulmateSheet() {
     final friends = FriendService.instance.friends;
     showModalBottomSheet(
@@ -413,15 +466,22 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                     final f = friends[i];
                     final cleanName = cleanDisplayName(f.displayName);
                     return ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: Color(0xFFFF3366),
-                        child: Icon(Icons.favorite, color: Colors.white, size: 20),
+                      leading: AvatarHelper.buildAvatar(
+                        displayName: f.displayName,
+                        avatarBase64: f.avatarBase64,
+                        uid: f.uid,
+                        size: 40,
+                        border: Border.all(color: const Color(0xFFFF3366), width: 1.5),
                       ),
                       title: Text(cleanName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      onTap: () async {
+                      subtitle: Text(
+                        'UID: ${f.uid}',
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11, fontFamily: 'monospace'),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
+                      onTap: () {
                         Navigator.pop(ctx);
-                        await SoulmateService.instance.setSoulmate(f);
-                        _refreshLocationAndBroadcast();
+                        _confirmAndSendSoulmateRequest(f);
                       },
                     );
                   },
@@ -434,19 +494,243 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
     );
   }
 
+  /// Hộp thoại xác nhận gửi lời mời kết nối Quỹ đạo Cận tâm
+  void _confirmAndSendSoulmateRequest(Friend f) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1020),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Text('💕', style: TextStyle(fontSize: 24)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Kết Nối Quỹ Đạo Cận Tâm',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AvatarHelper.buildAvatar(
+              displayName: f.displayName,
+              avatarBase64: f.avatarBase64,
+              uid: f.uid,
+              size: 64,
+              border: Border.all(color: const Color(0xFFFF3366), width: 2),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              cleanDisplayName(f.displayName),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Gửi lời mời kết nối Quỹ đạo Cận tâm tới ${cleanDisplayName(f.displayName)}?\n\n'
+              'Khi người ấy chấp nhận, hai bạn sẽ cùng chia sẻ vị trí thực tế, gửi nhịp tim rung máy và tương tác trực tiếp lên Widget màn hình chính.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Hủy', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3366),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              final messenger = ScaffoldMessenger.of(context);
+              await SoulmateService.instance.sendSoulmateRequest(f);
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF2C0A1E),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+                    ),
+                    content: Row(
+                      children: [
+                        const Text('💌', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Đã gửi lời mời tới ${cleanDisplayName(f.displayName)}! Đang đợi người ấy chấp nhận...',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              }
+            },
+            child: const Text('Gửi lời mời 💕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLoveNoteDialog(SoulmateData soulmate) {
+    final controller = TextEditingController(text: soulmate.lastNote ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2C0A1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Text('💌', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text(
+              'Ghim Lời Nhắn Lên Widget',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Lời nhắn này sẽ xuất hiện ngay lập tức trên Widget màn hình chính của ${cleanDisplayName(soulmate.displayName)} 💕',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              maxLength: 60,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Nhập lời nhắn yêu thương (VD: Hôm nay cậu nhớ ăn đúng giờ nha)...',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 12.5),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.08),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                counterStyle: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Hủy', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3366),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(ctx);
+                await SoulmateService.instance.updateLoveNote(text);
+              }
+            },
+            child: const Text('Ghim ngay ✨', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMoodSheet(SoulmateData soulmate) {
+    const moods = [
+      'Đang nhớ bạn 💭',
+      'Đang bận xíu 💼',
+      'Đang ăn ngon 🍜',
+      'Muốn đi chơi 🛵',
+      'Đang buồn ngủ 😴',
+      'Nhớ cậu phát điên 💖',
+      'Đang tập thể dục 🏃',
+      'Chill nghe nhạc 🎧',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1020),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Cập nhật trạng thái tâm trạng 💭',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: moods.length,
+                itemBuilder: (ctx, i) {
+                  final m = moods[i];
+                  return ListTile(
+                    title: Text(m, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await SoulmateService.instance.updateMood(m);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<SoulmateData?>(
       valueListenable: SoulmateService.instance.soulmateNotifier,
       builder: (context, soulmate, _) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0F040D),
+          backgroundColor: const Color(0xFF0F020A),
           appBar: AppBar(
-            backgroundColor: Colors.transparent,
+            backgroundColor: const Color(0xFF0F020A),
             elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+            centerTitle: true,
             title: const Text(
               'Quỹ đạo Cận tâm 🪐',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
+              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
             ),
             actions: [
               IconButton(
@@ -459,7 +743,7 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
               ),
               IconButton(
                 icon: const Icon(Icons.swap_horiz, color: Colors.white),
-                tooltip: 'Đổi Soulmate',
+                tooltip: 'Đổi người kết nối',
                 onPressed: _showSelectSoulmateSheet,
               ),
             ],
@@ -469,9 +753,56 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
               : Stack(
                   children: [
                     _buildSoulmateContent(soulmate),
+                    _buildVisualFxLayer(),
                     _buildLiveNotificationOverlay(),
                   ],
                 ),
+        );
+      },
+    );
+  }
+
+  /// Lớp hiệu ứng trực quan hoá tương tác bay lượn trên sân khấu
+  Widget _buildVisualFxLayer() {
+    return AnimatedBuilder(
+      animation: _visualFxController,
+      builder: (context, _) {
+        if (!_visualFxController.isAnimating) return const SizedBox.shrink();
+
+        final progress = _visualFxController.value;
+        final opacity = progress < 0.2
+            ? progress / 0.2
+            : progress > 0.8
+                ? (1.0 - progress) / 0.2
+                : 1.0;
+
+        return IgnorePointer(
+          child: Stack(
+            children: _activeParticles.map((p) {
+              final curX = p.startX + (p.targetX - p.startX) * progress;
+              // Đường cong parabola nhẹ
+              final arc = math.sin(progress * math.pi) * 0.15;
+              final curY = p.startY + (p.targetY - p.startY) * progress - arc;
+
+              return Positioned(
+                left: MediaQuery.of(context).size.width * curX,
+                top: 260 * curY + 60,
+                child: Opacity(
+                  opacity: opacity.clamp(0.0, 1.0),
+                  child: Transform.rotate(
+                    angle: p.rotation * progress * 2 * math.pi,
+                    child: Transform.scale(
+                      scale: p.scale * (0.8 + progress * 0.5),
+                      child: Text(
+                        p.emoji,
+                        style: const TextStyle(fontSize: 26),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         );
       },
     );
@@ -533,7 +864,7 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              incoming.senderName,
+                              cleanDisplayName(incoming.senderName),
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             const Text('Vừa xong', style: TextStyle(color: Colors.white54, fontSize: 10)),
@@ -598,33 +929,32 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                 border: Border.all(color: const Color(0xFFFF3366), width: 2),
               ),
               child: const Center(
-                child: Text('💞', style: TextStyle(fontSize: 48)),
+                child: Text('💕', style: TextStyle(fontSize: 48)),
               ),
             ),
             const SizedBox(height: 24),
             const Text(
-              'Soulmate Mode (Quy tắc 1 + 1)',
-              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+              'Quỹ đạo Cận tâm đang trống',
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
-              'Dành riêng cho 1 người quan trọng nhất (Người yêu hoặc Bạn thân nhất).\nTheo dõi khoảng cách GPS chuẩn, bắn nhịp tim rung máy và ghim lời nhắn lên Widget!',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, height: 1.5),
+              'Chọn 1 người đặc biệt nhất (#1) để cùng chia sẻ vị trí thực tế, nhịp tim đồng bộ và tương tác trực tiếp lên Widget.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13.5, height: 1.45),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
             ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF3366),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
               onPressed: _showSelectSoulmateSheet,
               icon: const Icon(Icons.favorite, color: Colors.white),
               label: const Text(
-                'Chọn người vào Quỹ đạo Cận tâm',
+                'Chọn người kết nối 💕',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF3366),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
           ],
@@ -637,7 +967,8 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
     final myUser = AuthService.instance.currentUser;
     final myCleanName = cleanDisplayName(myUser?.displayName);
     final soulmateCleanName = cleanDisplayName(soulmate.displayName);
-    final myLocName = SoulmateService.instance.myLastLocation?.displayName ?? 'Hà Nội';
+    final myLocName = SoulmateService.instance.myLastLocation?.displayName ??
+        (_isLoadingLocation ? 'Đang định vị...' : 'Vị trí của tôi');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -721,19 +1052,30 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      CustomPaint(
-                        size: const Size(double.infinity, 190),
-                        painter: _BinaryOrbitPainter(pulse: _pulseController.value),
+                      AnimatedBuilder(
+                        animation: Listenable.merge([_pulseController, _visualFxController]),
+                        builder: (context, _) {
+                          return CustomPaint(
+                            size: const Size(double.infinity, 190),
+                            painter: _BinaryOrbitPainter(
+                              pulse: _pulseController.value,
+                              visualFxProgress: _visualFxController.value,
+                              activeColor: _activeFxColor,
+                            ),
+                          );
+                        },
                       ),
 
                       // Trọng tâm vũ trụ: Trái tim nhịp đập tương tác
                       GestureDetector(
                         onTap: () => _sendInteraction('heartbeat'),
                         child: AnimatedBuilder(
-                          animation: _pulseController,
+                          animation: Listenable.merge([_pulseController, _visualFxController]),
                           builder: (context, child) {
-                            final isTriggered = _lastSentInteractionType == 'heartbeat';
-                            final scale = isTriggered ? 1.4 : 1.0 + (_pulseController.value * 0.15);
+                            final isTriggered = _lastSentInteractionType == 'heartbeat' || _visualFxController.isAnimating;
+                            final fxBoost = _visualFxController.isAnimating ? (math.sin(_visualFxController.value * math.pi) * 0.35) : 0.0;
+                            final scale = (isTriggered ? 1.35 : 1.0 + (_pulseController.value * 0.15)) + fxBoost;
+
                             return Transform.scale(
                               scale: scale,
                               child: Container(
@@ -741,13 +1083,13 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                                 height: 58,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: const RadialGradient(
-                                    colors: [Color(0xFFFF3366), Color(0xFFB30036)],
+                                  gradient: RadialGradient(
+                                    colors: [_activeFxColor, const Color(0xFFB30036)],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFFF3366).withValues(alpha: 0.65),
-                                      blurRadius: 26,
+                                      color: _activeFxColor.withValues(alpha: 0.7),
+                                      blurRadius: 28,
                                       spreadRadius: 4,
                                     ),
                                   ],
@@ -769,16 +1111,18 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                             name: myCleanName,
                             subLabel: myLocName,
                             avatarPath: myUser?.avatarPath,
-                            defaultIcon: '🧑‍🚀',
+                            avatarBase64: myUser?.avatarBase64,
+                            uid: myUser?.uid,
                             borderColor: const Color(0xFF00F0FF),
                             glowColor: const Color(0xFF00F0FF),
                           ),
 
                           _buildPlanetNode(
                             name: soulmateCleanName,
-                            subLabel: soulmate.placeName ?? 'Hồ Tây, Hà Nội',
+                            subLabel: soulmate.placeName ?? (_isLoadingLocation ? 'Đang định vị...' : 'Chưa chia sẻ vị trí'),
                             avatarPath: soulmate.avatarPath,
-                            defaultIcon: '💖',
+                            avatarBase64: soulmate.avatarBase64,
+                            uid: soulmate.uid,
                             borderColor: const Color(0xFFFF3366),
                             glowColor: const Color(0xFFFF3366),
                           ),
@@ -790,7 +1134,7 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
 
                 const SizedBox(height: 6),
                 const Text(
-                  'Chạm vào trái tim để gửi nhịp tim rung máy người ấy 💓',
+                  'Chạm vào trái tim để gửi nhịp tim rung máy người ấy 💖',
                   style: TextStyle(color: Colors.white54, fontSize: 11),
                   textAlign: TextAlign.center,
                 ),
@@ -818,7 +1162,7 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
 
                 const SizedBox(height: 12),
 
-                // Địa điểm chi tiết của Soulmate
+                // Địa điểm chi tiết THỰC TẾ của Soulmate (100% Không dùng vị trí ảo)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
@@ -832,7 +1176,7 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                       const Icon(Icons.location_on, color: Color(0xFF00F0FF), size: 14),
                       const SizedBox(width: 5),
                       Text(
-                        'Vị trí người ấy: ${soulmate.placeName ?? "Hồ Tây, Hà Nội"}',
+                        'Vị trí người ấy: ${soulmate.placeName ?? (_isLoadingLocation ? "Đang định vị GPS..." : "Chưa chia sẻ vị trí")}',
                         style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -1048,95 +1392,69 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                   children: [
                     const Row(
                       children: [
-                        Text('⏱️', style: TextStyle(fontSize: 15)),
+                        Text('📜', style: TextStyle(fontSize: 16)),
                         SizedBox(width: 6),
                         Text(
                           'Nhật Ký Tương Tác Gần Đây',
-                          style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-
-                    ...interactions.take(4).map((act) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: Row(
+                    const SizedBox(height: 12),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: interactions.take(8).length,
+                      separatorBuilder: (ctx, i) => Divider(color: Colors.white.withValues(alpha: 0.08), height: 16),
+                      itemBuilder: (ctx, i) {
+                        final act = interactions[i];
+                        final isMe = act.senderId == myUser?.uid;
+                        return Row(
                           children: [
-                            Text(act.typeEmoji, style: const TextStyle(fontSize: 18)),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isMe
+                                    ? const Color(0xFF00F0FF).withValues(alpha: 0.15)
+                                    : const Color(0xFFFF3366).withValues(alpha: 0.15),
+                              ),
+                              child: Center(
+                                child: Text(act.typeEmoji, style: const TextStyle(fontSize: 16)),
+                              ),
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${act.senderName}: ${act.typeTitle}',
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                    isMe ? 'Bạn ${act.typeTitle}' : '${cleanDisplayName(act.senderName)}: ${act.typeTitle}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
                                   ),
                                   if (act.message != null && act.message!.isNotEmpty)
                                     Text(
-                                      act.message!,
-                                      style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 11),
+                                      '“${act.message}”',
+                                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11),
                                     ),
                                 ],
                               ),
                             ),
-                            Text(act.timeAgo, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                            Text(
+                              act.timeAgo,
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10),
+                            ),
                           ],
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                   ],
                 ),
               );
             },
           ),
-
-          const SizedBox(height: 20),
-
-          // NÚT BẮN ẢNH TỨC THÌ SANG WIDGET
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Gửi khoảnh khắc cho $soulmateCleanName',
-                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Bức ảnh sẽ chiếm sóng ngay lập tức trên Widget màn hình chính của $soulmateCleanName.',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 12.5),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.camera_alt, color: Colors.white),
-                    label: Text(
-                      'Bắn ảnh sang Widget của $soulmateCleanName 🚀',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF3366),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1192,26 +1510,11 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
     required String name,
     required String subLabel,
     required String? avatarPath,
-    required String defaultIcon,
+    String? avatarBase64,
+    String? uid,
     required Color borderColor,
     required Color glowColor,
   }) {
-    Widget avatarContent;
-    if (avatarPath != null && File(avatarPath).existsSync()) {
-      avatarContent = ClipOval(
-        child: Image.file(
-          File(avatarPath),
-          width: 74,
-          height: 74,
-          fit: BoxFit.cover,
-        ),
-      );
-    } else {
-      avatarContent = Center(
-        child: Text(defaultIcon, style: const TextStyle(fontSize: 34)),
-      );
-    }
-
     return SizedBox(
       width: 100,
       child: Column(
@@ -1232,7 +1535,13 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
                 ),
               ],
             ),
-            child: avatarContent,
+            child: AvatarHelper.buildAvatar(
+              avatarPath: avatarPath,
+              avatarBase64: avatarBase64,
+              displayName: name,
+              uid: uid,
+              size: 74,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -1277,11 +1586,17 @@ class _SoulmateScreenState extends State<SoulmateScreen> with TickerProviderStat
   }
 }
 
-/// Vẽ đường elip quỹ đạo và sóng hấp dẫn kết nối hai hành tinh
+/// Vẽ đường elip quỹ đạo và sóng hấp dẫn kết nối hai hành tinh (Kèm Shockwave tương tác)
 class _BinaryOrbitPainter extends CustomPainter {
   final double pulse;
+  final double visualFxProgress;
+  final Color activeColor;
 
-  _BinaryOrbitPainter({required this.pulse});
+  _BinaryOrbitPainter({
+    required this.pulse,
+    this.visualFxProgress = 0.0,
+    this.activeColor = const Color(0xFFFF3366),
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1289,20 +1604,40 @@ class _BinaryOrbitPainter extends CustomPainter {
     final rect = Rect.fromCenter(center: center, width: size.width * 0.88, height: 110);
 
     final orbitPaint = Paint()
-      ..color = const Color(0xFFFF3366).withValues(alpha: 0.25)
+      ..color = activeColor.withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawOval(rect, orbitPaint);
 
     final wavePaint = Paint()
-      ..color = const Color(0xFFFF3366).withValues(alpha: 0.18 * (1.0 - pulse))
+      ..color = activeColor.withValues(alpha: 0.18 * (1.0 - pulse))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawCircle(center, 40 + (pulse * 25), wavePaint);
+
+    // Shockwave bùng nổ khi có tương tác trực tiếp
+    if (visualFxProgress > 0.0) {
+      final fxWave1 = Paint()
+        ..color = activeColor.withValues(alpha: (1.0 - visualFxProgress) * 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.0;
+      canvas.drawCircle(center, 30 + (visualFxProgress * 85), fxWave1);
+
+      if (visualFxProgress > 0.2) {
+        final subProgress = (visualFxProgress - 0.2) / 0.8;
+        final fxWave2 = Paint()
+          ..color = activeColor.withValues(alpha: (1.0 - subProgress) * 0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+        canvas.drawCircle(center, 30 + (subProgress * 110), fxWave2);
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _BinaryOrbitPainter oldDelegate) {
-    return oldDelegate.pulse != pulse;
+    return oldDelegate.pulse != pulse ||
+        oldDelegate.visualFxProgress != visualFxProgress ||
+        oldDelegate.activeColor != activeColor;
   }
 }

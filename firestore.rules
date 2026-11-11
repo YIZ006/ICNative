@@ -18,5 +18,25 @@ service cloud.firestore {
     match /friend_requests/{reqId} {
       allow read, write: if true;
     }
+
+    // 4. Trạng thái Tri Kỷ (Soulmate status & radar)
+    match /soulmate_status/{uid} {
+      allow read, write: if true;
+    }
+
+    // 5. Tương tác trực tiếp Tri Kỷ (Heartbeat, Poke, Hug, v.v.)
+    match /soulmate_interactions/{interactionId} {
+      allow read, write: if true;
+    }
+
+    // 6. Lời mời kết đôi Tri Kỷ
+    match /soulmate_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    // 7. Ảnh bí mật (Secret Scratch Photos)
+    match /secret_photos/{photoId} {
+      allow read, write: if true;
+    }
   }
 }

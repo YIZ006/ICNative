@@ -46,6 +46,9 @@ class InviteService {
   final ValueNotifier<InviteConnectEvent?> inviteEventNotifier =
       ValueNotifier<InviteConnectEvent?>(null);
 
+  /// Thông báo yêu cầu điều hướng thẳng vào trang Quỹ đạo Cận tâm (khi bấm notification)
+  final ValueNotifier<bool> navigateSoulmateNotifier = ValueNotifier<bool>(false);
+
   bool _isInitialized = false;
   bool _isProcessingLink = false;
   String? _lastProcessedUidAndTime;
@@ -193,6 +196,12 @@ class InviteService {
 
   /// Xử lý một đường link hoặc chuỗi kết bạn gửi vào app
   Future<InviteConnectEvent?> handleIncomingLink(String rawLink) async {
+    final lower = rawLink.trim().toLowerCase();
+    if (lower.contains('orbit://soulmate') || lower.endsWith('/soulmate')) {
+      navigateSoulmateNotifier.value = true;
+      return null;
+    }
+
     final payload = parseInviteInput(rawLink);
     if (payload == null) return null;
 

@@ -5,6 +5,54 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-11 17:15:00] - Hoàn Thiện Đồng Bộ Vị Trí Thật GPS (Xoá Vị Trí Ảo), Lời Mời Kết Nối Quỹ Đạo Cận Tâm 2 Chiều & Trực Quan Hoá Tương Tác Thời Gian Thực
+* **Thời gian (Timestamp):** 2026-11-11 17:15:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Thực hiện trọn vẹn 3 nâng cấp trọng yếu cho Quỹ đạo Cận tâm (Soulmate Orbit) theo đúng yêu cầu:
+  1. **Triệt tiêu hoàn toàn vị trí ảo & Đồng bộ vị trí thực 100% từ GPS on-device:**
+     - Xoá bỏ hoàn toàn chuỗi toạ độ và địa danh mock "Hồ Tây, Hà Nội" (21.0583, 105.8236) trong `SoulmateService` và `SoulmateScreen`.
+     - Vị trí của người dùng lấy trực tiếp từ GPS thiết bị qua `LocationService.getCurrentPlaceName()` và tự động phát sóng toạ độ thực lên Firestore `soulmate_status/${user.uid}`.
+     - Vị trí đối phương được lắng nghe realtime từ `soulmate_status/${friend.uid}`. Nếu chưa có GPS, app hiển thị trạng thái chuẩn xác "Đang định vị..." hoặc "Chưa chia sẻ vị trí", tuyệt đối không dùng dữ liệu giả.
+  2. **Quy trình kết nối Tri Kỷ 2 chiều với Thông báo điện thoại & Hộp thoại duyệt tương tác:**
+     - Tích hợp Android Native System Notification qua `MainActivity.kt` (`orbit_soulmate_channel`, `IMPORTANCE_HIGH`, rung tuỳ biến, pending intent deep-link `orbit://soulmate`).
+     - Khi người dùng đổi/kết nối bạn bè vào Quỹ đạo Cận tâm, app gửi `SoulmateRequest` lên collection `soulmate_requests` và kích hoạt notification tới máy người kia: "💕 Lời mời kết nối Quỹ đạo Cận tâm từ [Tên]".
+     - Người nhận bấm vào thông báo hoặc mở app sẽ hiển thị ngay hộp thoại mời kết nối (`_showIncomingSoulmateRequestDialog`).
+     - Khi bấm "Đồng ý kết nối 💕", cả 2 thiết bị lập tức được kết nối, cập nhật trạng thái `accepted`, và tự động chuyển ngay sang màn hình `SoulmateScreen` để chiêm ngưỡng vòng tròn kết nối và địa chỉ thật của cả 2. Người gửi cũng nhận được thông báo chấp nhận và SnackBar ăn mừng tức thì.
+  3. **Trực quan hoá tương tác thời gian thực (Live Interaction Visualizer):**
+     - Khi một trong hai người bấm các tương tác (💓 Nhịp tim, 💋 Gửi hôn, 🥺 Nhớ cậu, 🫂 Ôm cái, 🛸 Ping), hệ thống gửi thông báo đẩy và rung điện thoại máy đối phương.
+     - Đồng thời, màn hình Quỹ đạo Cận tâm kích hoạt engine hạt nổi `_VisualParticle` (16 hạt emoji bay toả ngẫu nhiên, mờ dần theo hiệu ứng nhịp tim) kết hợp hiệu ứng sóng xung kích mở rộng `shockwave` toả ra từ trái tim trung tâm theo màu tương ứng của tương tác cho cả người gửi và người nhận.
+     - Tích hợp hoàn hảo `AvatarHelper.buildAvatar()` hiển thị ảnh avatar Base64 hoặc sticker linh vật đáng yêu (Mèo/Shiba/Capybara) trên cả 2 node hành tinh.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`android/app/src/main/AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml): Cấp quyền `POST_NOTIFICATIONS` và `VIBRATE`.
+  - [MODIFY] [`android/app/src/main/kotlin/com/abom/utas/utas/MainActivity.kt`](../android/app/src/main/kotlin/com/abom/utas/utas/MainActivity.kt): Tạo `NOTIFICATION_CHANNEL` hiển thị native system notification với pending intent `orbit://soulmate`.
+  - [MODIFY] [`firestore.rules`](../firestore.rules): Cấp quyền cho `soulmate_status`, `soulmate_interactions`, `soulmate_requests`, và `secret_photos`.
+  - [MODIFY] [`lib/services/soulmate_service.dart`](../lib/services/soulmate_service.dart): Xoá bỏ mock location; xây dựng luồng `sendSoulmateRequest()`, `acceptSoulmateRequest()`, `declineSoulmateRequest()`, model `SoulmateRequest`, lắng nghe realtime request và gửi native notification.
+  - [MODIFY] [`lib/services/invite_service.dart`](../lib/services/invite_service.dart): Bổ sung deep link handler `orbit://soulmate` với `navigateSoulmateNotifier`.
+  - [MODIFY] [`lib/screens/soulmate_screen.dart`](../lib/screens/soulmate_screen.dart): Xoá text "Hồ Tây, Hà Nội", thay thế bằng địa chỉ GPS thực; dựng visualizer hạt `_VisualParticle` và hiệu ứng sóng xung kích `shockwave`; hộp thoại xác nhận gửi và chấp nhận lời mời.
+  - [MODIFY] [`lib/screens/home.dart`](../lib/screens/home.dart): Lắng nghe `incomingRequestNotifier`, `acceptedRequestNotifier` và `navigateSoulmateNotifier` để hiển thị dialog duyệt lời mời và tự động mở `SoulmateScreen`.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze --no-fatal-infos lib/`: Không phát hiện lỗi (0 errors, 0 warnings).
+  - Quy tắc bảo mật Firestore đã deploy thành công qua Firebase CLI.
+
+### [2026-11-11 16:58:00] - Cập Nhật firestore.rules Cho Tính Năng Tri Kỷ (Soulmate) & Ảnh Bí Mật (Secret Photos)
+* **Thời gian (Timestamp):** 2026-11-11 16:58:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Firestore Security Rules Author Subagent
+* **Tóm tắt công việc (Summary):**
+  Cập nhật tệp quy tắc bảo mật `firestore.rules` để cấp quyền đọc/ghi cho các collection của tính năng Tri Kỷ (Soulmate) và Ảnh Bí Mật (Secret Photos) theo yêu cầu kiến trúc hệ thống:
+  1. `soulmate_status/{uid}`: Quản lý trạng thái trực tuyến, toạ độ radar, tâm trạng (mood) và ghi chú của Tri Kỷ.
+  2. `soulmate_interactions/{interactionId}`: Xử lý và truyền tải các tương tác thời gian thực (Heartbeat, Poke, Hug, Miss You, v.v.).
+  3. `soulmate_requests/{requestId}`: Xử lý các yêu cầu ghép đôi Tri Kỷ giữa 2 người dùng.
+  4. `secret_photos/{photoId}`: Lưu trữ và đồng bộ ảnh bí mật cào mở tương tác (Secret Scratch Photos).
+  - Giữ nguyên toàn bộ cấu hình quy tắc cho `users/{uid}`, `users/{uid}/friends/{friendUid}`, `posts/{postId}` và `friend_requests/{reqId}`.
+  - Kiểm tra và xác thực cú pháp 100% hợp lệ thông qua `firebase_validate_security_rules`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`firestore.rules`](../firestore.rules): Bổ sung match rules cho 4 collections `soulmate_status`, `soulmate_interactions`, `soulmate_requests`, và `secret_photos`.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - Kiểm thử cú pháp với công cụ Firebase Rules Validator: `OK: No errors detected.` (0 syntax errors, 0 lint warnings).
+
 ### [2026-11-11 16:45:00] - Nâng Cấp Tải Cập Nhật Chạy Ngầm (Android DownloadManager), Triệt Tiêu Rò Rỉ Camera & Hoàn Thiện Hệ Thống Avatar Đa Tầng
 * **Thời gian (Timestamp):** 2026-11-11 16:45:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

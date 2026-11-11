@@ -26,6 +26,7 @@ import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/sizes.dart';
 import 'package:icnative/settings/theme_colors.dart';
+import 'package:icnative/utils/avatar_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -194,13 +195,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
     InviteService.instance.inviteEventNotifier.addListener(_onInviteEventReceived);
+    InviteService.instance.navigateSoulmateNotifier.addListener(_onNavigateSoulmateRequested);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.addListener(_onFriendPhotosChanged);
     SoulmateService.instance.incomingInteractionNotifier.addListener(_onSoulmateInteractionReceived);
+    SoulmateService.instance.incomingRequestNotifier.addListener(_onSoulmateRequestReceived);
+    SoulmateService.instance.acceptedRequestNotifier.addListener(_onSoulmateAcceptedReceived);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (InviteService.instance.inviteEventNotifier.value != null) {
         _onInviteEventReceived();
+      }
+      if (InviteService.instance.navigateSoulmateNotifier.value) {
+        _onNavigateSoulmateRequested();
+      }
+      if (SoulmateService.instance.incomingRequestNotifier.value != null) {
+        _onSoulmateRequestReceived();
       }
     });
 
@@ -409,9 +419,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
     InviteService.instance.inviteEventNotifier.removeListener(_onInviteEventReceived);
+    InviteService.instance.navigateSoulmateNotifier.removeListener(_onNavigateSoulmateRequested);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
     SyncService.friendPhotosChangeNotifier.removeListener(_onFriendPhotosChanged);
     SoulmateService.instance.incomingInteractionNotifier.removeListener(_onSoulmateInteractionReceived);
+    SoulmateService.instance.incomingRequestNotifier.removeListener(_onSoulmateRequestReceived);
+    SoulmateService.instance.acceptedRequestNotifier.removeListener(_onSoulmateAcceptedReceived);
     isDemoModeNotifier.removeListener(_onDemoModeChanged);
     _demoReactionTimer?.cancel();
     _orbitTicker.dispose();
@@ -603,6 +616,160 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
         ),
       );
     }
+  }
+
+  void _onNavigateSoulmateRequested() {
+    InviteService.instance.navigateSoulmateNotifier.value = false;
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SoulmateScreen()),
+    );
+  }
+
+  void _onSoulmateRequestReceived() {
+    final req = SoulmateService.instance.incomingRequestNotifier.value;
+    if (req == null || !mounted) return;
+
+    final cleanName = req.senderName.replaceAll(RegExp(r'\s*#\d+.*$'), '').trim();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1020),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+          side: const BorderSide(color: Color(0xFFFF3366), width: 2),
+        ),
+        title: const Row(
+          children: [
+            Text('🪐', style: TextStyle(fontSize: 24)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'LỜI MỜI QUỸ ĐẠO CẬN TÂM 💕',
+                style: TextStyle(
+                  color: Color(0xFFFF99BB),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AvatarHelper.buildAvatar(
+              displayName: req.senderName,
+              avatarBase64: req.senderAvatarBase64,
+              avatarPath: req.senderAvatar,
+              uid: req.senderUid,
+              size: 72,
+              border: Border.all(color: const Color(0xFFFF3366), width: 2.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              cleanName,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (req.senderPlaceName != null && req.senderPlaceName!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.location_on, size: 13, color: Color(0xFF00F0FF)),
+                  const SizedBox(width: 4),
+                  Text(
+                    req.senderPlaceName!,
+                    style: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              '$cleanName muốn kết nối Quỹ đạo Cận tâm độc quyền (#1) với bạn!\n\n'
+              'Hai bạn sẽ cùng chia sẻ vị trí thực tế, gửi nhịp tim rung máy và tương tác trực tiếp lên Widget màn hình chính.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13, height: 1.45),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              SoulmateService.instance.declineSoulmateRequest(req);
+            },
+            child: Text('Để sau', style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3366),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              await SoulmateService.instance.acceptSoulmateRequest(req);
+              if (mounted) {
+                // Điều hướng thẳng sang trang SoulmateScreen để hiện kết nối và địa chỉ
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SoulmateScreen()),
+                );
+              }
+            },
+            child: const Text('Đồng ý kết nối 💕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onSoulmateAcceptedReceived() {
+    final req = SoulmateService.instance.acceptedRequestNotifier.value;
+    if (req == null || !mounted) return;
+    SoulmateService.instance.acceptedRequestNotifier.value = null;
+
+    final cleanName = req.receiverName.replaceAll(RegExp(r'\s*#\d+.*$'), '').trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF2C0A1E),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFFF3366), width: 1.5),
+        ),
+        content: Row(
+          children: [
+            const Text('🎉', style: TextStyle(fontSize: 22)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$cleanName đã đồng ý kết nối Quỹ đạo Cận tâm với bạn!',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Mở ngay 💕',
+          textColor: const Color(0xFFFF3366),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SoulmateScreen()),
+            );
+          },
+        ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
   }
 
   void _showFriendLatestPhotoModal(String friendName, String imagePath) {

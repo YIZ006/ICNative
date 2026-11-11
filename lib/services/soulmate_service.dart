@@ -15,6 +15,7 @@ class SoulmateData {
   final String uid;
   final String displayName;
   final String? avatarPath;
+  final String? avatarBase64;
   final int startDateMillis;
   final String statusMood;
   final double? latitude;
@@ -28,6 +29,7 @@ class SoulmateData {
     required this.uid,
     required this.displayName,
     this.avatarPath,
+    this.avatarBase64,
     required this.startDateMillis,
     this.statusMood = 'Đang nhớ bạn 💭',
     this.latitude,
@@ -52,7 +54,7 @@ class SoulmateData {
   }
 
   String get timeAgo {
-    if (lastActiveMillis == null) return 'Vừa cập nhật';
+    if (lastActiveMillis == null) return 'Đang cập nhật';
     final diffSeconds = (DateTime.now().millisecondsSinceEpoch - lastActiveMillis!) ~/ 1000;
     if (diffSeconds < 60) return 'Vừa xong';
     final diffMinutes = diffSeconds ~/ 60;
@@ -67,6 +69,7 @@ class SoulmateData {
       'uid': uid,
       'displayName': displayName,
       'avatarPath': avatarPath,
+      'avatarBase64': avatarBase64,
       'startDateMillis': startDateMillis,
       'statusMood': statusMood,
       'latitude': latitude,
@@ -83,6 +86,7 @@ class SoulmateData {
       uid: map['uid'] as String? ?? '',
       displayName: map['displayName'] as String? ?? 'Soulmate',
       avatarPath: map['avatarPath'] as String?,
+      avatarBase64: map['avatarBase64'] as String?,
       startDateMillis: (map['startDateMillis'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
       statusMood: map['statusMood'] as String? ?? 'Đang nhớ bạn 💭',
       latitude: (map['latitude'] as num?)?.toDouble(),
@@ -95,12 +99,80 @@ class SoulmateData {
   }
 }
 
+class SoulmateRequest {
+  final String id;
+  final String senderUid;
+  final String senderName;
+  final String? senderAvatar;
+  final String? senderAvatarBase64;
+  final String receiverUid;
+  final String receiverName;
+  final String status; // 'pending' | 'accepted' | 'declined'
+  final int createdAt;
+  final int? acceptedAt;
+  final String? senderPlaceName;
+  final double? senderLatitude;
+  final double? senderLongitude;
+
+  SoulmateRequest({
+    required this.id,
+    required this.senderUid,
+    required this.senderName,
+    this.senderAvatar,
+    this.senderAvatarBase64,
+    required this.receiverUid,
+    required this.receiverName,
+    required this.status,
+    required this.createdAt,
+    this.acceptedAt,
+    this.senderPlaceName,
+    this.senderLatitude,
+    this.senderLongitude,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'senderUid': senderUid,
+      'senderName': senderName,
+      'senderAvatar': senderAvatar,
+      'senderAvatarBase64': senderAvatarBase64,
+      'receiverUid': receiverUid,
+      'receiverName': receiverName,
+      'status': status,
+      'createdAt': createdAt,
+      'acceptedAt': acceptedAt,
+      'senderPlaceName': senderPlaceName,
+      'senderLatitude': senderLatitude,
+      'senderLongitude': senderLongitude,
+    };
+  }
+
+  factory SoulmateRequest.fromMap(Map<String, dynamic> map) {
+    return SoulmateRequest(
+      id: map['id'] as String? ?? '',
+      senderUid: map['senderUid'] as String? ?? '',
+      senderName: map['senderName'] as String? ?? 'Bạn bè',
+      senderAvatar: map['senderAvatar'] as String?,
+      senderAvatarBase64: map['senderAvatarBase64'] as String?,
+      receiverUid: map['receiverUid'] as String? ?? '',
+      receiverName: map['receiverName'] as String? ?? 'Bạn',
+      status: map['status'] as String? ?? 'pending',
+      createdAt: (map['createdAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      acceptedAt: (map['acceptedAt'] as num?)?.toInt(),
+      senderPlaceName: map['senderPlaceName'] as String?,
+      senderLatitude: (map['senderLatitude'] as num?)?.toDouble(),
+      senderLongitude: (map['senderLongitude'] as num?)?.toDouble(),
+    );
+  }
+}
+
 class CoupleInteraction {
   final String id;
   final String senderId;
   final String senderName;
   final String receiverId;
-  final String type; // 'heartbeat', 'kiss', 'miss_you', 'hug', 'poke', 'love_note'
+  final String type; // 'heartbeat', 'kiss', 'miss_you', 'hug', 'poke', 'love_note', 'soulmate_invite'
   final String? message;
   final int timestamp;
   final bool isRead;
@@ -130,6 +202,8 @@ class CoupleInteraction {
         return '🛸';
       case 'love_note':
         return '💌';
+      case 'soulmate_invite':
+        return '🪐';
       default:
         return '✨';
     }
@@ -149,6 +223,8 @@ class CoupleInteraction {
         return 'Đã chọt màn hình của bạn';
       case 'love_note':
         return 'Đã ghim lời nhắn lên Widget';
+      case 'soulmate_invite':
+        return 'Muốn kết nối Quỹ đạo Cận tâm với bạn';
       default:
         return 'Đã gửi tương tác';
     }
@@ -197,6 +273,7 @@ class SoulmateService {
 
   static const _prefKey = 'orbit_soulmate_data';
   static const _prefInteractionsKey = 'orbit_soulmate_interactions';
+  static const MethodChannel _notifChannel = MethodChannel('com.abom.utas.utas/system_notification');
 
   SoulmateData? _currentSoulmate;
   SoulmateData? get currentSoulmate => _currentSoulmate;
@@ -205,11 +282,19 @@ class SoulmateService {
   final ValueNotifier<List<CoupleInteraction>> interactionsNotifier = ValueNotifier<List<CoupleInteraction>>([]);
   final ValueNotifier<CoupleInteraction?> incomingInteractionNotifier = ValueNotifier<CoupleInteraction?>(null);
 
+  /// Lời mời kết nối Quỹ đạo Cận tâm đang chờ xử lý từ bạn bè
+  final ValueNotifier<SoulmateRequest?> incomingRequestNotifier = ValueNotifier<SoulmateRequest?>(null);
+
+  /// Thông báo phản hồi khi lời mời mình gửi đi vừa được đối phương chấp nhận
+  final ValueNotifier<SoulmateRequest?> acceptedRequestNotifier = ValueNotifier<SoulmateRequest?>(null);
+
   final List<CoupleInteraction> _recentInteractions = [];
   LocationResult? myLastLocation;
 
   StreamSubscription<DocumentSnapshot>? _partnerStatusSub;
   StreamSubscription<QuerySnapshot>? _interactionsSub;
+  StreamSubscription<QuerySnapshot>? _incomingRequestsSub;
+  StreamSubscription<QuerySnapshot>? _outgoingRequestsSub;
 
   Future<void> init() async {
     try {
@@ -236,31 +321,224 @@ class SoulmateService {
       if (AuthService.isCloudConfigured) {
         _startListeningToPartner();
         _startListeningToInteractions();
+        _startListeningToRequests();
       }
     } catch (e) {
       debugPrint('SoulmateService init error: $e');
     }
   }
 
+  /// Kích hoạt thông báo đẩy hệ thống Android Native
+  Future<void> showSystemNotification({
+    required String title,
+    required String body,
+    int id = 1001,
+    String deepLink = 'orbit://soulmate',
+  }) async {
+    try {
+      await _notifChannel.invokeMethod('showNotification', {
+        'id': id,
+        'title': title,
+        'body': body,
+        'deepLink': deepLink,
+      });
+    } catch (e) {
+      debugPrint('Native system notification error: $e');
+    }
+  }
+
+  /// Gửi lời mời kết nối Quỹ đạo Cận tâm tới một người bạn
+  Future<bool> sendSoulmateRequest(Friend friend) async {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null) return false;
+
+    // Lấy toạ độ GPS chuẩn thực tế của bản thân trước khi gửi lời mời
+    await broadcastMyLocationAndStatus();
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final requestId = 'req_${myProfile.uid}_${friend.uid}';
+
+    final request = SoulmateRequest(
+      id: requestId,
+      senderUid: myProfile.uid,
+      senderName: myProfile.displayName,
+      senderAvatar: myProfile.avatarPath,
+      senderAvatarBase64: myProfile.avatarBase64,
+      receiverUid: friend.uid,
+      receiverName: friend.displayName,
+      status: 'pending',
+      createdAt: now,
+      senderPlaceName: myLastLocation?.displayName,
+      senderLatitude: myLastLocation?.latitude,
+      senderLongitude: myLastLocation?.longitude,
+    );
+
+    if (AuthService.isCloudConfigured) {
+      try {
+        final firestore = FirebaseFirestore.instance;
+        // 1. Tạo document yêu cầu trong collection soulmate_requests
+        await firestore
+            .collection('soulmate_requests')
+            .doc(requestId)
+            .set(request.toMap(), SetOptions(merge: true))
+            .timeout(const Duration(seconds: 6));
+
+        // 2. Gửi tương tác trực tiếp dạng soulmate_invite để máy đối phương lập tức nhận được push/rung
+        final interaction = CoupleInteraction(
+          id: 'invite_$now',
+          senderId: myProfile.uid,
+          senderName: myProfile.displayName,
+          receiverId: friend.uid,
+          type: 'soulmate_invite',
+          message: 'Muốn kết nối Quỹ đạo Cận tâm (#1) với bạn 💕',
+          timestamp: now,
+        );
+
+        await firestore
+            .collection('soulmate_interactions')
+            .doc(interaction.id)
+            .set(interaction.toMap())
+            .timeout(const Duration(seconds: 6));
+
+        debugPrint('💌 Sent soulmate request to ${friend.displayName} (${friend.uid})');
+        return true;
+      } catch (e) {
+        debugPrint('Error sending soulmate request: $e');
+      }
+    }
+
+    // Nếu chạy Offline / Demo: Kết nối tức thì
+    await setSoulmate(friend);
+    return true;
+  }
+
+  /// Chấp nhận lời mời kết nối Quỹ đạo Cận tâm
+  Future<bool> acceptSoulmateRequest(SoulmateRequest req) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    incomingRequestNotifier.value = null;
+
+    final friend = Friend(
+      uid: req.senderUid,
+      displayName: req.senderName,
+      addedAt: now,
+      avatarBase64: req.senderAvatarBase64,
+    );
+
+    // 1. Thiết lập Soulmate trên máy mình với vị trí GPS thực tế của đối phương
+    await setSoulmate(
+      friend,
+      placeName: req.senderPlaceName,
+      lat: req.senderLatitude,
+      lng: req.senderLongitude,
+    );
+
+    // 2. Cập nhật vị trí GPS chuẩn của bản thân và phát sóng lên Firestore
+    await broadcastMyLocationAndStatus();
+
+    if (AuthService.isCloudConfigured) {
+      try {
+        final firestore = FirebaseFirestore.instance;
+        await firestore.collection('soulmate_requests').doc(req.id).update({
+          'status': 'accepted',
+          'acceptedAt': now,
+        }).timeout(const Duration(seconds: 6));
+
+        // Gửi tương tác nhịp tim chúc mừng sang người gửi
+        final myProfile = AuthService.instance.currentUser;
+        if (myProfile != null) {
+          final notifyInteraction = CoupleInteraction(
+            id: 'accept_$now',
+            senderId: myProfile.uid,
+            senderName: myProfile.displayName,
+            receiverId: req.senderUid,
+            type: 'heartbeat',
+            message: 'Đã chấp nhận lời mời kết nối Quỹ đạo Cận tâm 💕',
+            timestamp: now,
+          );
+
+          await firestore
+              .collection('soulmate_interactions')
+              .doc(notifyInteraction.id)
+              .set(notifyInteraction.toMap())
+              .timeout(const Duration(seconds: 6));
+        }
+        return true;
+      } catch (e) {
+        debugPrint('Error accepting soulmate request: $e');
+      }
+    }
+
+    return true;
+  }
+
+  /// Từ chối hoặc huỷ lời mời kết nối
+  Future<void> declineSoulmateRequest(SoulmateRequest req) async {
+    incomingRequestNotifier.value = null;
+    if (!AuthService.isCloudConfigured) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('soulmate_requests')
+          .doc(req.id)
+          .update({'status': 'declined'})
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
   /// Ghim một người bạn vào Quỹ đạo Cận tâm (Soulmate / Bestie #1)
   Future<void> setSoulmate(Friend friend, {DateTime? startDate, String? placeName, double? lat, double? lng}) async {
+    // Tuyệt đối không dùng địa chỉ ảo "Hồ Tây, Hà Nội"
     _currentSoulmate = SoulmateData(
       uid: friend.uid,
       displayName: friend.displayName,
       avatarPath: SyncService.friendLatestPhotos[friend.uid],
+      avatarBase64: friend.avatarBase64,
       startDateMillis: (startDate ?? DateTime.now()).millisecondsSinceEpoch,
       statusMood: 'Đang online trên Orbit ✨',
-      placeName: placeName ?? 'Hồ Tây, Hà Nội',
-      latitude: lat ?? 21.0583,
-      longitude: lng ?? 105.8236,
+      placeName: placeName,
+      latitude: lat,
+      longitude: lng,
       lastActiveMillis: DateTime.now().millisecondsSinceEpoch,
     );
     soulmateNotifier.value = _currentSoulmate;
     await _persist();
 
     if (AuthService.isCloudConfigured) {
+      // Truy vấn vị trí thực tế của đối phương từ soulmate_status nếu họ đã từng phát sóng
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('soulmate_status')
+            .doc(friend.uid)
+            .get()
+            .timeout(const Duration(seconds: 4));
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data()!;
+          final partnerLat = (data['latitude'] as num?)?.toDouble();
+          final partnerLng = (data['longitude'] as num?)?.toDouble();
+          final partnerPlace = data['placeName'] as String?;
+          final mood = data['statusMood'] as String?;
+          final updated = (data['updatedAt'] as num?)?.toInt();
+          final b64 = data['avatarBase64'] as String?;
+
+          _currentSoulmate = SoulmateData(
+            uid: friend.uid,
+            displayName: friend.displayName,
+            avatarPath: SyncService.friendLatestPhotos[friend.uid],
+            avatarBase64: b64 ?? friend.avatarBase64,
+            startDateMillis: _currentSoulmate!.startDateMillis,
+            statusMood: mood ?? _currentSoulmate!.statusMood,
+            latitude: partnerLat ?? lat,
+            longitude: partnerLng ?? lng,
+            placeName: partnerPlace ?? placeName,
+            lastActiveMillis: updated ?? _currentSoulmate!.lastActiveMillis,
+          );
+          soulmateNotifier.value = _currentSoulmate;
+          await _persist();
+        }
+      } catch (_) {}
+
       _startListeningToPartner();
       _startListeningToInteractions();
+      _startListeningToRequests();
     }
   }
 
@@ -271,6 +549,7 @@ class SoulmateService {
       uid: _currentSoulmate!.uid,
       displayName: _currentSoulmate!.displayName,
       avatarPath: _currentSoulmate!.avatarPath,
+      avatarBase64: _currentSoulmate!.avatarBase64,
       startDateMillis: _currentSoulmate!.startDateMillis,
       statusMood: mood,
       latitude: _currentSoulmate!.latitude,
@@ -293,6 +572,7 @@ class SoulmateService {
       uid: _currentSoulmate!.uid,
       displayName: _currentSoulmate!.displayName,
       avatarPath: _currentSoulmate!.avatarPath,
+      avatarBase64: _currentSoulmate!.avatarBase64,
       startDateMillis: _currentSoulmate!.startDateMillis,
       statusMood: _currentSoulmate!.statusMood,
       latitude: _currentSoulmate!.latitude,
@@ -328,6 +608,7 @@ class SoulmateService {
             'uid': myProfile.uid,
             'displayName': myProfile.displayName,
             'avatarPath': myProfile.avatarPath,
+            'avatarBase64': myProfile.avatarBase64,
             'latitude': loc.latitude,
             'longitude': loc.longitude,
             'placeName': loc.displayName,
@@ -426,16 +707,18 @@ class SoulmateService {
           final mood = data['statusMood'] as String?;
           final updated = (data['updatedAt'] as num?)?.toInt();
           final note = data['lastNote'] as String?;
+          final b64 = data['avatarBase64'] as String?;
 
           _currentSoulmate = SoulmateData(
             uid: _currentSoulmate!.uid,
             displayName: _currentSoulmate!.displayName,
             avatarPath: _currentSoulmate!.avatarPath,
+            avatarBase64: b64 ?? _currentSoulmate!.avatarBase64,
             startDateMillis: _currentSoulmate!.startDateMillis,
             statusMood: mood ?? _currentSoulmate!.statusMood,
-            latitude: lat ?? _currentSoulmate!.latitude,
-            longitude: lng ?? _currentSoulmate!.longitude,
-            placeName: place ?? _currentSoulmate!.placeName,
+            latitude: lat,
+            longitude: lng,
+            placeName: place,
             lastActiveMillis: updated ?? _currentSoulmate!.lastActiveMillis,
             lastNote: note ?? _currentSoulmate!.lastNote,
             lastNoteTime: updated,
@@ -478,6 +761,81 @@ class SoulmateService {
     );
   }
 
+  /// Lắng nghe các yêu cầu kết nối Quỹ đạo Cận tâm gửi đến mình
+  void _startListeningToRequests() {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null || !AuthService.isCloudConfigured) return;
+
+    // A. Lắng nghe lời mời gửi ĐẾN mình (receiverUid == me && status == pending)
+    _incomingRequestsSub?.cancel();
+    _incomingRequestsSub = FirebaseFirestore.instance
+        .collection('soulmate_requests')
+        .where('receiverUid', isEqualTo: myProfile.uid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snap) {
+      for (var change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
+          final data = change.doc.data();
+          if (data != null) {
+            final req = SoulmateRequest.fromMap(data);
+            incomingRequestNotifier.value = req;
+
+            // Kích hoạt thông báo hệ thống Android Native
+            showSystemNotification(
+              id: 9999,
+              title: '🪐 Lời mời Quỹ đạo Cận tâm 💕',
+              body: '${req.senderName} muốn kết nối Quỹ đạo Cận tâm với bạn!',
+              deepLink: 'orbit://soulmate',
+            );
+
+            // Rung thông báo nhịp tim
+            _triggerReceiverHaptic('heartbeat');
+          }
+        }
+      }
+    }, onError: (e) => debugPrint('Incoming soulmate request listen error: $e'));
+
+    // B. Lắng nghe phản hồi chấp thuận từ người mình ĐÃ GỬI lời mời (senderUid == me && status == accepted)
+    _outgoingRequestsSub?.cancel();
+    _outgoingRequestsSub = FirebaseFirestore.instance
+        .collection('soulmate_requests')
+        .where('senderUid', isEqualTo: myProfile.uid)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots()
+        .listen((snap) {
+      for (var change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
+          final data = change.doc.data();
+          if (data != null) {
+            final req = SoulmateRequest.fromMap(data);
+            final now = DateTime.now().millisecondsSinceEpoch;
+            // Chỉ xử lý nếu vừa chấp thuận gần đây (< 15 phút)
+            if (req.acceptedAt != null && (now - req.acceptedAt!) < 15 * 60 * 1000) {
+              if (_currentSoulmate?.uid != req.receiverUid) {
+                final friend = Friend(
+                  uid: req.receiverUid,
+                  displayName: req.receiverName,
+                  addedAt: now,
+                );
+                setSoulmate(friend);
+                broadcastMyLocationAndStatus();
+                acceptedRequestNotifier.value = req;
+
+                showSystemNotification(
+                  id: 9998,
+                  title: '🎉 Kết nối Quỹ đạo Cận tâm thành công!',
+                  body: '${req.receiverName} đã đồng ý kết nối với bạn!',
+                  deepLink: 'orbit://soulmate',
+                );
+              }
+            }
+          }
+        }
+      }
+    }, onError: (e) => debugPrint('Outgoing soulmate request listen error: $e'));
+  }
+
   /// Xử lý khi nhận được tương tác trực tiếp từ đối phương
   void _handleIncomingInteraction(CoupleInteraction interaction) {
     // 1. Thêm vào lịch sử tương tác
@@ -496,7 +854,15 @@ class SoulmateService {
     // 3. Rung haptic đặc thù theo nhịp điệu tương tác
     _triggerReceiverHaptic(interaction.type);
 
-    // 4. Đồng bộ lên Home Widget màn hình chính
+    // 4. Kích hoạt thông báo hệ thống Android Native khi nhận tương tác
+    showSystemNotification(
+      id: interaction.timestamp % 100000,
+      title: '🪐 ${interaction.senderName}',
+      body: '${interaction.typeEmoji} ${interaction.message ?? interaction.typeTitle}',
+      deepLink: 'orbit://soulmate',
+    );
+
+    // 5. Đồng bộ lên Home Widget màn hình chính
     try {
       HomeWidget.saveWidgetData<String>(
         'soulmate_last_interaction',
@@ -598,36 +964,14 @@ class SoulmateService {
             timestamp: now,
           );
           break;
-        case 'poke':
-          response = CoupleInteraction(
-            id: 'sim_$now',
-            senderId: soulmate.uid,
-            senderName: soulmate.displayName,
-            receiverId: 'my_uid',
-            type: 'poke',
-            message: 'Đang online đây nè, chọt lại bạn nè 🛸',
-            timestamp: now,
-          );
-          break;
-        case 'love_note':
-          response = CoupleInteraction(
-            id: 'sim_$now',
-            senderId: soulmate.uid,
-            senderName: soulmate.displayName,
-            receiverId: 'my_uid',
-            type: 'love_note',
-            message: 'Đã đọc lời nhắn và ghim lên màn hình rồi nhé 🥰',
-            timestamp: now,
-          );
-          break;
         default:
           response = CoupleInteraction(
             id: 'sim_$now',
             senderId: soulmate.uid,
             senderName: soulmate.displayName,
             receiverId: 'my_uid',
-            type: 'heartbeat',
-            message: 'Đã nhận được tín hiệu vũ trụ từ bạn ✨',
+            type: 'poke',
+            message: 'Đã chọt lại bạn một cái nè! 🛸✨',
             timestamp: now,
           );
       }
@@ -635,12 +979,13 @@ class SoulmateService {
     });
   }
 
-  /// Tính khoảng cách địa lý Haversine (km) giữa 2 người (100% Offline, 0 VNĐ)
+  /// Tính khoảng cách địa lý (Haversine Formula) bằng toạ độ thực tế
   double? calculateDistanceKm(double myLat, double myLng) {
     if (_currentSoulmate?.latitude == null || _currentSoulmate?.longitude == null) {
       return null;
     }
-    const double earthRadiusKm = 6371.0;
+
+    const earthRadiusKm = 6371.0;
     final dLat = _degToRad(_currentSoulmate!.latitude! - myLat);
     final dLon = _degToRad(_currentSoulmate!.longitude! - myLng);
 
@@ -649,32 +994,30 @@ class SoulmateService {
             math.cos(_degToRad(_currentSoulmate!.latitude!)) *
             math.sin(dLon / 2) *
             math.sin(dLon / 2);
-
-    final clampedA = a.clamp(0.0, 1.0);
-    final c = 2 * math.atan2(math.sqrt(clampedA), math.sqrt(1.0 - clampedA));
-    return double.parse((earthRadiusKm * c).toStringAsFixed(1));
-  }
-
-  /// Định dạng khoảng cách thân thiện cho cặp đôi
-  String formatDistance(double? km) {
-    if (km == null) return 'Đang định vị...';
-    if (km < 0.05) return 'Cùng một nơi (0 km) 💞';
-    if (km < 1.0) return '${(km * 1000).round()} m (Đang rất gần!)';
-    return '$km km';
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
   }
 
   double _degToRad(double deg) => deg * (math.pi / 180.0);
 
+  String formatDistance(double? distKm) {
+    if (distKm == null) return 'Đang định vị...';
+    if (distKm < 0.05) return 'Đang ở cạnh nhau ✨';
+    if (distKm < 1.0) return 'Cách ${(distKm * 1000).toInt()} m';
+    if (distKm < 10.0) return 'Cách ${distKm.toStringAsFixed(1)} km';
+    return 'Cách ${distKm.toInt()} km';
+  }
+
   Future<void> clearSoulmate() async {
     _currentSoulmate = null;
     soulmateNotifier.value = null;
-    _recentInteractions.clear();
-    interactionsNotifier.value = [];
-    incomingInteractionNotifier.value = null;
     _partnerStatusSub?.cancel();
-    _interactionsSub?.cancel();
-    await _persist();
-    await _persistInteractions();
+    _incomingRequestsSub?.cancel();
+    _outgoingRequestsSub?.cancel();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKey);
+    } catch (_) {}
   }
 
   Future<void> _persist() async {
@@ -693,8 +1036,8 @@ class SoulmateService {
   Future<void> _persistInteractions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final mapped = _recentInteractions.map((i) => i.toMap()).toList();
-      await prefs.setString(_prefInteractionsKey, jsonEncode(mapped));
+      final list = _recentInteractions.map((i) => i.toMap()).toList();
+      await prefs.setString(_prefInteractionsKey, jsonEncode(list));
     } catch (e) {
       debugPrint('SoulmateService persistInteractions error: $e');
     }

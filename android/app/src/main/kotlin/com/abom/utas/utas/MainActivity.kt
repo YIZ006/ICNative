@@ -1,6 +1,8 @@
 package com.abom.utas.utas
 
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -14,6 +16,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -27,6 +30,7 @@ class MainActivity: FlutterActivity() {
     private val SCRATCH_SFX_CHANNEL = "com.abom.utas.utas/scratch_sfx"
     private val STORY_SHARE_CHANNEL = "com.abom.utas.utas/story_share"
     private val DEEP_LINK_CHANNEL = "com.abom.utas.utas/deep_link"
+    private val NOTIFICATION_CHANNEL = "com.abom.utas.utas/system_notification"
     private val storyExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var storyEncoder: StoryVideoEncoder? = null
@@ -429,6 +433,60 @@ class MainActivity: FlutterActivity() {
                         }
                     } else {
                         result.success(false)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 6. Kênh Thông Báo Hệ Thống Cục Bộ (Tương tác & Lời mời Quỹ đạo Cận tâm)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NOTIFICATION_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showNotification" -> {
+                    val notifId = (call.argument<Number>("id"))?.toInt() ?: 1001
+                    val title = call.argument<String>("title") ?: "Orbit Widget"
+                    val body = call.argument<String>("body") ?: ""
+                    val deepLink = call.argument<String>("deepLink") ?: "orbit://soulmate"
+
+                    try {
+                        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        val chanId = "orbit_soulmate_channel"
+                        val chanName = "Quỹ Đạo Cận Tâm & Tương Tác"
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            val channel = NotificationChannel(chanId, chanName, NotificationManager.IMPORTANCE_HIGH).apply {
+                                description = "Thông báo tương tác trực tiếp và lời mời Quỹ đạo Cận tâm"
+                                enableVibration(true)
+                                vibrationPattern = longArrayOf(0, 150, 100, 250)
+                            }
+                            notifManager.createNotificationChannel(channel)
+                        }
+
+                        val clickIntent = Intent(this, MainActivity::class.java).apply {
+                            action = Intent.ACTION_VIEW
+                            data = Uri.parse(deepLink)
+                            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        } else {
+                            PendingIntent.FLAG_UPDATE_CURRENT
+                        }
+                        val pendingIntent = PendingIntent.getActivity(this, notifId, clickIntent, pendingFlags)
+
+                        val notifBuilder = NotificationCompat.Builder(this, chanId)
+                            .setSmallIcon(R.mipmap.ic_launcher)
+                            .setContentTitle(title)
+                            .setContentText(body)
+                            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                            .setPriority(NotificationCompat.PRIORITY_HIGH)
+                            .setAutoCancel(true)
+                            .setContentIntent(pendingIntent)
+
+                        notifManager.notify(notifId, notifBuilder.build())
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("NOTIF_ERROR", e.message, null)
                     }
                 }
                 else -> result.notImplemented()
