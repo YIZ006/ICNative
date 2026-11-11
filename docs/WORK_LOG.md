@@ -2421,3 +2421,21 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - Bản release v1.5.0 đã sẵn sàng công khai trên GitHub Releases cho người dùng tải về hoặc cập nhật tự động trong app.
 * **Bước tiếp theo (Next Steps):**
   1. Bàn giao link tải và thông báo cho người dùng.
+
+
+---
+
+### [2026-11-11 15:51:00] - Sửa Lỗi Font Chữ Release Notes v1.5.0 Chuẩn UTF-8 (Khắc Phục Triệt Để Mojibake)
+* **Thời gian (Timestamp):** 2026-11-11 15:51:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  - Phát hiện nguyên nhân gây lỗi font tiếng Việt trên GitHub Release v1.5.0: Windows PowerShell 5.1 khi nạp chuỗi multiline string literal từ file script `.ps1` không có BOM sẽ tự động parse theo bảng mã ANSI/Windows-1252 trước khi gọi `Encoding.UTF8.GetBytes()`, dẫn đến việc bị double-encode thành chuỗi ký tự lạ (Mojibake: `Káº¿t Báº¡n`, `ðŸª `...).
+  - Khắc phục triệt để: lưu trữ nội dung ghi chú phát hành ra tệp `scratch/release_v150_utf8.json` theo chuẩn UTF-8 thuần, nạp trực tiếp qua `[System.IO.File]::ReadAllBytes()` và gửi payload byte nguyên bản lên GitHub Releases API qua phương thức PATCH.
+  - Toàn bộ tiêu đề và nội dung Release Notes v1.5.0 trên GitHub đã được khôi phục 100% tiếng Việt có dấu hoàn hảo.
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] `scratch/release_v150_utf8.json` - Tệp JSON chứa payload release notes UTF-8 chuẩn.
+  - [MODIFY] `scratch/publish_v150.ps1` - Sửa cơ chế đọc byte trực tiếp từ tệp JSON.
+  - [RELEASE] Đã cập nhật thành công lên GitHub: https://github.com/YIZ006/ICNative/releases/tag/v1.5.0
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Đã kiểm tra lại qua GitHub API: Toàn bộ văn bản hiển thị chuẩn xác tiếng Việt, không còn bất kỳ lỗi vỡ font nào.
