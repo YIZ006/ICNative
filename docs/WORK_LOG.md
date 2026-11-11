@@ -5,6 +5,27 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-11 17:30:00] - Xuất Bản Chính Thức Phiên Bản Orbit v1.5.1 Dual-Release Lên GitHub Releases
+* **Thời gian (Timestamp):** 2026-11-11 17:30:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  - Nâng cấp phiên bản toàn hệ thống lên **v1.5.1** (`1.5.1+2021` trong `pubspec.yaml`, `UpdateService`, `AppDelegate.swift`).
+  - Kiểm tra toàn bộ mã nguồn đạt chuẩn: `flutter test` 87/87 tests passed, `flutter analyze` 0 issues found.
+  - Biên dịch và phát hành thành công cả 2 tệp APK theo **Luật Kép Dual-Release Bắt Buộc**:
+    1. `Orbit-v1.5.1-clean-release.apk` (170,011,040 bytes) - Bản Sạch 100%, không mock data, Demo Mode tắt mặc định (`DEFAULT_DEMO_MODE=false`).
+    2. `Orbit-v1.5.1-demo-showcase.apk` (170,011,040 bytes) - Bản Trải Nghiệm Mẫu có sẵn bạn bè mẫu và feed ảnh sinh động (`DEFAULT_DEMO_MODE=true`).
+  - Tải lên GitHub Releases qua quy trình an toàn `draft: true` -> upload 2 assets -> xuất bản `draft: false`.
+  - Tuân thủ 100% chuẩn mã hoá tiếng Việt UTF-8 byte array chống lỗi font Mojibake và cơ chế chống tải nhầm bản cập nhật trong `UpdateService`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`pubspec.yaml`](../pubspec.yaml): Nâng `version: 1.5.1+2021`.
+  - [MODIFY] [`lib/services/update_service.dart`](../lib/services/update_service.dart): Nâng `_currentVersion = '1.5.1'`.
+  - [MODIFY] [`ios/Runner/AppDelegate.swift`](../ios/Runner/AppDelegate.swift): Nâng fallback version lên `1.5.1`.
+  - [NEW] `scratch/publish_v151.js`: Script phát hành GitHub Release v1.5.1 tự động qua Node.js HTTPS UTF-8 thuần.
+  - [RELEASE] Đã phát hành chính thức tại: https://github.com/YIZ006/ICNative/releases/tag/v1.5.1
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - Bản release v1.5.1 đã sẵn sàng công khai trên GitHub Releases cho người dùng tải về hoặc cập nhật tự động trong app qua In-App Updater.
+
 ### [2026-11-11 17:15:00] - Hoàn Thiện Đồng Bộ Vị Trí Thật GPS (Xoá Vị Trí Ảo), Lời Mời Kết Nối Quỹ Đạo Cận Tâm 2 Chiều & Trực Quan Hoá Tương Tác Thời Gian Thực
 * **Thời gian (Timestamp):** 2026-11-11 17:15:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]
