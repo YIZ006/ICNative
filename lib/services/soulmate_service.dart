@@ -1000,12 +1000,12 @@ class SoulmateService {
 
   double _degToRad(double deg) => deg * (math.pi / 180.0);
 
-  String formatDistance(double? distKm) {
-    if (distKm == null) return 'Đang định vị...';
-    if (distKm < 0.05) return 'Đang ở cạnh nhau ✨';
-    if (distKm < 1.0) return 'Cách ${(distKm * 1000).toInt()} m';
-    if (distKm < 10.0) return 'Cách ${distKm.toStringAsFixed(1)} km';
-    return 'Cách ${distKm.toInt()} km';
+  /// Định dạng khoảng cách thân thiện cho cặp đôi
+  String formatDistance(double? km) {
+    if (km == null) return 'Đang định vị...';
+    if (km < 0.05) return 'Cùng một nơi (0 km) 💞';
+    if (km < 1.0) return '${(km * 1000).round()} m (Đang rất gần!)';
+    return '$km km';
   }
 
   Future<void> clearSoulmate() async {

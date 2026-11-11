@@ -24,7 +24,7 @@ import Flutter
       updaterChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
         switch call.method {
         case "getAppVersion":
-          let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0"
+          let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.1"
           result(version)
         case "openUrl":
           guard let args = call.arguments as? [String: Any],
