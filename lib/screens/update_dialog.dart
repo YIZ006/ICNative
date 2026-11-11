@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:icnative/screens/update_screen.dart';
 import 'package:icnative/services/update_service.dart';
 import 'package:icnative/settings/theme_colors.dart';
 
@@ -10,10 +11,9 @@ class UpdateDialog extends StatefulWidget {
   const UpdateDialog({super.key, required this.releaseInfo});
 
   static Future<void> show(BuildContext context, GitHubReleaseInfo releaseInfo) async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => UpdateDialog(releaseInfo: releaseInfo),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UpdateScreen(releaseInfo: releaseInfo)),
     );
   }
 

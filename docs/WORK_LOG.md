@@ -5,6 +5,58 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-11 16:45:00] - Nâng Cấp Tải Cập Nhật Chạy Ngầm (Android DownloadManager), Triệt Tiêu Rò Rỉ Camera & Hoàn Thiện Hệ Thống Avatar Đa Tầng
+* **Thời gian (Timestamp):** 2026-11-11 16:45:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết toàn diện 3 vấn đề trọng yếu theo phản hồi của người dùng:
+  1. **Triệt tiêu hoàn toàn hiện tượng rò rỉ phần cứng Camera chạy ngầm (Camera Hardware Sensor Leak):**
+     - **Hiện trạng trước đây:** `HomeScreen` giữ `CameraController` mở liên tục; khi chuyển màn hình (Bạn bè, Trang cá nhân, Hướng dẫn widget, Cập nhật...) qua `Navigator.push`, Flutter vẫn giữ `HomeScreen` trong cây điều hướng mà không dispose camera, khiến đèn/icon camera xanh trên thanh thông báo Android luôn sáng và gây hao pin.
+     - **Giải pháp triệt để:**
+       * Đăng ký `final RouteObserver<PageRoute> routeObserver` toàn cục tại `lib/main.dart` và truyền vào `navigatorObservers`.
+       * Cho `_HomeScreenState` kế thừa `RouteAware`, đăng ký lắng nghe lộ trình điều hướng `routeObserver.subscribe(this, ModalRoute.of(context) as PageRoute)`.
+       * Bổ sung `didPushNext()`: Tự động gọi `_pauseCamera()` để ngắt và hủy hoàn toàn camera sensor ngay khi đẩy màn hình mới lên trên. Biểu tượng camera trên Android tắt ngay lập tức.
+       * Bổ sung `didPopNext()`: Tự động gọi `_resumeCamera()` kích hoạt lại camera mượt mà ngay khi người dùng quay trở lại `HomeScreen`.
+       * Hoàn thiện `didChangeAppLifecycleState`: Tắt camera khi app rơi vào trạng thái `paused`, `inactive`, hoặc `hidden`.
+  2. **Hệ thống Cập nhật App Tải Ngầm Không Bị Gián Đoạn (Android Native DownloadManager + UpdateScreen):**
+     - **Hiện trạng trước đây:** Cập nhật thông qua `UpdateDialog` modal chiếm trọn màn hình, tải trực tiếp bằng `http.Client()` trên Flutter UI thread. Nếu mạng chập chờn hoặc người dùng thoát/ẩn ứng dụng thì kết nối bị ngắt và mất toàn bộ tiến trình tải, đồng thời camera vẫn bị bật ngầm.
+     - **Giải pháp chuyển giao sang OS cấp cao:**
+       * Bổ sung kênh `UPDATER_CHANNEL` trong `MainActivity.kt` tích hợp trực tiếp `android.app.DownloadManager` của hệ điều hành Android.
+       * Cấu hình thông báo tải nền `VISIBILITY_VISIBLE_NOTIFY_COMPLETED`, cho phép hệ điều hành Android tự quản lý việc tải tệp APK ngầm ngay cả khi người dùng thoát app, khoá màn hình hay chuyển đổi mạng Wi-Fi/4G.
+       * Cấu hình `android/app/src/main/res/xml/file_paths.xml` cấp quyền `FileProvider` cho thư mục `Environment.DIRECTORY_DOWNLOADS`.
+       * Bổ sung cơ chế Fallback tải trực tiếp bằng pure-Dart có hỗ trợ HTTP Header `Range: bytes=` tự động tiếp tục (resume) tải tiếp từ vị trí đã tải nếu mạng bị ngắt quãng.
+       * Xây dựng màn hình cập nhật riêng biệt `UpdateScreen` (`lib/screens/update_screen.dart`): Thiết kế giao diện Orbit đẹp mắt, hiển thị phiên bản hiện tại vs phiên bản mới, phù hiệu Dual-Release (Clean vs Demo), What's New, dung lượng file, thanh tiến trình %, tốc độ tải (MB/s).
+       * Nút `[Về App (Tải ngầm)]` cho phép người dùng quay lại sử dụng app hoặc thoát app trong lúc hệ thống tiếp tục tải ở nền. Nút `[🚀 CÀI ĐẶT NGAY]` tự kích hoạt khi tải hoàn tất.
+       * Cập nhật `HomeScreen` hiển thị banner cập nhật mỏng nhẹ, tinh tế (không chặn camera/màn hình) và điều hướng thẳng vào `UpdateScreen`.
+  3. **Khắc phục Triệt Để Vấn Đề Hiển Thị Avatar Tài Khoản & Bạn Bè, Nâng Cấp Card Liên Kết:**
+     - **Hiện trạng trước đây:** Tài khoản mới tạo hoặc bạn bè chưa chọn ảnh đại diện cá nhân chỉ hiển thị chữ cái đầu (ví dụ: chữ 'M' viền xanh) hoặc icon trống. Đường dẫn tương đối trên Firebase Hosting gặp vấn đề với router URL rewrite (`/invite/**`).
+     - **Giải pháp đa tầng:**
+       * Xây dựng `AvatarHelper` (`lib/utils/avatar_helper.dart`): Tự động phân giải Avatar đa tầng: Ảnh tệp cục bộ (`avatarPath`) -> Chuỗi Base64 Cloud (`avatarBase64`) -> Sticker linh vật mascot siêu đáng yêu (Mèo, Shiba, Capybara) theo cơ chế băm định danh (Deterministic Hash) -> Chữ cái đại diện fallback an toàn.
+       * Áp dụng `AvatarHelper` đồng bộ trên toàn bộ: Thẻ tài khoản `FriendsScreen`, danh sách Bạn bè đang kết nối, danh sách Lời mời kết bạn đang chờ, và `ProfileScreen`.
+       * Chuẩn hoá tài nguyên trên trang web mời kết bạn `hosting_invite/index.html`: Sử dụng đường dẫn gốc tường minh (`/avatar_cat.jpg`, `/avatar_dog.jpg`, `/avatar_capybara.jpg`, `/orbit_icon.png`, `/og_preview.png`), bổ sung xử lý sự kiện `onerror` và tự động hiển thị linh vật đáng yêu theo tên/UID.
+       * Bổ sung siêu dữ liệu Open Graph chuẩn kích thước 1200x630 (`og:image`, `og:title`, `og:description`, `twitter:card`) giúp đường link gửi qua Messenger, Zalo hiển thị card xem trước sắc nét và chuyên nghiệp kèm logo Orbit.
+       * Triển khai xuất bản bản cập nhật web thành công lên Firebase Hosting (`npx firebase-tools deploy --only hosting`).
+* **Chi tiết thay đổi (Changes Made):**
+  - [NEW] [`lib/screens/update_screen.dart`](../lib/screens/update_screen.dart): Màn hình cập nhật ứng dụng chuyên biệt, theo dõi tiến trình tải ngầm theo thời gian thực.
+  - [NEW] [`lib/utils/avatar_helper.dart`](../lib/utils/avatar_helper.dart): Bộ tiện ích hiển thị Avatar đa tầng (File -> Base64 -> Mascot Stickers).
+  - [MODIFY] [`lib/main.dart`](../lib/main.dart): Khởi tạo và đăng ký `RouteObserver<PageRoute>` toàn cục.
+  - [MODIFY] [`lib/screens/home.dart`](../lib/screens/home.dart): Tích hợp `RouteAware`, tự động ngắt camera sensor khi sang màn hình khác (`_pauseCamera`) và phục hồi khi quay lại (`_resumeCamera`), bổ sung banner cập nhật không che chắn.
+  - [MODIFY] [`lib/screens/friends_screen.dart`](../lib/screens/friends_screen.dart): Sử dụng `AvatarHelper` cho thẻ người dùng, danh sách bạn bè và lời mời kết bạn.
+  - [MODIFY] [`lib/screens/profile_screen.dart`](../lib/screens/profile_screen.dart): Tích hợp `AvatarHelper`, điều hướng kiểm tra cập nhật sang `UpdateScreen`.
+  - [MODIFY] [`lib/screens/update_dialog.dart`](../lib/screens/update_dialog.dart): Chuyển hướng yêu cầu mở dialog sang `UpdateScreen`.
+  - [MODIFY] [`lib/services/update_service.dart`](../lib/services/update_service.dart): Tích hợp Android System `DownloadManager`, cơ chế fallback HTTP streaming resume `Range: bytes=`, quản lý trạng thái tải `downloadProgressNotifier`.
+  - [MODIFY] [`android/app/src/main/kotlin/com/abom/utas/utas/MainActivity.kt`](../android/app/src/main/kotlin/com/abom/utas/utas/MainActivity.kt): Xử lý method call `startDownload`, `checkDownloadStatus`, `cancelDownload` qua Android `DownloadManager`.
+  - [MODIFY] [`android/app/src/main/res/xml/file_paths.xml`](../android/app/src/main/res/xml/file_paths.xml): Cấp quyền `external-files-path` cho thư mục Downloads.
+  - [MODIFY] [`hosting_invite/index.html`](../hosting_invite/index.html): Chuẩn hoá đường dẫn gốc ảnh, cơ chế phân bổ avatar mascot thông minh, Open Graph 1200x630.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze lib/`: **No issues found! (0 warnings, 0 errors)**.
+  - Firebase Hosting: Đã deploy thành công 100% phiên bản web mới nhất tại https://ncnative-bcf6d.web.app/invite.
+  - Camera Lifecycle: Đã kiểm tra logic ngắt/mở hardware sensor theo đúng chuẩn Android Lifecycle & RouteAware.
+  - Background Download: Đã kiểm tra logic Android `DownloadManager` nhận `DOWNLOAD_COMPLETE` broadcast và tự động gợi ý cài đặt.
+
+---
+
 ### [2026-11-10 17:30:00] - Khắc Phục Triệt Để Lỗi Sticker Vô Hình & Xuất Bản Orbit v1.4.14 Dual-Release
 * **Thời gian (Timestamp):** 2026-11-10 17:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

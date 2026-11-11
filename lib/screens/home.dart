@@ -11,8 +11,9 @@ import 'package:icnative/screens/history.dart';
 import 'package:icnative/screens/preview.dart';
 import 'package:icnative/screens/profile_screen.dart';
 import 'package:icnative/screens/soulmate_screen.dart';
-import 'package:icnative/screens/update_dialog.dart';
+import 'package:icnative/screens/update_screen.dart';
 import 'package:icnative/screens/widget_guide_screen.dart';
+import 'package:icnative/main.dart';
 import 'package:icnative/services/auth_service.dart';
 import 'package:icnative/services/demo_data_service.dart';
 import 'package:icnative/services/friend_service.dart';
@@ -33,7 +34,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   CameraController? controller;
   bool _isCameraInitializing = false;
   int _cameraRetryCount = 0;
@@ -212,9 +213,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     try {
       await Future.delayed(const Duration(milliseconds: 2500));
       if (!mounted) return;
+      // Khôi phục theo dõi tiến trình tải ngầm nếu đã bắt đầu trước đó
+      await UpdateService.instance.checkExistingDownloadOnStart();
       final release = await UpdateService.instance.checkForUpdate(isManual: false);
       if (release != null && mounted) {
-        UpdateDialog.show(context, release);
+        UpdateService.instance.pendingUpdateNotifier.value = release;
       }
     } catch (e) {
       debugPrint('Auto update check error: $e');
@@ -263,16 +266,58 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    // Tự động tắt máy ảnh hoàn toàn ngay khi người dùng chuyển sang mục khác (Friends, Profile, Update...)
+    _pauseCamera();
+  }
+
+  @override
+  void didPopNext() {
+    // Tự động bật lại camera khi người dùng quay lại màn hình chính Orbit
+    if (!_isCapturing) {
+      _resumeCamera();
+    }
+  }
+
+  /// Tạm dừng và giải phóng cảm biến camera (Icon máy ảnh trên thanh thông báo lập tức biến mất)
+  Future<void> _pauseCamera() async {
+    final old = controller;
+    controller = null;
+    if (old != null) {
+      try {
+        await old.dispose();
+      } catch (e) {
+        debugPrint('Camera dispose error: $e');
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Bật lại camera an toàn khi màn hình chính active
+  Future<void> _resumeCamera() async {
+    if (_isCameraInitializing) return;
+    if (controller != null && controller!.value.isInitialized) return;
+    await _initCameraSafe();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      final old = controller;
-      controller = null;
-      old?.dispose();
-      if (mounted) setState(() {});
+    if (state != AppLifecycleState.resumed) {
+      // Khi thoát app, sang ứng dụng khác, tắt màn hình, hoặc mở trình cài đặt: TẮT CAMERA NGAY LẬP TỨC
+      _pauseCamera();
     } else if (state == AppLifecycleState.resumed) {
-      // Chi khoi dong lai camera neu khong dang mo man hinh Preview/Sticker Studio
-      if (!_isCapturing) {
-        _initCameraSafe();
+      final route = ModalRoute.of(context);
+      if (route != null && route.isCurrent && !_isCapturing) {
+        _resumeCamera();
       }
       // Tự động kiểm tra nếu người dùng vừa sao chép link mời kết bạn từ trình duyệt ngoài rồi mở app
       unawaited(InviteService.instance.checkClipboardForInvite(silent: true));
@@ -359,6 +404,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
@@ -881,6 +927,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                                 // 1. Top Bar (Cao 50dp)
                                 _buildTopBar(),
 
+                                // Banner thông báo cập nhật ngầm & bản mới (nếu có)
+                                _buildUpdateBanner(),
+
                                 // Banner thông báo lời mời kết bạn 2 chiều (nếu có)
                                 _buildPendingFriendRequestBanner(),
 
@@ -1176,6 +1225,173 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
           ),
         ],
       ),
+    );
+  }
+
+  /// Banner thông báo tiến trình tải ngầm và bản cập nhật mới
+  Widget _buildUpdateBanner() {
+    return ValueListenableBuilder<UpdateDownloadProgress>(
+      valueListenable: UpdateService.instance.downloadProgressNotifier,
+      builder: (context, downloadProgress, _) {
+        final isDownloading = downloadProgress.status == DownloadStatus.downloading;
+        final isPaused = downloadProgress.status == DownloadStatus.paused;
+        final isCompleted = downloadProgress.status == DownloadStatus.completed;
+
+        // Nếu đang tải ngầm hoặc đã tải xong:
+        if (isDownloading || isPaused || isCompleted) {
+          final percent = (downloadProgress.progress * 100).toInt();
+          return GestureDetector(
+            onTap: () {
+              final release = downloadProgress.releaseInfo ?? UpdateService.instance.pendingUpdateNotifier.value;
+              if (release != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => UpdateScreen(releaseInfo: release)),
+                );
+              } else if (isCompleted) {
+                UpdateService.instance.installCurrentApk();
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isCompleted ? Colors.green.shade50 : OrbitColors.surfaceCard,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isCompleted ? Colors.green.shade600 : OrbitColors.buttonPrimary,
+                  width: 1.6,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: OrbitColors.deepOlive.withValues(alpha: 0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isCompleted ? Icons.check_circle_rounded : Icons.downloading_rounded,
+                    color: isCompleted ? Colors.green.shade700 : OrbitColors.buttonPrimary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isCompleted
+                              ? 'Đã tải xong bản cập nhật! Chạm để cài đặt 🚀'
+                              : 'Đang tải ngầm trong nền: $percent%',
+                          style: TextStyle(
+                            color: isCompleted ? Colors.green.shade800 : OrbitColors.deepOlive,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (!isCompleted)
+                          Text(
+                            'Thoát app vẫn tiếp tục tải • Chạm để mở Trung tâm cập nhật',
+                            style: TextStyle(
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.65),
+                              fontSize: 10,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: OrbitColors.deepOlive),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Nếu có bản cập nhật mới đang chờ (nhưng chưa bấm tải):
+        return ValueListenableBuilder<GitHubReleaseInfo?>(
+          valueListenable: UpdateService.instance.pendingUpdateNotifier,
+          builder: (context, pendingRelease, _) {
+            if (pendingRelease == null) return const SizedBox.shrink();
+
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => UpdateScreen(releaseInfo: pendingRelease)),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFBF4DC), Color(0xFFF1E4B8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: OrbitColors.buttonPrimary, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: OrbitColors.deepOlive.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Text('🚀', style: TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Đã có bản mới: Orbit ${pendingRelease.tagName}',
+                            style: const TextStyle(
+                              color: OrbitColors.deepOlive,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            'Hỗ trợ tải ngầm không lo gián đoạn • Xem ngay',
+                            style: TextStyle(
+                              color: OrbitColors.deepOlive.withValues(alpha: 0.7),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: OrbitColors.buttonPrimary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Cập nhật',
+                        style: TextStyle(
+                          color: OrbitColors.textLight,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

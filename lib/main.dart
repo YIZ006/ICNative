@@ -111,6 +111,9 @@ Future<void> _loadSavedImages() async {
   }
 }
 
+/// Bộ giám sát điều hướng toàn cục để quản lý vòng đời camera an toàn
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -122,6 +125,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Orbit',
           debugShowCheckedModeBanner: false,
+          navigatorObservers: [routeObserver],
           theme: ThemeData(
             brightness: Brightness.light,
             scaffoldBackgroundColor: OrbitColors.background,

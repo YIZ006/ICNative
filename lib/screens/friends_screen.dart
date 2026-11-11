@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/friend_service.dart';
 import '../services/invite_service.dart';
 import '../services/secret_photo_service.dart';
+import '../utils/avatar_helper.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'scratch_photo_screen.dart';
@@ -281,14 +280,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Avatar circle
+                          // Avatar circle in orbital ring
                           Container(
-                            width: 44,
-                            height: 44,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: OrbitColors.buttonPrimary,
-                              border: Border.all(color: const Color(0xFFDDA15E), width: 2),
                               boxShadow: [
                                 BoxShadow(
                                   color: OrbitColors.deepOlive.withValues(alpha: 0.2),
@@ -297,33 +292,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                 ),
                               ],
                             ),
-                            child: ClipOval(
-                              child: Builder(
-                                builder: (_) {
-                                  final u = user;
-                                  if (u != null && u.avatarPath != null && File(u.avatarPath!).existsSync()) {
-                                    return Image.file(
-                                      File(u.avatarPath!),
-                                      width: 44,
-                                      height: 44,
-                                      fit: BoxFit.cover,
-                                    );
-                                  }
-                                  if (u != null && u.avatarBase64 != null && u.avatarBase64!.isNotEmpty) {
-                                    try {
-                                      return Image.memory(
-                                        base64Decode(u.avatarBase64!),
-                                        width: 44,
-                                        height: 44,
-                                        fit: BoxFit.cover,
-                                      );
-                                    } catch (_) {}
-                                  }
-                                  return const Center(
-                                    child: Text('🐾', style: TextStyle(fontSize: 22)),
-                                  );
-                                },
-                              ),
+                            child: AvatarHelper.buildAvatar(
+                              avatarPath: user?.avatarPath,
+                              avatarBase64: user?.avatarBase64,
+                              displayName: user?.displayName ?? 'Tôi',
+                              uid: user?.uid,
+                              size: 44,
+                              border: Border.all(color: const Color(0xFFDDA15E), width: 2),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -811,32 +786,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           ),
                           child: Row(
                             children: [
-                              Builder(
-                                builder: (_) {
-                                  if (req.fromAvatarBase64 != null && req.fromAvatarBase64!.isNotEmpty) {
-                                    try {
-                                      return CircleAvatar(
-                                        radius: 20,
-                                        backgroundColor: const Color(0xFFFFD54F),
-                                        backgroundImage: MemoryImage(base64Decode(req.fromAvatarBase64!)),
-                                      );
-                                    } catch (_) {}
-                                  }
-                                  return CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: const Color(0xFFFFD54F),
-                                    child: Text(
-                                      req.fromName.isNotEmpty
-                                          ? req.fromName.substring(0, 1).toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: OrbitColors.deepOlive,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  );
-                                },
+                              AvatarHelper.buildAvatar(
+                                avatarBase64: req.fromAvatarBase64,
+                                displayName: req.fromName,
+                                uid: req.fromUid,
+                                size: 40,
+                                backgroundColor: const Color(0xFFFFD54F),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -995,30 +950,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       children: [
                         Builder(
                           builder: (_) {
-                            if (friend.avatarBase64 != null && friend.avatarBase64!.isNotEmpty) {
-                              try {
-                                return CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: OrbitColors.buttonPrimary,
-                                  backgroundImage: MemoryImage(base64Decode(friend.avatarBase64!)),
-                                );
-                              } catch (_) {}
-                            } else {
+                            if (friend.avatarBase64 == null || friend.avatarBase64!.isEmpty) {
                               FriendService.instance.fetchAndCacheFriendAvatar(friend.uid);
                             }
-                            return CircleAvatar(
-                              radius: 20,
-                              backgroundColor: OrbitColors.buttonPrimary,
-                              child: Text(
-                                friend.displayName.isNotEmpty
-                                    ? friend.displayName.substring(0, 1).toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: OrbitColors.textLight,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
+                            return AvatarHelper.buildAvatar(
+                              avatarBase64: friend.avatarBase64,
+                              displayName: friend.displayName,
+                              uid: friend.uid,
+                              size: 40,
                             );
                           },
                         ),

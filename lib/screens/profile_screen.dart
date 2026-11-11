@@ -7,8 +7,9 @@ import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/update_service.dart';
+import '../utils/avatar_helper.dart';
 import 'qr_scanner_screen.dart';
-import 'update_dialog.dart';
+import 'update_screen.dart';
 import 'widget_guide_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -33,8 +34,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       valueListenable: AuthService.instance.currentUserNotifier,
       builder: (context, user, _) {
         final isCloudActive = AuthService.isCloudConfigured;
-        final avatarPath = user?.avatarPath;
-        final hasCustomAvatar = avatarPath != null && File(avatarPath).existsSync();
 
         return Scaffold(
           backgroundColor: OrbitColors.background,
@@ -84,12 +83,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           clipBehavior: Clip.none,
                           children: [
                             Container(
-                              width: 84,
-                              height: 84,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: OrbitColors.buttonPrimary,
-                                border: Border.all(color: OrbitColors.background, width: 3),
                                 boxShadow: [
                                   BoxShadow(
                                     color: OrbitColors.deepOlive.withValues(alpha: 0.25),
@@ -98,17 +93,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ],
                               ),
-                              child: ClipOval(
-                                child: hasCustomAvatar
-                                    ? Image.file(
-                                        File(avatarPath),
-                                        fit: BoxFit.cover,
-                                        width: 84,
-                                        height: 84,
-                                      )
-                                    : const Center(
-                                        child: Text('🐾', style: TextStyle(fontSize: 40)),
-                                      ),
+                              child: AvatarHelper.buildAvatar(
+                                avatarPath: user?.avatarPath,
+                                avatarBase64: user?.avatarBase64,
+                                displayName: user?.displayName ?? 'Tôi',
+                                uid: user?.uid,
+                                size: 84,
+                                border: Border.all(color: OrbitColors.background, width: 3),
                               ),
                             ),
 
@@ -283,7 +274,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final release = await UpdateService.instance.checkForUpdate(isManual: true);
                     if (!context.mounted) return;
                     if (release != null) {
-                      UpdateDialog.show(context, release);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => UpdateScreen(releaseInfo: release)),
+                      );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

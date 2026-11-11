@@ -244,7 +244,7 @@
   <div class="card">
     <!-- App Brand Top Badge -->
     <div class="app-brand-bar">
-      <img src="orbit_icon.png" class="app-brand-icon" alt="Orbit Icon" />
+      <img src="/orbit_icon.png" class="app-brand-icon" alt="Orbit Icon" />
       <span class="app-brand-text">ORBIT WIDGET 🪐</span>
     </div>
 
@@ -254,7 +254,7 @@
         <div class="orbit-dot"></div>
       </div>
       <div class="avatar-wrapper">
-        <img id="avatarImg" class="avatar-img" src="avatar_cat.jpg" alt="Avatar" />
+        <img id="avatarImg" class="avatar-img" src="/avatar_cat.jpg" alt="Avatar" />
         <div class="avatar-initial" id="avatarInitial">O</div>
       </div>
     </div>
@@ -310,18 +310,24 @@
     const statusEl = document.getElementById('statusText');
     const inAppHintEl = document.getElementById('inAppHint');
 
-    function selectDefaultAvatar(displayName) {
+    function selectDefaultAvatar(displayName, uidStr) {
       const lower = (displayName || '').toLowerCase();
       if (lower.includes('mèo') || lower.includes('cat') || lower.includes('meo')) {
-        return 'avatar_cat.jpg';
+        return '/avatar_cat.jpg';
       }
       if (lower.includes('cún') || lower.includes('chó') || lower.includes('shiba') || lower.includes('dog')) {
-        return 'avatar_dog.jpg';
+        return '/avatar_dog.jpg';
       }
       if (lower.includes('capybara')) {
-        return 'avatar_capybara.jpg';
+        return '/avatar_capybara.jpg';
       }
-      return 'orbit_icon.png';
+      const avatars = ['/avatar_cat.jpg', '/avatar_dog.jpg', '/avatar_capybara.jpg'];
+      let hash = 0;
+      const str = (uidStr || displayName || 'orbit');
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash * 31 + str.charCodeAt(i)) % avatars.length;
+      }
+      return avatars[Math.abs(hash)];
     }
 
     function setAvatarImage(srcUrl) {
@@ -329,6 +335,14 @@
       avatarImgEl.style.display = 'block';
       avatarInitEl.style.display = 'none';
     }
+
+    avatarImgEl.onerror = function() {
+      if (!avatarImgEl.src.endsWith('/orbit_icon.png')) {
+        avatarImgEl.src = '/orbit_icon.png';
+      } else {
+        setAvatarInitial(nameEl.textContent);
+      }
+    };
 
     function setAvatarInitial(displayName) {
       const char = (displayName || '?').charAt(0).toUpperCase();
@@ -343,8 +357,8 @@
       uidEl.textContent = displayUid ? `(UID: ${displayUid})` : '';
       document.title = `Kết bạn với ${finalName} trên Orbit 🪐`;
       
-      // Default placeholder avatar based on cute nickname
-      setAvatarImage(selectDefaultAvatar(finalName));
+      // Default cute mascot avatar based on nickname / uid
+      setAvatarImage(selectDefaultAvatar(finalName, displayUid));
     }
 
     updateProfileUI(uid, name);
@@ -365,7 +379,7 @@
               const b64 = doc.fields.avatarBase64.stringValue;
               setAvatarImage('data:image/jpeg;base64,' + b64);
             } else {
-              setAvatarImage(selectDefaultAvatar(name));
+              setAvatarImage(selectDefaultAvatar(name, uid));
             }
           }
         })

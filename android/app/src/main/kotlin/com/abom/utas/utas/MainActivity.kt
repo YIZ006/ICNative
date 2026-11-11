@@ -1,14 +1,17 @@
 package com.abom.utas.utas
 
+import android.app.DownloadManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.FileProvider
@@ -181,6 +184,100 @@ class MainActivity: FlutterActivity() {
                         result.success(pInfo.versionName ?: "1.4.0")
                     } catch (e: Exception) {
                         result.success("1.4.0")
+                    }
+                }
+                "startDownload" -> {
+                    val url = call.argument<String>("url")
+                    val title = call.argument<String>("title") ?: "Bản cập nhật Orbit"
+                    val fileName = call.argument<String>("fileName") ?: "Orbit_Update.apk"
+                    if (url != null) {
+                        try {
+                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                            val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                            if (destDir != null && !destDir.exists()) {
+                                destDir.mkdirs()
+                            }
+                            val destFile = File(destDir, fileName)
+                            if (destFile.exists()) {
+                                destFile.delete()
+                            }
+                            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                                setTitle(title)
+                                setDescription("Đang tải bản cập nhật Orbit trong nền hệ thống...")
+                                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                setDestinationUri(Uri.fromFile(destFile))
+                                setAllowedOverMetered(true)
+                                setAllowedOverRoaming(true)
+                            }
+                            val downloadId = dm.enqueue(request)
+                            result.success(mapOf(
+                                "downloadId" to downloadId,
+                                "filePath" to destFile.absolutePath
+                            ))
+                        } catch (e: Exception) {
+                            result.error("DOWNLOAD_ERROR", "Lỗi khởi chạy tải ngầm: ${e.message}", null)
+                        }
+                    } else {
+                        result.error("INVALID_URL", "URL tải về null", null)
+                    }
+                }
+                "checkDownloadStatus" -> {
+                    val downloadId = (call.argument<Number>("downloadId"))?.toLong()
+                    if (downloadId != null) {
+                        try {
+                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                            val query = DownloadManager.Query().setFilterById(downloadId)
+                            val cursor = dm.query(query)
+                            if (cursor != null && cursor.moveToFirst()) {
+                                val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                                val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                                val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+
+                                val downloaded = if (bytesDownloadedIndex != -1) cursor.getLong(bytesDownloadedIndex) else 0L
+                                val total = if (bytesTotalIndex != -1) cursor.getLong(bytesTotalIndex) else 0L
+                                val status = if (statusIndex != -1) cursor.getInt(statusIndex) else -1
+                                val reason = if (reasonIndex != -1) cursor.getInt(reasonIndex) else 0
+                                cursor.close()
+
+                                val statusStr = when (status) {
+                                    DownloadManager.STATUS_RUNNING -> "running"
+                                    DownloadManager.STATUS_PENDING -> "pending"
+                                    DownloadManager.STATUS_PAUSED -> "paused"
+                                    DownloadManager.STATUS_SUCCESSFUL -> "successful"
+                                    DownloadManager.STATUS_FAILED -> "failed"
+                                    else -> "unknown"
+                                }
+
+                                result.success(mapOf(
+                                    "status" to statusStr,
+                                    "bytesDownloaded" to downloaded,
+                                    "bytesTotal" to total,
+                                    "reason" to reason
+                                ))
+                            } else {
+                                cursor?.close()
+                                result.success(mapOf("status" to "not_found"))
+                            }
+                        } catch (e: Exception) {
+                            result.error("QUERY_ERROR", "Lỗi kiểm tra tải ngầm: ${e.message}", null)
+                        }
+                    } else {
+                        result.error("INVALID_ID", "ID tải về null", null)
+                    }
+                }
+                "cancelDownload" -> {
+                    val downloadId = (call.argument<Number>("downloadId"))?.toLong()
+                    if (downloadId != null) {
+                        try {
+                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                            dm.remove(downloadId)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("CANCEL_ERROR", "Lỗi hủy tải: ${e.message}", null)
+                        }
+                    } else {
+                        result.error("INVALID_ID", "ID tải về null", null)
                     }
                 }
                 else -> result.notImplemented()
