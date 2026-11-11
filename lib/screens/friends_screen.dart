@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import '../services/auth_service.dart';
@@ -26,14 +27,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void initState() {
     super.initState();
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsUpdated);
+    FriendService.instance.friendsUpdatedNotifier.addListener(_onFriendsUpdated);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(InviteService.instance.checkClipboardForInvite(silent: true));
+      unawaited(FriendService.instance.syncAllFriendsAvatars());
     });
   }
 
   @override
   void dispose() {
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsUpdated);
+    FriendService.instance.friendsUpdatedNotifier.removeListener(_onFriendsUpdated);
     super.dispose();
   }
 
@@ -280,25 +284,53 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Avatar circle in orbital ring
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: OrbitColors.deepOlive.withValues(alpha: 0.2),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
+                          // Avatar circle in orbital ring (Chạm để đổi ảnh đại diện cá nhân)
+                          GestureDetector(
+                            onTap: () async {
+                              final picker = ImagePicker();
+                              final picked = await picker.pickImage(
+                                source: ImageSource.gallery,
+                                maxWidth: 512,
+                                maxHeight: 512,
+                                imageQuality: 85,
+                              );
+                              if (picked != null) {
+                                await AuthService.instance.updateAvatar(picked.path);
+                                if (mounted) setState(() {});
+                              }
+                            },
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: OrbitColors.deepOlive.withValues(alpha: 0.2),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: AvatarHelper.buildAvatar(
+                                    avatarPath: user?.avatarPath,
+                                    avatarBase64: user?.avatarBase64,
+                                    displayName: user?.displayName ?? 'Tôi',
+                                    uid: user?.uid,
+                                    size: 44,
+                                    border: Border.all(color: const Color(0xFFDDA15E), width: 2),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: OrbitColors.buttonPrimary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.camera_alt_rounded, size: 10, color: Colors.white),
                                 ),
                               ],
-                            ),
-                            child: AvatarHelper.buildAvatar(
-                              avatarPath: user?.avatarPath,
-                              avatarBase64: user?.avatarBase64,
-                              displayName: user?.displayName ?? 'Tôi',
-                              uid: user?.uid,
-                              size: 44,
-                              border: Border.all(color: const Color(0xFFDDA15E), width: 2),
                             ),
                           ),
                           const SizedBox(width: 10),

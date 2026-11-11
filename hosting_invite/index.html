@@ -33,12 +33,17 @@
   <link rel="apple-touch-icon" sizes="180x180" href="https://ncnative-bcf6d.web.app/orbit_icon.png" />
   <link rel="shortcut icon" href="https://ncnative-bcf6d.web.app/favicon.png" />
 
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     body {
       background-color: #FEFAE0;
@@ -313,15 +318,19 @@
     function selectDefaultAvatar(displayName, uidStr) {
       const lower = (displayName || '').toLowerCase();
       if (lower.includes('mèo') || lower.includes('cat') || lower.includes('meo')) {
-        return '/avatar_cat.jpg';
+        return 'https://ncnative-bcf6d.web.app/avatar_cat.jpg';
       }
       if (lower.includes('cún') || lower.includes('chó') || lower.includes('shiba') || lower.includes('dog')) {
-        return '/avatar_dog.jpg';
+        return 'https://ncnative-bcf6d.web.app/avatar_dog.jpg';
       }
       if (lower.includes('capybara')) {
-        return '/avatar_capybara.jpg';
+        return 'https://ncnative-bcf6d.web.app/avatar_capybara.jpg';
       }
-      const avatars = ['/avatar_cat.jpg', '/avatar_dog.jpg', '/avatar_capybara.jpg'];
+      const avatars = [
+        'https://ncnative-bcf6d.web.app/avatar_cat.jpg',
+        'https://ncnative-bcf6d.web.app/avatar_dog.jpg',
+        'https://ncnative-bcf6d.web.app/avatar_capybara.jpg'
+      ];
       let hash = 0;
       const str = (uidStr || displayName || 'orbit');
       for (let i = 0; i < str.length; i++) {
@@ -337,8 +346,8 @@
     }
 
     avatarImgEl.onerror = function() {
-      if (!avatarImgEl.src.endsWith('/orbit_icon.png')) {
-        avatarImgEl.src = '/orbit_icon.png';
+      if (avatarImgEl.src !== 'https://ncnative-bcf6d.web.app/orbit_icon.png') {
+        avatarImgEl.src = 'https://ncnative-bcf6d.web.app/orbit_icon.png';
       } else {
         setAvatarInitial(nameEl.textContent);
       }
@@ -377,7 +386,8 @@
             // Nếu người dùng đã cài avatar ảnh cá nhân trên máy:
             if (doc.fields.avatarBase64 && doc.fields.avatarBase64.stringValue) {
               const b64 = doc.fields.avatarBase64.stringValue;
-              setAvatarImage('data:image/jpeg;base64,' + b64);
+              const mime = b64.startsWith('iVBOR') ? 'image/png' : 'image/jpeg';
+              setAvatarImage(`data:${mime};base64,${b64}`);
             } else {
               setAvatarImage(selectDefaultAvatar(name, uid));
             }

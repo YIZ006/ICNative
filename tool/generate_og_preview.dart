@@ -141,7 +141,7 @@ void main() {
   );
   img.drawString(
     image,
-    '100% On-Device  -  0 VND Cloud  -  Android & iOS',
+    'Vong tron quy dao tuong tac truc tiep - Android & iOS',
     font: img.arial24,
     x: 560,
     y: 360,

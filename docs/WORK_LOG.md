@@ -5,6 +5,38 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-11 19:10:00] - Hoàn Thiện Hiển Thị Avatar Bạn Bè 2 Chiều Trên Quỹ Đạo, Xoá Bỏ Chữ "0 VNĐ" & Thiết Kế Lại Thẻ Preview Lời Mời Đẳng Cấp
+* **Thời gian (Timestamp):** 2026-11-11 19:10:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  Giải quyết toàn diện và triệt để các vấn đề người dùng phản hồi:
+  1. **Hiển thị Avatar Bạn Bè 2 Chiều Trên Toàn Bộ Quỹ Đạo & Ứng Dụng:**
+     - Khắc phục lỗi khiến bạn bè sau khi kết nối chỉ hiển thị chữ cái đầu tiên (e.g., chữ 'M', 'N'):
+       * Nâng cấp `_SatelliteItem` trên `HomeScreen` lưu trữ đầy đủ `avatarBase64` và `avatarPath`.
+       * Nâng cấp `_buildSatelliteWidget`: Khi bạn bè chưa gửi ảnh widget, thay vì chỉ vẽ `Text(item.initial)`, hệ thống lập tức sử dụng `AvatarHelper.buildAvatar(...)` để hiển thị ảnh đại diện Base64 thực tế của bạn bè hoặc sticker linh vật độc quyền (Mèo cute, Shiba, Capybara) kèm viền quỹ đạo phát sáng.
+       * Bổ sung luồng tự động đồng bộ avatar ngầm `FriendService.syncAllFriendsAvatars()` từ collection `users/{friendUid}` vào danh bạ và lưu cache ngay khi mở app hoặc khi có thay đổi.
+       * Bổ sung cơ chế `AuthService.updateAvatar()` tự động phát sóng (`broadcastMyNewAvatarToAllFriends`) avatar mới tới subcollection bạn bè của tất cả đối phương trong Firestore theo thời gian thực.
+       * Cho phép người dùng chạm trực tiếp vào avatar của mình trên `FriendsScreen` để đổi ảnh đại diện từ thư viện ảnh máy.
+  2. **Xoá bỏ hoàn toàn thông tin "0 VNĐ" & Nâng cấp Thẻ Open Graph Preview Siêu Đẹp:**
+     - Xoá triệt để chuỗi `0 VND Cloud` / `0 VNĐ` trên toàn bộ tệp thẻ preview và web.
+     - Thay thế icon Flutter cũ trong `hosting_invite/orbit_icon.png` bằng Logo Orbit chính thức và các vệ tinh linh vật đáng yêu.
+     - Tạo mới `hosting_invite/og_preview.png` (1200x630) chất lượng cao bằng engine Skia: Đầy đủ dấu tiếng Việt, bố cục sang trọng, vòng tròn quỹ đạo vàng kim, logo Orbit tỏa hào quang và các bạn nhỏ Mèo/Shiba/Capybara orbiting.
+     - Nâng cấp `hosting_invite/index.html` với font chữ Google Fonts `Plus Jakarta Sans`, chuyển đổi đường dẫn avatar sang tuyệt đối và tự động nhận diện MIME type ảnh Base64.
+     - Triển khai trực tiếp phiên bản hosting mới lên `https://ncnative-bcf6d.web.app` thông qua Firebase CLI.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`lib/screens/home.dart`](../lib/screens/home.dart): Bổ sung `avatarBase64`/`avatarPath` cho `_SatelliteItem`, render `AvatarHelper.buildAvatar` trên các vệ tinh quỹ đạo.
+  - [MODIFY] [`lib/services/friend_service.dart`](../lib/services/friend_service.dart): Thêm `friendsUpdatedNotifier`, cơ chế `syncAllFriendsAvatars()`, `broadcastMyNewAvatarToAllFriends()`.
+  - [MODIFY] [`lib/services/auth_service.dart`](../lib/services/auth_service.dart): Tự động phát sóng avatar mới tới tất cả bạn bè khi đổi avatar.
+  - [MODIFY] [`lib/screens/friends_screen.dart`](../lib/screens/friends_screen.dart): Lắng nghe cập nhật avatar bạn bè, hỗ trợ chạm đổi avatar trực tiếp.
+  - [MODIFY] [`hosting_invite/index.html`](../hosting_invite/index.html): Tích hợp font Plus Jakarta Sans, đường dẫn tuyệt đối, xóa 0 VNĐ.
+  - [MODIFY] [`hosting_invite/og_preview.png`](../hosting_invite/og_preview.png): Banner Open Graph 1200x630 mới toanh, sắc nét, không 0 VNĐ.
+  - [MODIFY] [`tool/generate_og_preview.dart`](../tool/generate_og_preview.dart): Xóa chuỗi 0 VND.
+* **Hiện trạng & Kiểm thử (Current State & Verification):**
+  - `flutter analyze`: 0 issues found.
+  - `flutter test`: 87/87 tests passed.
+  - Firebase Hosting đã deploy thành công 100%.
+
 ### [2026-11-11 17:30:00] - Xuất Bản Chính Thức Phiên Bản Orbit v1.5.1 Dual-Release Lên GitHub Releases
 * **Thời gian (Timestamp):** 2026-11-11 17:30:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

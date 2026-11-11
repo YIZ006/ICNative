@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -8,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'friend_service.dart';
 
 class UserProfile {
   final String uid;
@@ -218,6 +220,7 @@ class AuthService {
 
       currentUserNotifier.value = _currentUser;
       _syncToFirestore();
+      unawaited(FriendService.instance.broadcastMyNewAvatarToAllFriends());
     } catch (e) {
       debugPrint('Error updating avatar: $e');
     }

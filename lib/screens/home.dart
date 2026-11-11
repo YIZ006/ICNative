@@ -194,6 +194,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     // Lắng nghe thông báo bạn bè chấp nhận kết bạn, số lượng bạn bè & ảnh mới nhận từ bạn bè
     FriendService.instance.newFriendAcceptedToastNotifier.addListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.addListener(_onFriendsChanged);
+    FriendService.instance.friendsUpdatedNotifier.addListener(_onFriendsChanged);
     InviteService.instance.inviteEventNotifier.addListener(_onInviteEventReceived);
     InviteService.instance.navigateSoulmateNotifier.addListener(_onNavigateSoulmateRequested);
     SyncService.instance.latestReceivedPhotoNotifier.addListener(_onLatestPhotoReceived);
@@ -418,6 +419,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     WidgetsBinding.instance.removeObserver(this);
     FriendService.instance.newFriendAcceptedToastNotifier.removeListener(_onNewFriendAccepted);
     FriendService.instance.friendsCountNotifier.removeListener(_onFriendsChanged);
+    FriendService.instance.friendsUpdatedNotifier.removeListener(_onFriendsChanged);
     InviteService.instance.inviteEventNotifier.removeListener(_onInviteEventReceived);
     InviteService.instance.navigateSoulmateNotifier.removeListener(_onNavigateSoulmateRequested);
     SyncService.instance.latestReceivedPhotoNotifier.removeListener(_onLatestPhotoReceived);
@@ -1693,6 +1695,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             id: f.uid,
             name: f.displayName,
             initial: initial,
+            avatarBase64: f.avatarBase64,
+            avatarPath: SyncService.friendLatestPhotos[f.uid],
             hasGlow: true,
             color: OrbitColors.buttonPrimary,
           ));
@@ -1766,6 +1770,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             id: f.uid,
             name: f.displayName,
             initial: initial,
+            avatarBase64: f.avatarBase64,
+            avatarPath: SyncService.friendLatestPhotos[f.uid],
           ));
         }
         innerSatellites.add(_SatelliteItem(
@@ -1783,6 +1789,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             id: f.uid,
             name: f.displayName,
             initial: initial,
+            avatarBase64: f.avatarBase64,
+            avatarPath: SyncService.friendLatestPhotos[f.uid],
           ));
         }
         for (int i = 4; i < math.min(realFriends.length, 8); i++) {
@@ -1792,6 +1800,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             id: f.uid,
             name: f.displayName,
             initial: initial,
+            avatarBase64: f.avatarBase64,
+            avatarPath: SyncService.friendLatestPhotos[f.uid],
           ));
         }
         outerSatellites.add(_SatelliteItem(
@@ -2401,16 +2411,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         height: avatarSize,
                         fit: BoxFit.cover,
                       )
-                    : Center(
-                        child: Text(
-                          item.initial,
-                          style: TextStyle(
-                            color: item.isAddButton ? OrbitColors.buttonPrimary : OrbitColors.textLight,
-                            fontWeight: FontWeight.bold,
-                            fontSize: item.isAddButton ? 22.0 : 16.0,
-                          ),
-                        ),
-                      ),
+                    : (item.isAddButton
+                        ? const Center(
+                            child: Text(
+                              '+',
+                              style: TextStyle(
+                                color: OrbitColors.buttonPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22.0,
+                              ),
+                            ),
+                          )
+                        : AvatarHelper.buildAvatar(
+                            avatarBase64: item.avatarBase64,
+                            avatarPath: item.avatarPath,
+                            displayName: item.name,
+                            uid: item.id,
+                            size: avatarSize,
+                            backgroundColor: item.color ?? OrbitColors.buttonPrimary,
+                          )),
               ),
             ),
           ),
@@ -2642,6 +2661,8 @@ class _SatelliteItem {
   final bool isAddButton;
   final bool hasGlow;
   final Color? color;
+  final String? avatarBase64;
+  final String? avatarPath;
 
   _SatelliteItem({
     required this.id,
@@ -2650,6 +2671,8 @@ class _SatelliteItem {
     this.isAddButton = false,
     this.hasGlow = false,
     this.color,
+    this.avatarBase64,
+    this.avatarPath,
   });
 }
 

@@ -106,6 +106,9 @@ class FriendService {
 
   final ValueNotifier<int> friendsCountNotifier = ValueNotifier<int>(0);
 
+  /// Thông báo mỗi khi danh sách bạn bè hoặc avatar của bạn bè có thay đổi mới
+  final ValueNotifier<int> friendsUpdatedNotifier = ValueNotifier<int>(0);
+
   /// Danh sách lời mời kết bạn đang chờ người dùng phản hồi
   final ValueNotifier<List<FriendRequest>> pendingRequestsNotifier =
       ValueNotifier<List<FriendRequest>>([]);
@@ -137,6 +140,7 @@ class FriendService {
 
     if (AuthService.isCloudConfigured) {
       startRealtimeSync();
+      unawaited(syncAllFriendsAvatars());
     }
   }
 
@@ -162,13 +166,28 @@ class FriendService {
 
         final List<Friend> updated = [];
         for (var doc in snapshot.docs) {
-          updated.add(Friend.fromMap(doc.data()));
+          final incoming = Friend.fromMap(doc.data());
+          final existing = _friends.firstWhere(
+            (x) => x.uid == incoming.uid,
+            orElse: () => incoming,
+          );
+          final b64 = (incoming.avatarBase64 != null && incoming.avatarBase64!.isNotEmpty)
+              ? incoming.avatarBase64
+              : existing.avatarBase64;
+          updated.add(Friend(
+            uid: incoming.uid,
+            displayName: incoming.displayName,
+            addedAt: incoming.addedAt,
+            avatarBase64: b64,
+          ));
         }
         _friends.clear();
         _friends.addAll(updated);
         friendsCountNotifier.value = _friends.length;
+        friendsUpdatedNotifier.value++;
         await _saveToCache();
         debugPrint('🪐 Realtime friends updated: ${_friends.length} friends on orbit');
+        unawaited(syncAllFriendsAvatars());
       },
       onError: (e) {
         debugPrint('Realtime friends sync error: $e');
@@ -332,21 +351,96 @@ class FriendService {
       final doc = await FirebaseFirestore.instance.collection('users').doc(friendUid).get().timeout(const Duration(seconds: 4));
       if (doc.exists && doc.data() != null) {
         final b64 = doc.data()!['avatarBase64'] as String?;
-        if (b64 != null && b64.isNotEmpty) {
-          final idx = _friends.indexWhere((f) => f.uid == friendUid);
-          if (idx != -1 && _friends[idx].avatarBase64 != b64) {
+        final cloudName = doc.data()!['displayName'] as String?;
+        final idx = _friends.indexWhere((f) => f.uid == friendUid);
+        if (idx != -1) {
+          bool updated = false;
+          String curName = _friends[idx].displayName;
+          String? curB64 = _friends[idx].avatarBase64;
+          if (cloudName != null && cloudName.trim().isNotEmpty && cloudName != curName) {
+            curName = cloudName.trim();
+            updated = true;
+          }
+          if (b64 != null && b64.isNotEmpty && b64 != curB64) {
+            curB64 = b64;
+            updated = true;
+          }
+          if (updated) {
             _friends[idx] = Friend(
               uid: _friends[idx].uid,
-              displayName: _friends[idx].displayName,
+              displayName: curName,
               addedAt: _friends[idx].addedAt,
-              avatarBase64: b64,
+              avatarBase64: curB64,
             );
             await _saveToCache();
+            friendsUpdatedNotifier.value++;
             friendsCountNotifier.value = _friends.length;
           }
         }
       }
     } catch (_) {}
+  }
+
+  /// Đồng bộ tự động toàn bộ avatar của tất cả bạn bè từ collection `users`
+  Future<void> syncAllFriendsAvatars() async {
+    if (!AuthService.isCloudConfigured || _friends.isEmpty) return;
+    final myUid = AuthService.instance.currentUser?.uid;
+    bool changed = false;
+    for (int i = 0; i < _friends.length; i++) {
+      final f = _friends[i];
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(f.uid).get().timeout(const Duration(seconds: 3));
+        if (doc.exists && doc.data() != null) {
+          final b64 = doc.data()!['avatarBase64'] as String?;
+          final cloudName = doc.data()!['displayName'] as String?;
+          if ((b64 != null && b64.isNotEmpty && b64 != f.avatarBase64) ||
+              (cloudName != null && cloudName.trim().isNotEmpty && cloudName != f.displayName)) {
+            _friends[i] = Friend(
+              uid: f.uid,
+              displayName: (cloudName != null && cloudName.trim().isNotEmpty) ? cloudName.trim() : f.displayName,
+              addedAt: f.addedAt,
+              avatarBase64: b64 ?? f.avatarBase64,
+            );
+            changed = true;
+            if (myUid != null && b64 != null) {
+              FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(myUid)
+                  .collection('friends')
+                  .doc(f.uid)
+                  .set({'avatarBase64': b64, 'displayName': _friends[i].displayName}, SetOptions(merge: true))
+                  .catchError((_) {});
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    if (changed) {
+      await _saveToCache();
+      friendsUpdatedNotifier.value++;
+    }
+  }
+
+  /// Phát sóng avatar mới của bản thân tới tất cả bạn bè trong danh bạ
+  Future<void> broadcastMyNewAvatarToAllFriends() async {
+    final myProfile = AuthService.instance.currentUser;
+    if (myProfile == null || !AuthService.isCloudConfigured || _friends.isEmpty) return;
+    final b64 = myProfile.avatarBase64;
+    if (b64 == null || b64.isEmpty) return;
+
+    for (final f in _friends) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(f.uid)
+            .collection('friends')
+            .doc(myProfile.uid)
+            .set({
+          'avatarBase64': b64,
+          'displayName': myProfile.displayName,
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
   }
 
   /// Chấp nhận lời mời kết bạn (Kết nối 2 chiều trên vòng tròn quỹ đạo của cả 2)
