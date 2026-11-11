@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -7,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/friend_service.dart';
 import '../services/invite_service.dart';
 import '../services/secret_photo_service.dart';
+import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'scratch_photo_screen.dart';
 import 'soulmate_screen.dart';
@@ -255,175 +258,334 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   ),
 
                   const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: OrbitColors.buttonPrimary,
-                          borderRadius: BorderRadius.circular(14),
+                  // User Profile info with Avatar in orbital ring
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      ).then((_) {
+                        if (mounted) setState(() {});
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: OrbitColors.surfaceCream,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
+                          width: 1.5,
                         ),
-                        child: Text(
-                          user?.displayName ?? 'Tôi',
-                          style: const TextStyle(
-                            color: OrbitColors.textLight,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Avatar circle
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: OrbitColors.buttonPrimary,
+                              border: Border.all(color: const Color(0xFFDDA15E), width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.2),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: Builder(
+                                builder: (_) {
+                                  final u = user;
+                                  if (u != null && u.avatarPath != null && File(u.avatarPath!).existsSync()) {
+                                    return Image.file(
+                                      File(u.avatarPath!),
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                    );
+                                  }
+                                  if (u != null && u.avatarBase64 != null && u.avatarBase64!.isNotEmpty) {
+                                    try {
+                                      return Image.memory(
+                                        base64Decode(u.avatarBase64!),
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
+                                      );
+                                    } catch (_) {}
+                                  }
+                                  return const Center(
+                                    child: Text('🐾', style: TextStyle(fontSize: 22)),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    user?.displayName ?? 'Tôi',
+                                    style: const TextStyle(
+                                      color: OrbitColors.deepOlive,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit_rounded, size: 13, color: OrbitColors.buttonPrimary),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                '(UID: ${user?.uid ?? ""})',
+                                style: TextStyle(
+                                  color: OrbitColors.deepOlive.withValues(alpha: 0.6),
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '(UID: ${user?.uid ?? ""})',
-                        style: TextStyle(
-                          color: OrbitColors.deepOlive.withValues(alpha: 0.5),
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),
                   Divider(color: OrbitColors.buttonPrimary.withValues(alpha: 0.2), height: 1),
                   const SizedBox(height: 14),
 
-                  // Phần Kết Bạn Qua Link (Nối trực tiếp với tài khoản hiện tại)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.link_rounded, size: 16, color: OrbitColors.buttonPrimary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'LINK KẾT BẠN CỦA TÔI (BẤM VÀO LÀ KẾT BẠN)',
-                        style: TextStyle(
-                          color: OrbitColors.deepOlive.withValues(alpha: 0.85),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
-                        ),
+                  // Thẻ Chia Sẻ Kết Bạn Orbit (Link kết bạn đẹp mắt có App Icon)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFBF4DC), Color(0xFFF3E9C6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      await InviteService.instance.copyInviteLinkToClipboard();
-                      if (mounted) {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('✅ Đã sao chép link kết bạn! Gửi cho bạn bè bấm vào là kết bạn ngay.'),
-                            backgroundColor: OrbitColors.buttonPrimary,
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: OrbitColors.surfaceCream,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: OrbitColors.buttonPrimary.withValues(alpha: 0.35),
-                        ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: OrbitColors.buttonPrimary.withValues(alpha: 0.4),
+                        width: 1.5,
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              myInviteLink,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: OrbitColors.deepOlive,
-                                fontSize: 11.5,
-                                fontFamily: 'monospace',
-                                decoration: TextDecoration.underline,
+                      boxShadow: [
+                        BoxShadow(
+                          color: OrbitColors.deepOlive.withValues(alpha: 0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            // App Icon
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFFDDA15E), width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFBC6C25).withValues(alpha: 0.2),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: Image.asset(
+                                  'assets/icons/app_logo_orbit.png',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.public_rounded,
+                                    color: OrbitColors.buttonPrimary,
+                                    size: 26,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.copy_rounded,
-                            size: 16,
-                            color: OrbitColors.buttonPrimary,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 6,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: OrbitColors.buttonPrimary,
-                            foregroundColor: OrbitColors.textLight,
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: OrbitColors.buttonPrimary,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          'ORBIT WIDGET 🪐',
+                                          style: TextStyle(
+                                            color: OrbitColors.textLight,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Bấm là kết bạn ngay',
+                                        style: TextStyle(
+                                          color: OrbitColors.deepOlive.withValues(alpha: 0.7),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  const Text(
+                                    'Link Mời Kết Nối Vòng Tròn',
+                                    style: TextStyle(
+                                      color: OrbitColors.deepOlive,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            elevation: 2,
-                          ),
-                          onPressed: () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final shared = await InviteService.instance.shareInviteLink();
-                            if (!shared && mounted) {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text('✅ Đã sao chép link kết bạn vào bộ nhớ tạm!'),
-                                  backgroundColor: OrbitColors.buttonPrimary,
-                                ),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.share_rounded, size: 18),
-                          label: const Text(
-                            'GỬI LINK KẾT BẠN',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
-                          ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 4,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: OrbitColors.deepOlive,
-                            side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            backgroundColor: OrbitColors.surfaceCream,
-                          ),
-                          onPressed: () async {
+                        const SizedBox(height: 10),
+                        // Link display bar
+                        GestureDetector(
+                          onTap: () async {
                             final messenger = ScaffoldMessenger.of(context);
                             await InviteService.instance.copyInviteLinkToClipboard();
                             if (mounted) {
                               messenger.showSnackBar(
                                 const SnackBar(
-                                  content: Text('✅ Đã sao chép link kết bạn!'),
+                                  content: Text('✅ Đã sao chép link kết bạn! Dán vào Messenger/Zalo gửi cho bạn bè nhé.'),
                                   backgroundColor: OrbitColors.buttonPrimary,
                                   duration: Duration(seconds: 2),
                                 ),
                               );
                             }
                           },
-                          icon: const Icon(Icons.content_copy_rounded, size: 16),
-                          label: const Text(
-                            'Sao chép',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: OrbitColors.buttonPrimary.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.link_rounded, size: 16, color: OrbitColors.buttonPrimary),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    myInviteLink,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: OrbitColors.deepOlive,
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.copy_rounded, size: 14, color: OrbitColors.buttonPrimary),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 6,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: OrbitColors.buttonPrimary,
+                                  foregroundColor: OrbitColors.textLight,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  elevation: 1,
+                                ),
+                                onPressed: () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  final shared = await InviteService.instance.shareInviteLink();
+                                  if (!shared && mounted) {
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text('✅ Đã sao chép link kết bạn vào bộ nhớ tạm!'),
+                                        backgroundColor: OrbitColors.buttonPrimary,
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.share_rounded, size: 16),
+                                label: const Text(
+                                  'GỬI LINK CHO BẠN',
+                                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 4,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: OrbitColors.deepOlive,
+                                  backgroundColor: OrbitColors.surfaceCream,
+                                  side: const BorderSide(color: OrbitColors.buttonPrimary, width: 1.5),
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  await InviteService.instance.copyInviteLinkToClipboard();
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text('✅ Đã sao chép link kết bạn!'),
+                                        backgroundColor: OrbitColors.buttonPrimary,
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.content_copy_rounded, size: 14),
+                                label: const Text(
+                                  'Sao chép',
+                                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -649,19 +811,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           ),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: const Color(0xFFFFD54F),
-                                child: Text(
-                                  req.fromName.isNotEmpty
-                                      ? req.fromName.substring(0, 1).toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: OrbitColors.deepOlive,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
+                              Builder(
+                                builder: (_) {
+                                  if (req.fromAvatarBase64 != null && req.fromAvatarBase64!.isNotEmpty) {
+                                    try {
+                                      return CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: const Color(0xFFFFD54F),
+                                        backgroundImage: MemoryImage(base64Decode(req.fromAvatarBase64!)),
+                                      );
+                                    } catch (_) {}
+                                  }
+                                  return CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: const Color(0xFFFFD54F),
+                                    child: Text(
+                                      req.fromName.isNotEmpty
+                                          ? req.fromName.substring(0, 1).toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: OrbitColors.deepOlive,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -818,19 +993,34 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     ),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: OrbitColors.buttonPrimary,
-                          child: Text(
-                            friend.displayName.isNotEmpty
-                                ? friend.displayName.substring(0, 1).toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: OrbitColors.textLight,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
+                        Builder(
+                          builder: (_) {
+                            if (friend.avatarBase64 != null && friend.avatarBase64!.isNotEmpty) {
+                              try {
+                                return CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: OrbitColors.buttonPrimary,
+                                  backgroundImage: MemoryImage(base64Decode(friend.avatarBase64!)),
+                                );
+                              } catch (_) {}
+                            } else {
+                              FriendService.instance.fetchAndCacheFriendAvatar(friend.uid);
+                            }
+                            return CircleAvatar(
+                              radius: 20,
+                              backgroundColor: OrbitColors.buttonPrimary,
+                              child: Text(
+                                friend.displayName.isNotEmpty
+                                    ? friend.displayName.substring(0, 1).toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: OrbitColors.textLight,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(width: 12),
                         Expanded(

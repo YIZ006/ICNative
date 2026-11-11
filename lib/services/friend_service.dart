@@ -10,11 +10,13 @@ class Friend {
   final String uid;
   final String displayName;
   final int addedAt;
+  final String? avatarBase64;
 
   Friend({
     required this.uid,
     required this.displayName,
     required this.addedAt,
+    this.avatarBase64,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +24,8 @@ class Friend {
       'uid': uid,
       'displayName': displayName,
       'addedAt': addedAt,
+      if (avatarBase64 != null && avatarBase64!.isNotEmpty)
+        'avatarBase64': avatarBase64,
     };
   }
 
@@ -30,6 +34,7 @@ class Friend {
       uid: map['uid'] as String? ?? '',
       displayName: map['displayName'] as String? ?? 'Bạn bè',
       addedAt: (map['addedAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      avatarBase64: map['avatarBase64'] as String?,
     );
   }
 }
@@ -42,6 +47,7 @@ class FriendRequest {
   final String toName;
   final String status; // 'pending', 'accepted', 'declined'
   final int createdAt;
+  final String? fromAvatarBase64;
 
   FriendRequest({
     required this.id,
@@ -51,6 +57,7 @@ class FriendRequest {
     required this.toName,
     required this.status,
     required this.createdAt,
+    this.fromAvatarBase64,
   });
 
   Map<String, dynamic> toMap() {
@@ -62,6 +69,8 @@ class FriendRequest {
       'toName': toName,
       'status': status,
       'createdAt': createdAt,
+      if (fromAvatarBase64 != null && fromAvatarBase64!.isNotEmpty)
+        'fromAvatarBase64': fromAvatarBase64,
     };
   }
 
@@ -74,6 +83,7 @@ class FriendRequest {
       toName: map['toName'] as String? ?? '',
       status: map['status'] as String? ?? 'pending',
       createdAt: (map['createdAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      fromAvatarBase64: map['fromAvatarBase64'] as String?,
     );
   }
 }
@@ -247,37 +257,59 @@ class FriendService {
     final firestore = FirebaseFirestore.instance;
     final now = DateTime.now().millisecondsSinceEpoch;
 
+    // Lấy trước avatarBase64 của bạn bè nếu họ đã lưu trên Firestore
+    String? friendAvatarBase64;
+    try {
+      final friendDoc = await firestore.collection('users').doc(friendUid).get().timeout(const Duration(seconds: 3));
+      if (friendDoc.exists && friendDoc.data() != null) {
+        friendAvatarBase64 = friendDoc.data()!['avatarBase64'] as String?;
+      }
+    } catch (_) {}
+
     try {
       // 2. Kết nối trực tiếp 2 chiều trên Cloud Firestore (WriteBatch)
       // Khi A quét mã QR của B, lập tức cả 2 trở thành bạn bè trên vòng tròn Orbit của nhau
       final batch = firestore.batch();
 
       // Thêm B vào danh sách bạn bè của A
+      final friendPayloadA = <String, dynamic>{
+        'uid': friendUid,
+        'displayName': friendName,
+        'addedAt': now,
+      };
+      if (friendAvatarBase64 != null && friendAvatarBase64.isNotEmpty) {
+        friendPayloadA['avatarBase64'] = friendAvatarBase64;
+      }
       batch.set(
         firestore.collection('users').doc(myProfile.uid).collection('friends').doc(friendUid),
-        {
-          'uid': friendUid,
-          'displayName': friendName,
-          'addedAt': now,
-        },
+        friendPayloadA,
         SetOptions(merge: true),
       );
 
       // Thêm A vào danh sách bạn bè của B
+      final friendPayloadB = <String, dynamic>{
+        'uid': myProfile.uid,
+        'displayName': myProfile.displayName,
+        'addedAt': now,
+      };
+      if (myProfile.avatarBase64 != null && myProfile.avatarBase64!.isNotEmpty) {
+        friendPayloadB['avatarBase64'] = myProfile.avatarBase64;
+      }
       batch.set(
         firestore.collection('users').doc(friendUid).collection('friends').doc(myProfile.uid),
-        {
-          'uid': myProfile.uid,
-          'displayName': myProfile.displayName,
-          'addedAt': now,
-        },
+        friendPayloadB,
         SetOptions(merge: true),
       );
 
       await batch.commit().timeout(const Duration(seconds: 4));
 
       // Cập nhật trạng thái cục bộ để UI phản hồi tức thì
-      final friendObj = Friend(uid: friendUid, displayName: friendName, addedAt: now);
+      final friendObj = Friend(
+        uid: friendUid,
+        displayName: friendName,
+        addedAt: now,
+        avatarBase64: friendAvatarBase64,
+      );
       if (!_friends.any((f) => f.uid == friendUid)) {
         _friends.add(friendObj);
         friendsCountNotifier.value = _friends.length;
@@ -293,6 +325,30 @@ class FriendService {
     }
   }
 
+  /// Lấy avatar Base64 của bạn bè từ Firestore nếu chưa có trong cache cục bộ
+  Future<void> fetchAndCacheFriendAvatar(String friendUid) async {
+    if (!AuthService.isCloudConfigured) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(friendUid).get().timeout(const Duration(seconds: 4));
+      if (doc.exists && doc.data() != null) {
+        final b64 = doc.data()!['avatarBase64'] as String?;
+        if (b64 != null && b64.isNotEmpty) {
+          final idx = _friends.indexWhere((f) => f.uid == friendUid);
+          if (idx != -1 && _friends[idx].avatarBase64 != b64) {
+            _friends[idx] = Friend(
+              uid: _friends[idx].uid,
+              displayName: _friends[idx].displayName,
+              addedAt: _friends[idx].addedAt,
+              avatarBase64: b64,
+            );
+            await _saveToCache();
+            friendsCountNotifier.value = _friends.length;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   /// Chấp nhận lời mời kết bạn (Kết nối 2 chiều trên vòng tròn quỹ đạo của cả 2)
   Future<bool> acceptFriendRequest(FriendRequest req) async {
     final myProfile = AuthService.instance.currentUser;
@@ -305,6 +361,7 @@ class FriendService {
       uid: req.fromUid,
       displayName: req.fromName,
       addedAt: now,
+      avatarBase64: req.fromAvatarBase64,
     );
     if (!_friends.any((f) => f.uid == req.fromUid)) {
       _friends.add(friendObj);
@@ -333,16 +390,20 @@ class FriendService {
           .timeout(const Duration(seconds: 3));
 
       // 4. Thêm tôi vào danh sách bạn bè của người gửi (Firestore)
+      final myFriendPayload = <String, dynamic>{
+        'uid': myProfile.uid,
+        'displayName': myProfile.displayName,
+        'addedAt': now,
+      };
+      if (myProfile.avatarBase64 != null && myProfile.avatarBase64!.isNotEmpty) {
+        myFriendPayload['avatarBase64'] = myProfile.avatarBase64;
+      }
       await firestore
           .collection('users')
           .doc(req.fromUid)
           .collection('friends')
           .doc(myProfile.uid)
-          .set({
-        'uid': myProfile.uid,
-        'displayName': myProfile.displayName,
-        'addedAt': now,
-      }, SetOptions(merge: true))
+          .set(myFriendPayload, SetOptions(merge: true))
           .timeout(const Duration(seconds: 3));
 
       debugPrint('🤝 Mutual friend connection established with ${req.fromName}!');

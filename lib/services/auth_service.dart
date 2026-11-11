@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -14,6 +15,7 @@ class UserProfile {
   final String secretToken;
   final int createdAt;
   final String? avatarPath;
+  final String? avatarBase64;
 
   UserProfile({
     required this.uid,
@@ -21,6 +23,7 @@ class UserProfile {
     required this.secretToken,
     required this.createdAt,
     this.avatarPath,
+    this.avatarBase64,
   });
 
   Map<String, dynamic> toMap() {
@@ -30,6 +33,7 @@ class UserProfile {
       'secretToken': secretToken,
       'createdAt': createdAt,
       'avatarPath': avatarPath,
+      'avatarBase64': avatarBase64,
     };
   }
 
@@ -40,6 +44,7 @@ class UserProfile {
       secretToken: map['secretToken'] as String? ?? '',
       createdAt: map['createdAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
       avatarPath: map['avatarPath'] as String?,
+      avatarBase64: map['avatarBase64'] as String?,
     );
   }
 }
@@ -74,6 +79,7 @@ class AuthService {
   static const _prefSecretKey = 'iconnative_secret';
   static const _prefCreatedKey = 'iconnative_created';
   static const _prefAvatarKey = 'iconnative_avatar';
+  static const _prefAvatarBase64Key = 'iconnative_avatar_b64';
 
   static const List<String> _cuteNames = [
     'Capybara Vui Vẻ',
@@ -88,6 +94,23 @@ class AuthService {
     'Chim Cánh Cụt Cute',
   ];
 
+  /// Nén và chuyển ảnh sang Base64 chuẩn JPEG 160x160 (chỉ ~8KB, 0 VNĐ trên Firestore)
+  static Future<String?> encodeAvatarToBase64(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) return null;
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+      final resized = img.copyResize(decoded, width: 160, height: 160);
+      final jpgBytes = img.encodeJpg(resized, quality: 78);
+      return base64Encode(jpgBytes);
+    } catch (e) {
+      debugPrint('Encode avatar Base64 error: $e');
+      return null;
+    }
+  }
+
   /// Initialize or load persistent user identity
   Future<UserProfile> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -95,12 +118,25 @@ class AuthService {
 
     if (uid != null && uid.isNotEmpty) {
       final savedAvatar = prefs.getString(_prefAvatarKey);
+      String? savedAvatarB64 = prefs.getString(_prefAvatarBase64Key);
+
+      // Nếu có ảnh trên máy mà chưa có Base64 thì sinh ngay và lưu cache
+      if ((savedAvatarB64 == null || savedAvatarB64.isEmpty) &&
+          savedAvatar != null &&
+          File(savedAvatar).existsSync()) {
+        savedAvatarB64 = await encodeAvatarToBase64(savedAvatar);
+        if (savedAvatarB64 != null) {
+          await prefs.setString(_prefAvatarBase64Key, savedAvatarB64);
+        }
+      }
+
       _currentUser = UserProfile(
         uid: uid,
         displayName: prefs.getString(_prefNameKey) ?? 'Bạn Vui Vẻ',
         secretToken: prefs.getString(_prefSecretKey) ?? '',
         createdAt: prefs.getInt(_prefCreatedKey) ?? DateTime.now().millisecondsSinceEpoch,
         avatarPath: (savedAvatar != null && File(savedAvatar).existsSync()) ? savedAvatar : null,
+        avatarBase64: savedAvatarB64,
       );
     } else {
       _currentUser = await _createNewIdentity(prefs);
@@ -146,6 +182,7 @@ class AuthService {
       secretToken: _currentUser!.secretToken,
       createdAt: _currentUser!.createdAt,
       avatarPath: _currentUser!.avatarPath,
+      avatarBase64: _currentUser!.avatarBase64,
     );
 
     currentUserNotifier.value = _currentUser;
@@ -160,9 +197,15 @@ class AuthService {
       final targetPath = '${dir.path}/avatar_${_currentUser!.uid}_${DateTime.now().millisecondsSinceEpoch}.png';
 
       final savedFile = await File(newImagePath).copy(targetPath);
+      final avatarB64 = await encodeAvatarToBase64(savedFile.path);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefAvatarKey, savedFile.path);
+      if (avatarB64 != null) {
+        await prefs.setString(_prefAvatarBase64Key, avatarB64);
+      } else {
+        await prefs.remove(_prefAvatarBase64Key);
+      }
 
       _currentUser = UserProfile(
         uid: _currentUser!.uid,
@@ -170,6 +213,7 @@ class AuthService {
         secretToken: _currentUser!.secretToken,
         createdAt: _currentUser!.createdAt,
         avatarPath: savedFile.path,
+        avatarBase64: avatarB64,
       );
 
       currentUserNotifier.value = _currentUser;
@@ -185,12 +229,16 @@ class AuthService {
     try {
       if (!isCloudConfigured) return;
       final docRef = FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid);
-      await docRef.set({
+      final payload = <String, dynamic>{
         'uid': _currentUser!.uid,
         'displayName': _currentUser!.displayName,
         'createdAt': _currentUser!.createdAt,
         'lastActive': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
+      };
+      if (_currentUser!.avatarBase64 != null && _currentUser!.avatarBase64!.isNotEmpty) {
+        payload['avatarBase64'] = _currentUser!.avatarBase64;
+      }
+      await docRef.set(payload, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
     } catch (e) {
       debugPrint('Firestore User Sync: $e');
     }
@@ -245,6 +293,7 @@ class AuthService {
         secretToken: secret,
         createdAt: createdAt,
         avatarPath: prefs.getString(_prefAvatarKey),
+        avatarBase64: prefs.getString(_prefAvatarBase64Key),
       );
 
       currentUserNotifier.value = _currentUser;

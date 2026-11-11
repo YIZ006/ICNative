@@ -3,11 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Kết Bạn Trên Orbit Widget 🪐</title>
-  <meta property="og:title" content="Lời mời kết bạn trên Orbit Widget 🪐" />
-  <meta property="og:description" content="Bấm vào liên kết này để mở ứng dụng Orbit và kết nối thẳng vào vòng tròn Widget của mình nhé!" />
+  <title>Lời Mời Kết Bạn Orbit Widget 🪐</title>
+
+  <meta name="description" content="Chạm để mở ứng dụng Orbit và kết nối thẳng vào Widget màn hình chính của bạn bè!" />
+
+  <!-- Open Graph / Facebook / Messenger / Zalo -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Orbit Widget" />
+  <meta property="og:title" content="Lời mời kết bạn trên Orbit Widget 🪐" />
+  <meta property="og:description" content="Chạm để mở ứng dụng Orbit và kết nối thẳng vào Widget màn hình chính của bạn bè!" />
+  <meta property="og:url" content="https://ncnative-bcf6d.web.app/invite" />
+  <meta property="og:image" content="https://ncnative-bcf6d.web.app/og_preview.png" />
+  <meta property="og:image:secure_url" content="https://ncnative-bcf6d.web.app/og_preview.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Orbit Widget - Kết nối bạn bè & chia sẻ khoảnh khắc" />
+  <link rel="image_src" href="https://ncnative-bcf6d.web.app/og_preview.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Lời mời kết bạn trên Orbit Widget 🪐" />
+  <meta name="twitter:description" content="Chạm để mở ứng dụng Orbit và kết nối thẳng vào Widget màn hình chính của bạn bè!" />
+  <meta name="twitter:image" content="https://ncnative-bcf6d.web.app/og_preview.png" />
+
+  <!-- App Icons & Theme -->
   <meta name="theme-color" content="#FEFAE0" />
+  <link rel="icon" type="image/png" sizes="192x192" href="https://ncnative-bcf6d.web.app/orbit_icon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="https://ncnative-bcf6d.web.app/orbit_icon.png" />
+  <link rel="shortcut icon" href="https://ncnative-bcf6d.web.app/favicon.png" />
+
   <style>
     * {
       box-sizing: border-box;
@@ -23,41 +48,61 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
     }
     .card {
       width: 100%;
-      max-width: 400px;
+      max-width: 410px;
       background: #FAF3DD;
       border: 2px solid #606C38;
-      border-radius: 28px;
-      padding: 28px 22px;
+      border-radius: 30px;
+      padding: 24px 20px;
       text-align: center;
-      box-shadow: 0 10px 28px rgba(40, 54, 24, 0.12);
+      box-shadow: 0 12px 32px rgba(40, 54, 24, 0.12);
+      position: relative;
     }
-    .badge-top {
-      display: inline-block;
-      background: rgba(96, 108, 56, 0.14);
+    .app-brand-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(96, 108, 56, 0.12);
+      padding: 5px 14px 5px 8px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(96, 108, 56, 0.2);
+    }
+    .app-brand-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      object-fit: cover;
+      box-shadow: 0 2px 4px rgba(40, 54, 24, 0.2);
+    }
+    .app-brand-text {
       color: #606C38;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 800;
       letter-spacing: 0.6px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      margin-bottom: 18px;
       text-transform: uppercase;
     }
-    .orbit-ring {
-      width: 104px;
-      height: 104px;
-      margin: 0 auto 16px;
-      border-radius: 50%;
-      border: 2.5px dashed #DDA15E;
+    .orbit-container {
+      width: 116px;
+      height: 116px;
+      margin: 0 auto 14px;
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
-      animation: spinSlow 18s linear infinite;
+    }
+    .orbit-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2.5px dashed #DDA15E;
+      animation: spinSlow 16s linear infinite;
     }
     .orbit-dot {
       width: 14px;
@@ -68,29 +113,38 @@
       top: -7px;
       left: 50%;
       transform: translateX(-50%);
-      box-shadow: 0 0 8px rgba(188, 108, 37, 0.6);
-    }
-    .avatar {
-      width: 76px;
-      height: 76px;
-      border-radius: 50%;
-      background: #606C38;
-      color: #FEFAE0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      font-weight: 900;
-      box-shadow: 0 4px 12px rgba(40, 54, 24, 0.25);
-      animation: spinReverse 18s linear infinite;
+      box-shadow: 0 0 10px rgba(188, 108, 37, 0.7);
     }
     @keyframes spinSlow {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-    @keyframes spinReverse {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(-360deg); }
+    .avatar-wrapper {
+      position: relative;
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid #606C38;
+      box-shadow: 0 6px 16px rgba(40, 54, 24, 0.22);
+      background: #606C38;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .avatar-initial {
+      color: #FEFAE0;
+      font-size: 34px;
+      font-weight: 900;
+      display: none;
+      line-height: 1;
     }
     .name-pill {
       display: inline-block;
@@ -100,19 +154,39 @@
       font-weight: 800;
       padding: 6px 18px;
       border-radius: 16px;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
+      box-shadow: 0 2px 8px rgba(40, 54, 24, 0.18);
     }
     .uid-text {
       font-family: monospace;
       font-size: 12px;
       color: rgba(40, 54, 24, 0.6);
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .desc {
-      font-size: 14px;
-      line-height: 1.5;
+      font-size: 13.5px;
+      line-height: 1.45;
       color: rgba(40, 54, 24, 0.85);
-      margin-bottom: 22px;
+      margin-bottom: 18px;
+    }
+    .inapp-hint {
+      display: none;
+      background: #FFF3CD;
+      border: 1px solid #FFE082;
+      color: #664D03;
+      border-radius: 16px;
+      padding: 11px 13px;
+      font-size: 12px;
+      margin-bottom: 14px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    .status-box {
+      font-size: 12px;
+      color: #BC6C25;
+      font-weight: 700;
+      min-height: 18px;
+      margin-bottom: 12px;
     }
     .btn-primary {
       display: flex;
@@ -122,9 +196,9 @@
       width: 100%;
       background: #606C38;
       color: #FEFAE0;
-      font-size: 16px;
+      font-size: 15.5px;
       font-weight: 800;
-      padding: 15px 18px;
+      padding: 14px 18px;
       border-radius: 22px;
       border: none;
       text-decoration: none;
@@ -154,52 +228,46 @@
       cursor: pointer;
       margin-bottom: 10px;
     }
-    .status-box {
-      font-size: 12px;
-      color: #BC6C25;
-      font-weight: 600;
-      min-height: 18px;
-      margin-bottom: 12px;
-    }
     .divider {
       height: 1px;
       background: rgba(96, 108, 56, 0.2);
-      margin: 16px 0;
+      margin: 14px 0;
     }
     .footer-note {
       font-size: 12px;
       color: rgba(40, 54, 24, 0.65);
-      line-height: 1.45;
-    }
-    .inapp-hint {
-      display: none;
-      background: #FFF3CD;
-      border: 1px solid #FFECB5;
-      color: #664D03;
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-size: 12px;
-      margin-bottom: 14px;
       line-height: 1.4;
-      text-align: left;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="badge-top">🪐 LỜI MỜI KẾT BẠN ORBIT</div>
-    <div class="orbit-ring">
-      <div class="orbit-dot"></div>
-      <div class="avatar" id="avatarInitial">O</div>
+    <!-- App Brand Top Badge -->
+    <div class="app-brand-bar">
+      <img src="orbit_icon.png" class="app-brand-icon" alt="Orbit Icon" />
+      <span class="app-brand-text">ORBIT WIDGET 🪐</span>
     </div>
+
+    <!-- Orbit Avatar -->
+    <div class="orbit-container">
+      <div class="orbit-ring">
+        <div class="orbit-dot"></div>
+      </div>
+      <div class="avatar-wrapper">
+        <img id="avatarImg" class="avatar-img" src="avatar_cat.jpg" alt="Avatar" />
+        <div class="avatar-initial" id="avatarInitial">O</div>
+      </div>
+    </div>
+
     <div class="name-pill" id="friendName">Bạn Bè Orbit</div>
     <div class="uid-text" id="friendUid">(UID: đang tải...)</div>
     <p class="desc" id="inviteDesc">
       Muốn kết nối với bạn trên vòng tròn <b>Orbit Widget</b> để chia sẻ khoảnh khắc trực tiếp lên màn hình chính!
     </p>
 
+    <!-- In-App Browser Hint for Messenger / Zalo -->
     <div class="inapp-hint" id="inAppHint">
-      💡 <b>Mẹo nhỏ:</b> Nếu trình duyệt trong Zalo/Messenger chặn mở ứng dụng, hãy bấm <b>"Sao chép mã kết bạn"</b> bên dưới rồi mở app <b>Orbit</b> (app sẽ tự động nhận lời mời!), hoặc bấm dấu <b>⋯ góc trên → Mở bằng trình duyệt</b>.
+      💡 <b>Mẹo mở nhanh:</b> Nếu Messenger/Zalo chặn mở ứng dụng, hãy bấm nút <b>"Sao chép mã kết bạn"</b> bên dưới rồi mở app <b>Orbit</b> (app sẽ tự động nhận lời mời!), hoặc bấm dấu <b>⋯ góc trên → Mở bằng trình duyệt</b> nhé.
     </div>
 
     <div class="status-box" id="statusText">Đang tìm ứng dụng Orbit trên máy của bạn...</div>
@@ -214,7 +282,7 @@
 
     <div class="divider"></div>
 
-    <p class="footer-note" style="margin-bottom: 10px;">
+    <p class="footer-note" style="margin-bottom: 8px;">
       Chưa cài ứng dụng <b>Orbit</b> trên điện thoại?
     </p>
     <a class="btn-secondary" href="https://github.com/YIZ006/ICNative/releases/latest" target="_blank" rel="noopener">
@@ -237,28 +305,68 @@
 
     const nameEl = document.getElementById('friendName');
     const uidEl = document.getElementById('friendUid');
-    const avatarEl = document.getElementById('avatarInitial');
+    const avatarImgEl = document.getElementById('avatarImg');
+    const avatarInitEl = document.getElementById('avatarInitial');
     const statusEl = document.getElementById('statusText');
     const inAppHintEl = document.getElementById('inAppHint');
+
+    function selectDefaultAvatar(displayName) {
+      const lower = (displayName || '').toLowerCase();
+      if (lower.includes('mèo') || lower.includes('cat') || lower.includes('meo')) {
+        return 'avatar_cat.jpg';
+      }
+      if (lower.includes('cún') || lower.includes('chó') || lower.includes('shiba') || lower.includes('dog')) {
+        return 'avatar_dog.jpg';
+      }
+      if (lower.includes('capybara')) {
+        return 'avatar_capybara.jpg';
+      }
+      return 'orbit_icon.png';
+    }
+
+    function setAvatarImage(srcUrl) {
+      avatarImgEl.src = srcUrl;
+      avatarImgEl.style.display = 'block';
+      avatarInitEl.style.display = 'none';
+    }
+
+    function setAvatarInitial(displayName) {
+      const char = (displayName || '?').charAt(0).toUpperCase();
+      avatarInitEl.textContent = char;
+      avatarInitEl.style.display = 'block';
+      avatarImgEl.style.display = 'none';
+    }
 
     function updateProfileUI(displayUid, displayName) {
       const finalName = displayName || 'Bạn Bè Orbit';
       nameEl.textContent = finalName;
       uidEl.textContent = displayUid ? `(UID: ${displayUid})` : '';
-      avatarEl.textContent = finalName.charAt(0).toUpperCase();
       document.title = `Kết bạn với ${finalName} trên Orbit 🪐`;
+      
+      // Default placeholder avatar based on cute nickname
+      setAvatarImage(selectDefaultAvatar(finalName));
     }
 
     updateProfileUI(uid, name);
 
-    // Nếu link chỉ có uid hoặc muốn lấy tên mới nhất từ Firestore
+    // Truy vấn dữ liệu tài khoản thời gian thực từ Cloud Firestore REST API
     if (uid) {
       fetch(`https://firestore.googleapis.com/v1/projects/ncnative-bcf6d/databases/(default)/documents/users/${encodeURIComponent(uid)}`)
         .then(r => r.ok ? r.json() : null)
         .then(doc => {
-          if (doc && doc.fields && doc.fields.displayName && doc.fields.displayName.stringValue) {
-            name = doc.fields.displayName.stringValue;
-            updateProfileUI(uid, name);
+          if (doc && doc.fields) {
+            if (doc.fields.displayName && doc.fields.displayName.stringValue) {
+              name = doc.fields.displayName.stringValue;
+              nameEl.textContent = name;
+              document.title = `Kết bạn với ${name} trên Orbit 🪐`;
+            }
+            // Nếu người dùng đã cài avatar ảnh cá nhân trên máy:
+            if (doc.fields.avatarBase64 && doc.fields.avatarBase64.stringValue) {
+              const b64 = doc.fields.avatarBase64.stringValue;
+              setAvatarImage('data:image/jpeg;base64,' + b64);
+            } else {
+              setAvatarImage(selectDefaultAvatar(name));
+            }
           }
         })
         .catch(() => {});
@@ -308,7 +416,6 @@
       statusEl.textContent = 'Đang mở ứng dụng Orbit...';
 
       if (isAndroid) {
-        // Thử mở qua custom scheme trước, sau đó fallback qua Android Intent
         window.location.href = schemeUrl;
         if (isUserTap) {
           setTimeout(() => {
@@ -333,7 +440,7 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(textToCopy).then(() => {
           statusEl.textContent = '✅ Đã sao chép! Hãy mở app Orbit để kết bạn ngay.';
-          document.getElementById('copyBtn').textContent = '✅ Đã sao chép! Đang thử mở Orbit...';
+          document.getElementById('copyBtn').textContent = '✅ Đã sao chép! Đang mở Orbit...';
           window.location.href = buildDeepLinkScheme();
         }).catch(() => {
           fallbackCopy(textToCopy);

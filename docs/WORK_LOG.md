@@ -2439,3 +2439,41 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
   - [RELEASE] Đã cập nhật thành công lên GitHub: https://github.com/YIZ006/ICNative/releases/tag/v1.5.0
 * **Hiện trạng & Rào cản (Current State & Blockers):**
   - Đã kiểm tra lại qua GitHub API: Toàn bộ văn bản hiển thị chuẩn xác tiếng Việt, không còn bất kỳ lỗi vỡ font nào.
+---
+
+### [2026-11-11 16:22:00] - Nâng Cấp Hiển Thị Avatar Tài Khoản & Thiết Kế Thẻ Link Kết Bạn Đẹp Mắt Kèm App Icon
+* **Thời gian (Timestamp):** 2026-11-11 16:22:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):** 
+  - **1. Sửa Triệt Để Lỗi Không Hiện Avatar Tài Khoản (0 VNĐ & 100% On-Device)**:
+    - Bổ sung trường `avatarBase64` vào `UserProfile` (`AuthService`), `Friend` và `FriendRequest` (`FriendService`).
+    - Xây dựng hàm `AuthService.encodeAvatarToBase64` sử dụng thư viện `image` Dart nén ảnh đại diện xuống kích thước 160x160 JPEG chất lượng 78 (~8KB - 11KB, hoàn toàn miễn phí trên Cloud Firestore Spark Tier, không tốn chi phí Cloud Storage).
+    - Đồng bộ `avatarBase64` lên tài liệu `users/{uid}` trên Cloud Firestore mỗi khi người dùng đổi ảnh trong app hoặc khởi động app (`init()`).
+    - Thêm cơ chế tải ngầm `FriendService.fetchAndCacheFriendAvatar(friendUid)` để tự động nạp avatar của bạn bè từ Firestore vào danh sách bạn bè đang kết nối.
+    - Hiển thị avatar tròn viền quỹ đạo cá nhân ngay tại thẻ "MÃ KẾT BẠN CỦA TÔI", danh sách bạn bè và danh sách lời mời kết bạn đang chờ trong `friends_screen.dart`.
+  - **2. Thiết Kế Lại Thẻ Link Kết Bạn Đẹp Mắt Có App Icon**:
+    - Nâng cấp vùng link kết bạn thô sơ thành **Thẻ Mời Kết Nối Vòng Tròn Orbit (Orbit Invite Preview Card)** sang trọng với nền kem chuyển sắc, viền bo tròn 18px.
+    - Tích hợp biểu tượng App Icon chính thức (`assets/icons/app_logo_orbit.png`) nằm trong vòng quỹ đạo óng ánh kèm nhãn "ORBIT WIDGET 🪐 - Bấm là kết bạn ngay".
+    - Thiết kế thanh hiển thị link gọn gàng và bộ đôi nút hành động: **[GỬI LINK CHO BẠN]** (mở chia sẻ hệ thống tới Messenger/Zalo) và **[Sao chép]**.
+    - Đăng ký thư mục `assets/icons/` vào `pubspec.yaml`.
+  - **3. Triển Khai Open Graph & Trang Web Lời Mời Firebase Hosting**:
+    - Tạo ảnh banner Open Graph chuẩn mực `og_preview.png` (1200x630) kèm logo Orbit, các vòng quỹ đạo và hành tinh vệ tinh.
+    - Cấu hình đầy đủ thẻ meta Open Graph (`og:image`, `og:image:width`, `og:image:height`, `og:title`, `og:description`, `twitter:card`, `twitter:image`) trong `hosting_invite/index.html` để Facebook Messenger, Zalo, iMessage tự động hiển thị thẻ card ảnh preview bắt mắt khi gửi link.
+    - Nâng cấp giao diện trang web lời mời: hiển thị avatar tài khoản trong vòng tròn quỹ đạo xoay 360 độ kèm vệ tinh quay quanh; hỗ trợ tự động tải `avatarBase64` từ Firestore và fallback ảnh đại diện thú cưng đáng yêu theo biệt danh.
+    - Cấu hình quy tắc Cache-Control và CORS cho tệp tĩnh hình ảnh trong `firebase.json`.
+    - Triển khai thành công lên Firebase Hosting bằng `firebase-tools deploy --only hosting` và kiểm thử trực tiếp qua curl đạt chuẩn HTTP 200 image/png.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] `pubspec.yaml` - Đăng ký `assets/icons/`.
+  - [MODIFY] `lib/services/auth_service.dart` - Thêm `avatarBase64`, nén ảnh offline JPEG 160x160 và đồng bộ Firestore `users/{uid}`.
+  - [MODIFY] `lib/services/friend_service.dart` - Bổ sung `avatarBase64` cho `Friend` & `FriendRequest`, thêm `fetchAndCacheFriendAvatar`.
+  - [MODIFY] `lib/screens/friends_screen.dart` - Thêm avatar tròn viền quỹ đạo, thiết kế Thẻ Mời Kết Nối Vòng Tròn Orbit kèm App Icon, cập nhật danh sách bạn bè hiển thị ảnh đại diện.
+  - [MODIFY] `firebase.json` - Bổ sung cache headers và CORS cho tệp hình ảnh hosting.
+  - [MODIFY] `hosting_invite/index.html` - Bổ sung thẻ Open Graph meta tags, avatar tròn xoay quỹ đạo, nạp `avatarBase64` thời gian thực từ Firestore.
+  - [NEW] `tool/generate_og_preview.dart` - Công cụ tạo banner Open Graph 1200x630.
+  - [DEPLOY] Triển khai thành công phiên bản mới lên: https://ncnative-bcf6d.web.app
+* **Hiện trạng & Rào cản (Current State & Blockers):**
+  - `flutter analyze` 0 warnings, 0 errors.
+  - Mọi link chia sẻ gửi qua Messenger/Zalo giờ đây đã có banner preview đẹp mắt và trang web hiển thị đầy đủ avatar tài khoản.
+* **Bước tiếp theo (Next Steps):**
+  1. Hướng dẫn người dùng trải nghiệm trên ứng dụng và chia sẻ link mới qua Messenger.
