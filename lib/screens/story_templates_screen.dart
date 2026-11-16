@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -8,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/story_share_service.dart';
+import '../utils/avatar_helper.dart';
 
 /// Các lựa chọn khi bấm "Lưu Story".
 enum _StoryExportAction { instagramStory, saveVideo, saveImage, shareOther }
@@ -89,22 +91,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
   }
 
   static const List<StoryTemplateItem> templates = [
-    // --- PACK 1 ---
-    StoryTemplateItem(
-      id: 1,
-      name: 'Cosmic Neon',
-      theme: 'Vũ trụ phát sáng & Quỹ đạo',
-      headline: 'ORBIT WITH ME ✨',
-      subHeadline: 'Chụp ảnh là nhảy thẳng lên màn hình chính của nhau!',
-      centerIcon: '🪐',
-      primaryColor: Color(0xFF00F0FF),
-      accentColor: Color(0xFFD000FF),
-      backgroundGradient: RadialGradient(
-        center: Alignment(0, -0.6),
-        radius: 1.2,
-        colors: [Color(0xFF1E0B36), Color(0xFF08020F), Color(0xFF030005)],
-      ),
-    ),
     StoryTemplateItem(
       id: 2,
       name: 'Y2K Chrome',
@@ -152,19 +138,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       isDark: false,
     ),
     StoryTemplateItem(
-      id: 5,
-      name: 'Dark Acid Grunge',
-      theme: 'Đen nhám, Barcode & Neon Green',
-      headline: 'ORBIT REVOLUTION ⚡',
-      subHeadline: 'Gửi khoảnh khắc thực, không filter, không khoảng cách',
-      centerIcon: '⚡',
-      primaryColor: Color(0xFF00FF66),
-      accentColor: Colors.white,
-      backgroundGradient: LinearGradient(
-        colors: [Color(0xFF080808), Color(0xFF141414)],
-      ),
-    ),
-    StoryTemplateItem(
       id: 6,
       name: 'Golden Hour',
       theme: 'Hoàng hôn rực rỡ & Ánh cam ấm',
@@ -177,21 +150,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [Color(0xFFFF7E5F), Color(0xFFFEB47B), Color(0xFFFF6E7F)],
-      ),
-    ),
-    StoryTemplateItem(
-      id: 7,
-      name: '80s Synthwave',
-      theme: 'Mặt trời neon & Lưới Cyber',
-      headline: 'ORBIT 1984 · SYNTHWAVE 🕹️',
-      subHeadline: 'Giao diện retro hoài niệm cho widget đôi',
-      centerIcon: '🕹️',
-      primaryColor: Color(0xFF00F6FF),
-      accentColor: Color(0xFFFF007F),
-      backgroundGradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF140026), Color(0xFF2C004D)],
       ),
     ),
     StoryTemplateItem(
@@ -210,36 +168,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       ),
     ),
     StoryTemplateItem(
-      id: 9,
-      name: 'Soulmate Infinity',
-      theme: 'Quỹ đạo Cận tâm & Trái tim vô cực',
-      headline: 'ONLY FOR MY #1 💕',
-      subHeadline: 'Quỹ đạo Cận tâm dành riêng cho hai đứa mình',
-      centerIcon: '💖',
-      primaryColor: Color(0xFFFF3366),
-      accentColor: Color(0xFFFF99BB),
-      backgroundGradient: RadialGradient(
-        center: Alignment(0, -0.4),
-        radius: 1.1,
-        colors: [Color(0xFF3D081F), Color(0xFF15020A), Color(0xFF080004)],
-      ),
-    ),
-    StoryTemplateItem(
-      id: 10,
-      name: 'Titanium Pro',
-      theme: 'Kính mờ cao cấp & Viền Titanium',
-      headline: 'ORBIT PRO WIDGET 💎',
-      subHeadline: 'Màn hình khóa kết nối tức thời, mượt mà tinh tế',
-      centerIcon: '🪐',
-      primaryColor: Color(0xFFF2F2F7),
-      accentColor: Color(0xFF34C759),
-      backgroundGradient: LinearGradient(
-        colors: [Color(0xFF000000), Color(0xFF1C1C1E)],
-      ),
-    ),
-
-    // --- PACK 2 ---
-    StoryTemplateItem(
       id: 11,
       name: 'Korean 4-Cut',
       theme: 'Life4Cuts dải ảnh Hàn Quốc',
@@ -252,21 +180,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
         colors: [Color(0xFFD4E6F1), Color(0xFFEAF2F8)],
       ),
       isDark: false,
-    ),
-    StoryTemplateItem(
-      id: 12,
-      name: 'Y2K Cyber Angel',
-      theme: 'Cánh thiên thần & Ánh tím Lilac',
-      headline: 'CYBER ANGEL 🪽',
-      subHeadline: 'Gửi tín hiệu thiên thần vào màn hình tui nè',
-      centerIcon: '🪽',
-      primaryColor: Color(0xFFBCA0FF),
-      accentColor: Color(0xFF8EC5FC),
-      backgroundGradient: RadialGradient(
-        center: Alignment(0, -0.4),
-        radius: 1.2,
-        colors: [Color(0xFF2A1B4E), Color(0xFF110926), Color(0xFF080314)],
-      ),
     ),
     StoryTemplateItem(
       id: 13,
@@ -283,21 +196,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       isDark: false,
     ),
     StoryTemplateItem(
-      id: 14,
-      name: 'Twilight Magic Hour',
-      theme: 'Chạng vạng tím hồng & Trăng khuyết',
-      headline: 'GỬI TUI BẦU TRỜI CHỖ CẬU 🌌',
-      subHeadline: 'Mỗi buổi chiều ngắm hoàng hôn cùng nhau qua widget',
-      centerIcon: '🌙',
-      primaryColor: Color(0xFFFFD285),
-      accentColor: Color(0xFFF5B7B1),
-      backgroundGradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF1B0A2A), Color(0xFF3A1548), Color(0xFFA35D87)],
-      ),
-    ),
-    StoryTemplateItem(
       id: 15,
       name: 'iOS Lock Screen',
       theme: 'Màn hình khóa iPhone & Thông báo',
@@ -308,19 +206,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       accentColor: Color(0xFF34C759),
       backgroundGradient: LinearGradient(
         colors: [Color(0xFF050508), Color(0xFF16161C)],
-      ),
-    ),
-    StoryTemplateItem(
-      id: 16,
-      name: 'Kodak 35mm Film',
-      theme: 'Cuộn phim âm bản cổ điển & Sprocket',
-      headline: 'KODAK ORBIT 400 🎞️',
-      subHeadline: 'Khoảnh khắc chụp film lưu giữ trên màn hình chính',
-      centerIcon: '🎞️',
-      primaryColor: Color(0xFFFF9900),
-      accentColor: Color(0xFFFFD285),
-      backgroundGradient: LinearGradient(
-        colors: [Color(0xFF121212), Color(0xFF1E1E1E)],
       ),
     ),
     StoryTemplateItem(
@@ -350,21 +235,6 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       accentColor: Colors.white,
       backgroundGradient: LinearGradient(
         colors: [Color(0xFF121212), Color(0xFF1E1E1E)],
-      ),
-    ),
-    StoryTemplateItem(
-      id: 19,
-      name: 'Sunset Beach',
-      theme: 'Bãi biển hoàng hôn & Sóng vỗ',
-      headline: 'CATCHING WAVES WITH YOU 🌊',
-      subHeadline: 'Bức ảnh hoàng hôn biển chiều gửi đến widget của bạn',
-      centerIcon: '🐚',
-      primaryColor: Color(0xFFFF6F61),
-      accentColor: Color(0xFFFFD166),
-      backgroundGradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFFC5C7D), Color(0xFF6A82FB)],
       ),
     ),
     StoryTemplateItem(
@@ -668,7 +538,7 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Mẫu ${_selectedTemplateIndex + 1}/20: ${currentTpl.name}',
+                          '${currentTpl.name} (${_selectedTemplateIndex + 1}/${templates.length})',
                           style: const TextStyle(color: Color(0xFF00FF66), fontWeight: FontWeight.bold, fontSize: 13.5),
                         ),
                       ),
@@ -774,7 +644,7 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                     child: Row(
                       children: [
                         Text(
-                          'Mẫu ${_selectedTemplateIndex + 1}/20: ${currentTpl.name}',
+                          '${currentTpl.name} (${_selectedTemplateIndex + 1}/${templates.length})',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(width: 8),
@@ -821,28 +691,38 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
                         return GestureDetector(
                           onTap: () => setState(() => _selectedTemplateIndex = idx),
                           child: Container(
-                            width: 58,
+                            width: 108,
                             margin: const EdgeInsets.symmetric(horizontal: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                             decoration: BoxDecoration(
                               gradient: t.backgroundGradient,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isSelected ? const Color(0xFF00FF66) : Colors.white24,
-                                width: isSelected ? 3 : 1,
+                                width: isSelected ? 2.8 : 1,
                               ),
                               boxShadow: isSelected
                                   ? [BoxShadow(color: const Color(0xFF00FF66).withValues(alpha: 0.4), blurRadius: 10)]
                                   : null,
                             ),
-                            child: Center(
-                              child: Text(
-                                '${t.id}',
-                                style: TextStyle(
-                                  color: t.isDark ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(t.centerIcon, style: const TextStyle(fontSize: 16)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  t.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: t.isDark ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                    height: 1.15,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         );
@@ -883,18 +763,18 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
       return _buildSpotifyStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 5. Mẫu 9 & 20: Soulmate Duo & Sợi chỉ đỏ
-    if (tpl.id == 9 || tpl.id == 20) {
+    // 5. Red Thread Destiny (ID 20)
+    if (tpl.id == 20) {
       return _buildSoulmateStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 6. Mẫu 2 & 12: Y2K Cyber Chrome
-    if (tpl.id == 2 || tpl.id == 12) {
+    // 6. Y2K Chrome (ID 2)
+    if (tpl.id == 2) {
       return _buildY2kStory(tpl, user, displayNameClean, userUid);
     }
 
-    // 7. Mẫu 6 & 19: Golden Hour & Sunset Beach
-    if (tpl.id == 6 || tpl.id == 19) {
+    // 7. Golden Hour (ID 6)
+    if (tpl.id == 6) {
       return _buildGoldenHourStory(tpl, user, displayNameClean, userUid);
     }
 
@@ -2177,19 +2057,45 @@ class _StoryTemplatesScreenState extends State<StoryTemplatesScreen> with Ticker
         ),
       );
     }
-    final initial = cleanName.isNotEmpty ? cleanName[0].toUpperCase() : 'O';
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(borderRadius),
-        gradient: const LinearGradient(colors: [Color(0xFF00F0FF), Color(0xFF7000FF)]),
-      ),
-      child: Center(
-        child: Text(
-          initial,
-          style: TextStyle(fontSize: width * 0.4, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+    if (user?.avatarBase64 != null && user!.avatarBase64!.isNotEmpty) {
+      try {
+        final bytes = base64Decode(user.avatarBase64!);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          ),
+        );
+      } catch (_) {}
+    }
+    final mascotAsset = AvatarHelper.getMascotAsset(cleanName, user?.uid);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: Image.asset(
+        mascotAsset,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          final initial = cleanName.isNotEmpty ? cleanName[0].toUpperCase() : 'O';
+          return Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+              gradient: const LinearGradient(colors: [Color(0xFF00F0FF), Color(0xFF7000FF)]),
+            ),
+            child: Center(
+              child: Text(
+                initial,
+                style: TextStyle(fontSize: width * 0.4, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

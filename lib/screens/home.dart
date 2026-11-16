@@ -536,6 +536,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   void _onLatestPhotoReceived() {
     final data = SyncService.instance.latestReceivedPhotoNotifier.value;
     if (data != null && mounted) {
+      final senderId = data['senderId'] as String?;
       final senderName = data['senderName'] as String? ?? 'Bạn bè';
       final imagePath = data['imagePath'] as String? ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -557,7 +558,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             textColor: const Color(0xFFFFD54F),
             onPressed: () {
               if (imagePath.isNotEmpty) {
-                _showFriendLatestPhotoModal(senderName, imagePath);
+                _showFriendLatestPhotoModal(senderName, imagePath, friendUid: senderId);
               }
             },
           ),
@@ -774,8 +775,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     );
   }
 
-  void _showFriendLatestPhotoModal(String friendName, String imagePath) {
+  void _showFriendLatestPhotoModal(String friendName, String imagePath, {String? friendUid}) {
     if (!File(imagePath).existsSync()) return;
+    final friend = (friendUid != null && friendUid.isNotEmpty)
+        ? FriendService.instance.getFriendByUid(friendUid)
+        : null;
+    final resolvedName = (friend != null && friend.displayName.trim().isNotEmpty)
+        ? friend.displayName
+        : friendName;
 
     showDialog(
       context: context,
@@ -803,13 +810,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                 padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: OrbitColors.buttonPrimary,
-                      child: Text(
-                        friendName.isNotEmpty ? friendName.substring(0, 1).toUpperCase() : '?',
-                        style: const TextStyle(color: OrbitColors.textLight, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                    AvatarHelper.buildAvatar(
+                      avatarBase64: friend?.avatarBase64,
+                      displayName: resolvedName,
+                      uid: friendUid,
+                      size: 34,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -817,7 +822,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            friendName,
+                            resolvedName,
                             style: const TextStyle(color: OrbitColors.deepOlive, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           Text(
@@ -1196,9 +1201,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
             child: ValueListenableBuilder<UserProfile?>(
               valueListenable: AuthService.instance.currentUserNotifier,
               builder: (context, user, _) {
-                final avatarPath = user?.avatarPath;
-                final hasCustomAvatar = avatarPath != null && File(avatarPath).existsSync();
-
                 return GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -1222,25 +1224,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                          color: OrbitColors.background,
-                          shape: BoxShape.circle,
-                        ),
-                        child: ClipOval(
-                          child: hasCustomAvatar
-                              ? Image.file(
-                                  File(avatarPath),
-                                  fit: BoxFit.cover,
-                                  width: 22,
-                                  height: 22,
-                                )
-                              : const Center(
-                                  child: Text('🐾', style: TextStyle(fontSize: 10)),
-                                ),
-                        ),
+                      AvatarHelper.buildAvatar(
+                        avatarPath: user?.avatarPath,
+                        avatarBase64: user?.avatarBase64,
+                        displayName: user?.displayName ?? 'Tôi',
+                        uid: user?.uid,
+                        size: 22,
+                        backgroundColor: OrbitColors.background,
                       ),
                       const SizedBox(width: 6),
                       Flexible(
@@ -2362,7 +2352,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                   MaterialPageRoute(builder: (ctx) => const FriendsScreen()),
                 );
               } else if (hasFriendPhoto) {
-                _showFriendLatestPhotoModal(item.name, friendPhoto);
+                _showFriendLatestPhotoModal(item.name, friendPhoto, friendUid: item.id);
               } else {
                 setState(() {
                   selectedRecipientName = isSelected ? null : item.name;
@@ -2430,6 +2420,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                             size: avatarSize,
                             backgroundColor: item.color ?? OrbitColors.buttonPrimary,
                           )),
+              ),
+            ),
+          ),
+
+          // Nhãn tên hiển thị bên dưới mỗi vệ tinh trên vòng tròn quỹ đạo
+          Positioned(
+            left: -22,
+            right: -22,
+            top: avatarSize + 3,
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: item.isAddButton
+                        ? OrbitColors.surfaceCard.withValues(alpha: 0.92)
+                        : (isSelected
+                            ? OrbitColors.terracotta
+                            : OrbitColors.deepOlive.withValues(alpha: 0.85)),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: item.isAddButton
+                          ? OrbitColors.buttonPrimary.withValues(alpha: 0.5)
+                          : (hasFriendPhoto || item.hasGlow
+                              ? const Color(0xFFFFD54F).withValues(alpha: 0.85)
+                              : OrbitColors.buttonPrimary.withValues(alpha: 0.4)),
+                      width: 0.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    item.name.replaceAll(RegExp(r'\s*#\d+.*$'), '').trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: item.isAddButton ? OrbitColors.deepOlive : OrbitColors.textLight,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

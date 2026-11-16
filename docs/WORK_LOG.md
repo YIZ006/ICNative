@@ -5,6 +5,47 @@ Quy chuẩn báo cáo tuân thủ nghiêm ngặt theo quy định tại [agent.m
 
 ---
 
+### [2026-11-16 13:20:00] - Khắc Phục Crash Gửi Ảnh Lên Widget, Đồng Bộ Trực Tiếp Thời Gian Thực, Tinh Gọn 11 Story Mẫu & Phát Hành Orbit v1.5.2 Dual-Release
+* **Thời gian (Timestamp):** 2026-11-16 13:20:00 (GMT+7)
+* **Trạng thái (Status):** [COMPLETED]
+* **Người thực hiện (Author):** Antigravity Tech Lead Agent
+* **Tóm tắt công việc (Summary):**
+  1. **Khắc phục triệt để lỗi out app ngay khi chụp ảnh và bấm gửi lên Widget:**
+     - Phát hiện nguyên nhân gốc từ `SecurityException` trong `ICNativeWidgetProvider.kt` và `ICNativePebbleWidgetProvider.kt`: gọi `alarmManager.setExactAndAllowWhileIdle(...)` không điều kiện trên app `targetSdkVersion=36` dù không có quyền `SCHEDULE_EXACT_ALARM` (và gọi ngay cả khi chưa ghim widget).
+     - Kiểm tra `alarmManager.canScheduleExactAlarms()` trên Android 12+, fallback sang `setAndAllowWhileIdle(...)` + bọc `try/catch`, chỉ lên lịch tick khi `appWidgetIds.isNotEmpty()`.
+     - Sửa lỗi đọc nhầm `SharedPreferences` trong `onReceive()` (`HomeWidgetPlugin.getData(context)` thay vì `FlutterSharedPreferences`), thêm `decodeSampledBitmap` giới hạn 512px chống OOM, và `dispose()` `ui.Image`/`Picture` trong `preview.dart`.
+  2. **Tinh gọn Story Templates còn 11 mẫu & đổi thanh chọn sang tên tiếng Anh:**
+     - Xoá 9 mẫu không ổn (IDs `1, 5, 7, 9, 10, 12, 14, 16, 19`), giữ lại 11 mẫu (`2, 3, 4, 6, 8, 11, 13, 15, 17, 18, 20`).
+     - Thay thế ô số thứ tự trên thanh chọn bằng thẻ rộng hiển thị biểu tượng + tên tiếng Anh (`Y2K Chrome`, `Retro Polaroid`, `Minimal Pastel`, `Golden Hour`, `Aura Gradient`, `Korean 4-Cut`, `Vintage Scrapbook`, `iOS Lock Screen`, `Coquette Ribbon`, `Spotify Music Duo`, `Red Thread Destiny`).
+     - Bổ sung hỗ trợ `avatarBase64` và `AvatarHelper` fallback trong `StoryTemplatesScreen._buildAvatarImage`, cập nhật nhãn `'11 Story Mẫu'` ở `FriendsScreen` và cập nhật `story_templates_screen_test.dart`.
+  3. **Đồng bộ trực tiếp thời gian thực & hiển thị nhãn tên / avatar trên toàn bộ app:**
+     - `FriendService`: Lắng nghe realtime document `users/{friendUid}` cho từng bạn bè để đồng bộ ngay `displayName` và `avatarBase64` mới nhất; nâng cấp `broadcastMyProfileToAllFriends()` phát sóng cả tên và avatar mới tới toàn bộ bạn bè và đồng bộ `friend_count`/`is_demo_mode` cho Native Widget.
+     - `AuthService`: Khi đổi tên (`updateDisplayName`) hoặc đổi avatar (`updateAvatar`), tự động phát sóng tới tất cả bạn bè và cập nhật `soulmate_status`.
+     - `FriendsFeedScreen`: Chuyển sang luồng realtime Firestore `snapshots()` và hiển thị avatar thật qua `AvatarHelper.buildAvatar`.
+     - `HomeScreen`: Hiển thị nhãn tên bên dưới mỗi vệ tinh trên vòng tròn quỹ đạo, tích hợp `AvatarHelper` cho TopBar và modal xem ảnh bạn bè.
+     - `SoulmateService`: Đồng bộ `displayName` realtime từ `soulmate_status`.
+  4. **Chuẩn hoá định dạng chữ & Quy tắc Agent + Phát hành Orbit v1.5.2 Dual-Release:**
+     - Cập nhật `AGENTS.md` và `agent.md` bổ sung quy tắc chống lỗi định dạng chữ / Markdown thô / Mojibake.
+     - Nâng cấp `UpdateScreen` (`_buildFormattedNoteWidgets`) chuẩn hoá Markdown thành văn bản sạch đẹp có padding.
+     - Nâng phiên bản lên `1.5.2+2022` (`pubspec.yaml`, `UpdateService`, `AppDelegate.swift`), build đủ 2 bản APK (`Orbit-v1.5.2-clean-release.apk` & `Orbit-v1.5.2-demo-showcase.apk`) và phát hành GitHub Release `v1.5.2`.
+* **Chi tiết thay đổi (Changes Made):**
+  - [MODIFY] [`android/app/src/main/kotlin/com/abom/utas/utas/ICNativeWidgetProvider.kt`](../android/app/src/main/kotlin/com/abom/utas/utas/ICNativeWidgetProvider.kt)
+  - [MODIFY] [`android/app/src/main/kotlin/com/abom/utas/utas/ICNativePebbleWidgetProvider.kt`](../android/app/src/main/kotlin/com/abom/utas/utas/ICNativePebbleWidgetProvider.kt)
+  - [MODIFY] [`lib/screens/preview.dart`](../lib/screens/preview.dart)
+  - [MODIFY] [`lib/screens/story_templates_screen.dart`](../lib/screens/story_templates_screen.dart)
+  - [MODIFY] [`lib/screens/friends_screen.dart`](../lib/screens/friends_screen.dart)
+  - [MODIFY] [`lib/services/friend_service.dart`](../lib/services/friend_service.dart)
+  - [MODIFY] [`lib/services/auth_service.dart`](../lib/services/auth_service.dart)
+  - [MODIFY] [`lib/services/sync_service.dart`](../lib/services/sync_service.dart)
+  - [MODIFY] [`lib/services/soulmate_service.dart`](../lib/services/soulmate_service.dart)
+  - [MODIFY] [`lib/screens/feed_screen.dart`](../lib/screens/feed_screen.dart)
+  - [MODIFY] [`lib/screens/home.dart`](../lib/screens/home.dart)
+  - [MODIFY] [`lib/screens/update_screen.dart`](../lib/screens/update_screen.dart)
+  - [MODIFY] [`lib/services/update_service.dart`](../lib/services/update_service.dart)
+  - [MODIFY] [`test/story_templates_screen_test.dart`](../test/story_templates_screen_test.dart)
+  - [MODIFY] [`AGENTS.md`](../AGENTS.md), [`agent.md`](../agent.md), [`pubspec.yaml`](../pubspec.yaml), [`ios/Runner/AppDelegate.swift`](../ios/Runner/AppDelegate.swift)
+  - [NEW] `scratch/publish_v152.js`
+
 ### [2026-11-11 19:10:00] - Hoàn Thiện Hiển Thị Avatar Bạn Bè 2 Chiều Trên Quỹ Đạo, Xoá Bỏ Chữ "0 VNĐ" & Thiết Kế Lại Thẻ Preview Lời Mời Đẳng Cấp
 * **Thời gian (Timestamp):** 2026-11-11 19:10:00 (GMT+7)
 * **Trạng thái (Status):** [COMPLETED]

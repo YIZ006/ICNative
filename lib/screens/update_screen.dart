@@ -198,6 +198,10 @@ class UpdateScreen extends StatelessWidget {
   }
 
   Widget _buildReleaseNotesCard() {
+    final notesText = releaseInfo.notes.isNotEmpty
+        ? releaseInfo.notes
+        : 'Bản cập nhật tối ưu hóa hiệu năng, cải thiện độ mượt và bổ sung tính năng mới cho Orbit Widget.';
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -225,25 +229,139 @@ class UpdateScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 260),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: OrbitColors.surfaceCream,
               borderRadius: BorderRadius.circular(14),
             ),
             child: SingleChildScrollView(
-              child: Text(
-                releaseInfo.notes.isNotEmpty
-                    ? releaseInfo.notes
-                    : 'Bản cập nhật tối ưu hóa hiệu năng, cải thiện độ mượt và bổ sung tính năng mới cho Orbit Widget.',
-                style: const TextStyle(
-                  color: OrbitColors.deepOlive,
-                  fontSize: 12.5,
-                  height: 1.45,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _buildFormattedNoteWidgets(notesText),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  List<Widget> _buildFormattedNoteWidgets(String raw) {
+    final normalized = raw.replaceAll('\r\n', '\n').replaceAll(r'\n', '\n');
+    final lines = normalized.split('\n');
+    final widgets = <Widget>[];
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+        continue;
+      }
+      if (RegExp(r'^-{3,}$').hasMatch(line) || RegExp(r'^\*{3,}$').hasMatch(line)) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Divider(height: 1, color: OrbitColors.buttonPrimary.withValues(alpha: 0.2)),
+        ));
+        continue;
+      }
+
+      if (line.startsWith('#')) {
+        final heading = line.replaceFirst(RegExp(r'^#+\s*'), '');
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 3),
+          child: _buildInlineRichText(
+            heading,
+            baseStyle: const TextStyle(
+              color: OrbitColors.deepOlive,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              height: 1.35,
+            ),
+          ),
+        ));
+        continue;
+      }
+
+      final bulletMatch = RegExp(r'^[-*•]\s+(.*)$').firstMatch(line);
+      if (bulletMatch != null) {
+        final content = bulletMatch.group(1) ?? '';
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '• ',
+                style: TextStyle(
+                  color: OrbitColors.buttonPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  height: 1.45,
+                ),
+              ),
+              Expanded(
+                child: _buildInlineRichText(
+                  content,
+                  baseStyle: const TextStyle(
+                    color: OrbitColors.deepOlive,
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
+        continue;
+      }
+
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: _buildInlineRichText(
+          line,
+          baseStyle: const TextStyle(
+            color: OrbitColors.deepOlive,
+            fontSize: 12.5,
+            height: 1.45,
+          ),
+        ),
+      ));
+    }
+    return widgets;
+  }
+
+  Widget _buildInlineRichText(String text, {required TextStyle baseStyle}) {
+    final cleaned = text.replaceAll('`', '');
+    final spans = <TextSpan>[];
+    final pattern = RegExp(r'\*\*(.+?)\*\*|\*(.+?)\*');
+    int lastEnd = 0;
+
+    for (final match in pattern.allMatches(cleaned)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: cleaned.substring(lastEnd, match.start)));
+      }
+      if (match.group(1) != null) {
+        spans.add(TextSpan(
+          text: match.group(1),
+          style: baseStyle.copyWith(fontWeight: FontWeight.bold),
+        ));
+      } else if (match.group(2) != null) {
+        spans.add(TextSpan(
+          text: match.group(2),
+          style: baseStyle.copyWith(fontStyle: FontStyle.italic),
+        ));
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < cleaned.length) {
+      spans.add(TextSpan(text: cleaned.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(style: baseStyle, children: spans),
     );
   }
 

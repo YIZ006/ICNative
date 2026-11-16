@@ -692,7 +692,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     },
                     icon: const Icon(Icons.auto_awesome, color: Color(0xFF0077B6), size: 18),
                     label: const Text(
-                      '10 Story Mẫu',
+                      '11 Story Mẫu',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),

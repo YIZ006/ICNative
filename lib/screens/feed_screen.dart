@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +8,9 @@ import 'package:icnative/settings/global.dart';
 import 'package:icnative/settings/theme_colors.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/auth_service.dart';
+import '../services/friend_service.dart';
 import '../services/sync_service.dart';
+import '../utils/avatar_helper.dart';
 
 class FriendsFeedScreen extends StatefulWidget {
   const FriendsFeedScreen({super.key});
@@ -19,11 +22,62 @@ class FriendsFeedScreen extends StatefulWidget {
 class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _posts = [];
+  StreamSubscription<QuerySnapshot>? _postsSub;
 
   @override
   void initState() {
     super.initState();
-    _loadFeed();
+    FriendService.instance.friendsUpdatedNotifier.addListener(_onProfileOrFriendsUpdated);
+    AuthService.instance.currentUserNotifier.addListener(_onProfileOrFriendsUpdated);
+    _startRealtimeFeed();
+  }
+
+  @override
+  void dispose() {
+    _postsSub?.cancel();
+    FriendService.instance.friendsUpdatedNotifier.removeListener(_onProfileOrFriendsUpdated);
+    AuthService.instance.currentUserNotifier.removeListener(_onProfileOrFriendsUpdated);
+    super.dispose();
+  }
+
+  void _onProfileOrFriendsUpdated() {
+    if (mounted) setState(() {});
+  }
+
+  void _startRealtimeFeed() {
+    final myProfile = AuthService.instance.currentUser;
+    if (!AuthService.isCloudConfigured || myProfile == null) {
+      _loadFeed();
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    _postsSub?.cancel();
+    _postsSub = FirebaseFirestore.instance
+        .collection('posts')
+        .where('receiverIds', arrayContains: myProfile.uid)
+        .limit(40)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        final docs = snapshot.docs.map((doc) => doc.data()).toList();
+        docs.sort((a, b) {
+          final aTime = (a['createdAt'] as num?)?.toInt() ?? 0;
+          final bTime = (b['createdAt'] as num?)?.toInt() ?? 0;
+          return bTime.compareTo(aTime);
+        });
+        if (mounted) {
+          setState(() {
+            _posts = docs;
+            _isLoading = false;
+          });
+        }
+      },
+      onError: (e) {
+        debugPrint('Realtime feed error: $e');
+        if (mounted) setState(() => _isLoading = false);
+      },
+    );
   }
 
   Future<void> _loadFeed() async {
@@ -272,7 +326,19 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
   }
 
   Widget _buildOnlinePostCard(Map<String, dynamic> post) {
-    final senderName = post['senderName'] as String? ?? 'Bạn bè';
+    final senderId = post['senderId'] as String? ?? '';
+    final myProfile = AuthService.instance.currentUser;
+    final isMe = myProfile != null && senderId == myProfile.uid;
+    final friend = isMe ? null : FriendService.instance.getFriendByUid(senderId);
+
+    final senderName = isMe
+        ? myProfile.displayName
+        : (friend != null && friend.displayName.trim().isNotEmpty
+            ? friend.displayName
+            : (post['senderName'] as String? ?? 'Bạn bè'));
+    final senderAvatarPath = isMe ? myProfile.avatarPath : null;
+    final senderAvatarBase64 = isMe ? myProfile.avatarBase64 : friend?.avatarBase64;
+
     final imageBase64 = post['imageBase64'] as String? ?? '';
     final imageUrl = post['imageUrl'] as String? ?? '';
     final caption = post['caption'] as String? ?? '';
@@ -299,13 +365,12 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: OrbitColors.buttonPrimary,
-                  child: Text(
-                    senderName.isNotEmpty ? senderName.substring(0, 1).toUpperCase() : '?',
-                    style: const TextStyle(color: OrbitColors.textLight, fontWeight: FontWeight.bold),
-                  ),
+                AvatarHelper.buildAvatar(
+                  avatarPath: senderAvatarPath,
+                  avatarBase64: senderAvatarBase64,
+                  displayName: senderName,
+                  uid: senderId,
+                  size: 36,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -420,6 +485,7 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
   Widget _buildLocalPostCard(String filePath) {
     final file = File(filePath);
     final exists = file.existsSync();
+    final myProfile = AuthService.instance.currentUser;
 
     return Container(
       decoration: BoxDecoration(
@@ -441,10 +507,12 @@ class _FriendsFeedScreenState extends State<FriendsFeedScreen> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                const CircleAvatar(
-                  radius: 18,
-                  backgroundColor: OrbitColors.buttonPrimary,
-                  child: Text('T', style: TextStyle(color: OrbitColors.textLight, fontWeight: FontWeight.bold)),
+                AvatarHelper.buildAvatar(
+                  avatarPath: myProfile?.avatarPath,
+                  avatarBase64: myProfile?.avatarBase64,
+                  displayName: myProfile?.displayName ?? 'Tôi',
+                  uid: myProfile?.uid,
+                  size: 36,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

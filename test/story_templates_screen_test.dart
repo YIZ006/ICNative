@@ -4,18 +4,23 @@ import 'package:icnative/screens/story_templates_screen.dart';
 
 void main() {
   group('StoryTemplatesScreen Data & Template Integrity Tests', () {
-    test('Must contain exactly 20 templates with unique IDs from 1 to 20', () {
+    test('Must contain exactly 11 curated templates and exclude removed IDs', () {
       final templates = StoryTemplatesScreen.templates;
-      expect(templates.length, equals(20));
+      expect(templates.length, equals(11));
 
       final ids = templates.map((t) => t.id).toSet();
-      expect(ids.length, equals(20));
-      for (int i = 1; i <= 20; i++) {
-        expect(ids.contains(i), isTrue, reason: 'Template id $i must be defined');
+      expect(ids.length, equals(11));
+
+      const expectedIds = {2, 3, 4, 6, 8, 11, 13, 15, 17, 18, 20};
+      expect(ids, equals(expectedIds));
+
+      const removedIds = {1, 5, 7, 9, 10, 12, 14, 16, 19};
+      for (final removedId in removedIds) {
+        expect(ids.contains(removedId), isFalse, reason: 'Template id $removedId should have been removed');
       }
     });
 
-    test('All templates must preserve non-empty metadata and valid colors', () {
+    test('All templates must preserve non-empty English names, metadata and valid colors', () {
       final templates = StoryTemplatesScreen.templates;
       for (final t in templates) {
         expect(t.name.trim().isNotEmpty, isTrue);
@@ -39,8 +44,8 @@ void main() {
 
     test('Core templates retain their signature primary colors per specifications', () {
       final templates = StoryTemplatesScreen.templates;
-      final cosmic = templates.firstWhere((t) => t.id == 1);
-      expect(cosmic.primaryColor, equals(const Color(0xFF00F0FF)));
+      final y2k = templates.firstWhere((t) => t.id == 2);
+      expect(y2k.name, equals('Y2K Chrome'));
 
       final spotify = templates.firstWhere((t) => t.id == 18);
       expect(spotify.primaryColor, equals(const Color(0xFF1DB954)));
@@ -54,8 +59,8 @@ void main() {
       final lockscreen = templates.firstWhere((t) => t.id == 15);
       expect(lockscreen.primaryColor, equals(const Color(0xFF007AFF)));
 
-      final soulmate = templates.firstWhere((t) => t.id == 9);
-      expect(soulmate.primaryColor, equals(const Color(0xFFFF3366)));
+      final redThread = templates.firstWhere((t) => t.id == 20);
+      expect(redThread.primaryColor, equals(const Color(0xFFFF2A2A)));
     });
   });
 }

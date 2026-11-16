@@ -701,6 +701,7 @@ class SoulmateService {
       (snap) {
         if (snap.exists && snap.data() != null) {
           final data = snap.data()!;
+          final partnerName = (data['displayName'] as String?)?.trim();
           final lat = (data['latitude'] as num?)?.toDouble();
           final lng = (data['longitude'] as num?)?.toDouble();
           final place = data['placeName'] as String?;
@@ -711,9 +712,11 @@ class SoulmateService {
 
           _currentSoulmate = SoulmateData(
             uid: _currentSoulmate!.uid,
-            displayName: _currentSoulmate!.displayName,
+            displayName: (partnerName != null && partnerName.isNotEmpty)
+                ? partnerName
+                : _currentSoulmate!.displayName,
             avatarPath: _currentSoulmate!.avatarPath,
-            avatarBase64: b64 ?? _currentSoulmate!.avatarBase64,
+            avatarBase64: (b64 != null && b64.isNotEmpty) ? b64 : _currentSoulmate!.avatarBase64,
             startDateMillis: _currentSoulmate!.startDateMillis,
             statusMood: mood ?? _currentSoulmate!.statusMood,
             latitude: lat,

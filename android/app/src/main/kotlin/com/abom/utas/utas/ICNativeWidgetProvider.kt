@@ -5,11 +5,14 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
 import java.io.File
 
@@ -18,6 +21,26 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
     companion object {
         const val ACTION_ORBIT_TICK = "com.abom.utas.utas.ACTION_ORBIT_TICK"
         private var currentRotationAngle = 0f
+
+        internal fun decodeSampledBitmap(path: String, maxSize: Int = 512): Bitmap? {
+            return try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(path, bounds)
+                var sampleSize = 1
+                val largest = maxOf(bounds.outWidth, bounds.outHeight)
+                if (largest > maxSize) {
+                    while (largest / (sampleSize * 2) >= maxSize) {
+                        sampleSize *= 2
+                    }
+                }
+                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                BitmapFactory.decodeFile(path, opts)
+            } catch (_: OutOfMemoryError) {
+                null
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -28,18 +51,21 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
             val componentName = android.content.ComponentName(context, ICNativeWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             if (appWidgetIds.isNotEmpty()) {
-                val widgetData = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                val widgetData = HomeWidgetPlugin.getData(context)
                 // Tiến thêm góc xoay nhẹ mượt mà (+15 độ mỗi chu kỳ)
                 currentRotationAngle = (currentRotationAngle + 15f) % 360f
                 onUpdate(context, appWidgetManager, appWidgetIds, widgetData)
             }
-            scheduleNextTick(context)
         }
     }
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        scheduleNextTick(context)
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val ids = appWidgetManager.getAppWidgetIds(android.content.ComponentName(context, ICNativeWidgetProvider::class.java))
+        if (ids.isNotEmpty()) {
+            scheduleNextTick(context)
+        }
     }
 
     override fun onDisabled(context: Context) {
@@ -48,37 +74,51 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
     }
 
     private fun scheduleNextTick(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val intent = Intent(context, ICNativeWidgetProvider::class.java).apply {
-            this.action = ACTION_ORBIT_TICK
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            9991,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        // Lên lịch cập nhật nhẹ sau mỗi 30 giây khi thiết bị hoạt động
-        val triggerAt = System.currentTimeMillis() + 30000L
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC, triggerAt, pendingIntent)
-        } else {
-            alarmManager.set(AlarmManager.RTC, triggerAt, pendingIntent)
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val intent = Intent(context, ICNativeWidgetProvider::class.java).apply {
+                this.action = ACTION_ORBIT_TICK
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                9991,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            // Lên lịch cập nhật nhẹ sau mỗi 30 giây khi thiết bị hoạt động
+            val triggerAt = System.currentTimeMillis() + 30000L
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC, triggerAt, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC, triggerAt, pendingIntent)
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC, triggerAt, pendingIntent)
+            } else {
+                alarmManager.set(AlarmManager.RTC, triggerAt, pendingIntent)
+            }
+        } catch (_: SecurityException) {
+            // Tránh văng app nếu hệ điều hành từ chối quyền AlarmManager
+        } catch (_: Exception) {
         }
     }
 
     private fun cancelNextTick(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val intent = Intent(context, ICNativeWidgetProvider::class.java).apply {
-            this.action = ACTION_ORBIT_TICK
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val intent = Intent(context, ICNativeWidgetProvider::class.java).apply {
+                this.action = ACTION_ORBIT_TICK
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                9991,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+        } catch (_: Exception) {
         }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            9991,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
     }
 
     override fun onUpdate(
@@ -87,78 +127,87 @@ class ICNativeWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        if (appWidgetIds.isEmpty()) return
+
         // Tự động tính toán góc xoay dựa trên thời gian và currentRotationAngle
         val timeBasedAngle = ((System.currentTimeMillis() / 20000L) % 360).toFloat() * 10f % 360f
         val effectiveAngle = if (currentRotationAngle != 0f) currentRotationAngle else timeBasedAngle
 
+        val flutterPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val isDemoMode = try { flutterPrefs.getBoolean("flutter.is_demo_mode", false) } catch (_: Exception) { false }
+        val friendCount = try { flutterPrefs.getLong("flutter.friend_count", 0L).toInt() } catch (_: Exception) {
+            try { flutterPrefs.getInt("flutter.friend_count", 0) } catch (_: Exception) { 0 }
+        }
+        val shouldDrawSatellites = isDemoMode || friendCount > 0
+
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
-                // 1. Chạm vào bất kỳ vị trí nào trên widget để mở app ngay lập tức (SingleTop không reload lại từ đầu)
-                val intent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
-                val pendingIntent = PendingIntent.getActivity(
-                    context,
-                    0,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                setOnClickPendingIntent(R.id.widget_container, pendingIntent)
-                setOnClickPendingIntent(R.id.widget_image, pendingIntent)
+            try {
+                val views = RemoteViews(context.packageName, R.layout.widget_layout).apply {
+                    // 1. Chạm vào bất kỳ vị trí nào trên widget để mở app ngay lập tức (SingleTop không reload lại từ đầu)
+                    val intent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    val pendingIntent = PendingIntent.getActivity(
+                        context,
+                        0,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+                    setOnClickPendingIntent(R.id.widget_image, pendingIntent)
 
-                // 2. Load ảnh & tên người gửi
-                val imagePath = widgetData.getString("widget_image_path", null)
-                val senderName = widgetData.getString("widget_sender_name", null)
+                    // 2. Load ảnh & tên người gửi
+                    val imagePath = widgetData.getString("widget_image_path", null)
+                    val senderName = widgetData.getString("widget_sender_name", null)
 
-                if (imagePath != null && File(imagePath).exists()) {
-                    var bitmap = BitmapFactory.decodeFile(imagePath)
+                    if (imagePath != null && File(imagePath).exists()) {
+                        var bitmap = decodeSampledBitmap(imagePath, 512)
 
-                    if (bitmap != null) {
-                        // Fix góc xoay EXIF
-                        try {
-                            val exif = ExifInterface(imagePath)
-                            val orientation = exif.getAttributeInt(
-                                ExifInterface.TAG_ORIENTATION,
-                                ExifInterface.ORIENTATION_NORMAL
-                            )
-                            val matrix = Matrix()
-                            when (orientation) {
-                                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-                                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-                                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-                            }
-                            if (!matrix.isIdentity) {
-                                bitmap = android.graphics.Bitmap.createBitmap(
-                                    bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                        if (bitmap != null) {
+                            // Fix góc xoay EXIF
+                            try {
+                                val exif = ExifInterface(imagePath)
+                                val orientation = exif.getAttributeInt(
+                                    ExifInterface.TAG_ORIENTATION,
+                                    ExifInterface.ORIENTATION_NORMAL
                                 )
+                                val matrix = Matrix()
+                                when (orientation) {
+                                    ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                                    ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                                    ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                                }
+                                if (!matrix.isIdentity) {
+                                    bitmap = Bitmap.createBitmap(
+                                        bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
                             }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
 
-                        val isDemoMode = widgetData.getBoolean("flutter.is_demo_mode", false)
-                        val friendCount = widgetData.getInt("flutter.friend_count", 0)
-                        val shouldDrawSatellites = isDemoMode || friendCount > 0
+                            // 3. Render Thiên Hà Vệ Tinh Nổi với chuyển động xoay nhẹ và vòng sáng rực rỡ
+                            val composed = WidgetComposer.composeGalaxyWidget(bitmap, effectiveAngle, shouldDrawSatellites)
+                            setImageViewBitmap(R.id.widget_image, composed)
+                            setViewVisibility(R.id.widget_empty_text, View.GONE)
 
-                        // 3. Render Thiên Hà Vệ Tinh Nổi với chuyển động xoay nhẹ và vòng sáng rực rỡ
-                        val composed = WidgetComposer.composeGalaxyWidget(bitmap, effectiveAngle, shouldDrawSatellites)
-                        setImageViewBitmap(R.id.widget_image, composed)
-                        setViewVisibility(R.id.widget_empty_text, View.GONE)
-
-                        if (!senderName.isNullOrBlank()) {
-                            setTextViewText(R.id.widget_sender_name, senderName)
-                            setViewVisibility(R.id.widget_sender_name, View.VISIBLE)
+                            if (!senderName.isNullOrBlank()) {
+                                setTextViewText(R.id.widget_sender_name, senderName)
+                                setViewVisibility(R.id.widget_sender_name, View.VISIBLE)
+                            } else {
+                                setViewVisibility(R.id.widget_sender_name, View.GONE)
+                            }
                         } else {
-                            setViewVisibility(R.id.widget_sender_name, View.GONE)
+                            showEmptyState(this)
                         }
                     } else {
                         showEmptyState(this)
                     }
-                } else {
-                    showEmptyState(this)
                 }
+                appWidgetManager.updateAppWidget(widgetId, views)
+            } catch (e: Throwable) {
+                e.printStackTrace()
             }
-            appWidgetManager.updateAppWidget(widgetId, views)
         }
         scheduleNextTick(context)
     }

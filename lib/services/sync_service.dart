@@ -32,6 +32,7 @@ class SyncService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_demo_mode', isDemoModeNotifier.value);
     final list = prefs.getStringList(_prefProcessedPostsKey) ?? [];
     _processedPostIds.addAll(list);
 
@@ -185,7 +186,10 @@ class SyncService {
           final data = doc.data();
           final postId = data['id'] as String? ?? doc.id;
           final senderId = data['senderId'] as String? ?? '';
-          final senderName = data['senderName'] as String? ?? 'Bạn bè';
+          final friend = FriendService.instance.getFriendByUid(senderId);
+          final senderName = (friend != null && friend.displayName.trim().isNotEmpty)
+              ? friend.displayName.trim()
+              : (data['senderName'] as String? ?? 'Bạn bè');
           final imageBase64 = data['imageBase64'] as String? ?? '';
           final imageUrl = data['imageUrl'] as String? ?? '';
 
@@ -251,7 +255,10 @@ class SyncService {
         final data = doc.data();
         final postId = data['id'] as String? ?? doc.id;
         final senderId = data['senderId'] as String? ?? '';
-        final senderName = data['senderName'] as String? ?? 'Bạn bè';
+        final friend = FriendService.instance.getFriendByUid(senderId);
+        final senderName = (friend != null && friend.displayName.trim().isNotEmpty)
+            ? friend.displayName.trim()
+            : (data['senderName'] as String? ?? 'Bạn bè');
         final imageBase64 = data['imageBase64'] as String? ?? '';
         final imageUrl = data['imageUrl'] as String? ?? '';
 

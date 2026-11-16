@@ -531,6 +531,8 @@ class _ImagePreviewState extends State<ImagePreview> {
       final finalImage = await picture.toImage(baseImg.width, baseImg.height);
       final byteData = await finalImage.toByteData(format: ui.ImageByteFormat.png);
 
+      finalImage.dispose();
+      picture.dispose();
       baseImg.dispose();
       baseCodec.dispose();
 

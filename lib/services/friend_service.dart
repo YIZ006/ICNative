@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../settings/global.dart';
 import 'auth_service.dart';
 import 'sync_service.dart';
 
@@ -120,6 +121,14 @@ class FriendService {
   StreamSubscription<QuerySnapshot>? _incomingRequestsSub;
   StreamSubscription<QuerySnapshot>? _outgoingRequestsSub;
   StreamSubscription<QuerySnapshot>? _friendsRealtimeSub;
+  final Map<String, StreamSubscription<DocumentSnapshot>> _friendProfileSubs = {};
+
+  Friend? getFriendByUid(String uid) {
+    for (final f in _friends) {
+      if (f.uid == uid) return f;
+    }
+    return null;
+  }
 
   /// Khởi tạo và đồng bộ bạn bè từ cache & Firestore
   Future<void> init() async {
@@ -140,6 +149,7 @@ class FriendService {
 
     if (AuthService.isCloudConfigured) {
       startRealtimeSync();
+      _syncFriendProfileListeners();
       unawaited(syncAllFriendsAvatars());
     }
   }
@@ -187,6 +197,7 @@ class FriendService {
         friendsUpdatedNotifier.value++;
         await _saveToCache();
         debugPrint('🪐 Realtime friends updated: ${_friends.length} friends on orbit');
+        _syncFriendProfileListeners();
         unawaited(syncAllFriendsAvatars());
       },
       onError: (e) {
@@ -421,27 +432,93 @@ class FriendService {
     }
   }
 
-  /// Phát sóng avatar mới của bản thân tới tất cả bạn bè trong danh bạ
-  Future<void> broadcastMyNewAvatarToAllFriends() async {
+  /// Lắng nghe trực tiếp hồ sơ `users/{friendUid}` để đồng bộ tên & avatar theo thời gian thực
+  void _syncFriendProfileListeners() {
+    if (!AuthService.isCloudConfigured) return;
+    final activeUids = _friends.map((f) => f.uid).where((u) => u.isNotEmpty).toSet();
+
+    // Huỷ lắng nghe những người không còn trong danh bạ
+    final removedUids = _friendProfileSubs.keys.where((u) => !activeUids.contains(u)).toList();
+    for (final uid in removedUids) {
+      _friendProfileSubs.remove(uid)?.cancel();
+    }
+
+    // Đăng ký lắng nghe mới cho từng bạn bè
+    for (final uid in activeUids) {
+      if (_friendProfileSubs.containsKey(uid)) continue;
+      _friendProfileSubs[uid] = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .listen(
+        (doc) async {
+          if (!doc.exists || doc.data() == null) return;
+          final data = doc.data()!;
+          final cloudName = (data['displayName'] as String?)?.trim();
+          final cloudAvatar = data['avatarBase64'] as String?;
+
+          final idx = _friends.indexWhere((f) => f.uid == uid);
+          if (idx == -1) return;
+
+          final current = _friends[idx];
+          bool changed = false;
+          String nextName = current.displayName;
+          String? nextAvatar = current.avatarBase64;
+
+          if (cloudName != null && cloudName.isNotEmpty && cloudName != current.displayName) {
+            nextName = cloudName;
+            changed = true;
+          }
+          if (cloudAvatar != null && cloudAvatar.isNotEmpty && cloudAvatar != current.avatarBase64) {
+            nextAvatar = cloudAvatar;
+            changed = true;
+          }
+
+          if (changed) {
+            _friends[idx] = Friend(
+              uid: current.uid,
+              displayName: nextName,
+              addedAt: current.addedAt,
+              avatarBase64: nextAvatar,
+            );
+            await _saveToCache();
+            friendsUpdatedNotifier.value++;
+            friendsCountNotifier.value = _friends.length;
+          }
+        },
+        onError: (e) => debugPrint('Friend profile stream error ($uid): $e'),
+      );
+    }
+  }
+
+  /// Phát sóng tên & avatar mới của bản thân tới tất cả bạn bè trong danh bạ theo thời gian thực
+  Future<void> broadcastMyProfileToAllFriends() async {
     final myProfile = AuthService.instance.currentUser;
     if (myProfile == null || !AuthService.isCloudConfigured || _friends.isEmpty) return;
-    final b64 = myProfile.avatarBase64;
-    if (b64 == null || b64.isEmpty) return;
 
-    for (final f in _friends) {
+    final payload = <String, dynamic>{
+      'uid': myProfile.uid,
+      'displayName': myProfile.displayName,
+    };
+    if (myProfile.avatarBase64 != null && myProfile.avatarBase64!.isNotEmpty) {
+      payload['avatarBase64'] = myProfile.avatarBase64;
+    }
+
+    await Future.wait(_friends.map((f) async {
       try {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(f.uid)
             .collection('friends')
             .doc(myProfile.uid)
-            .set({
-          'avatarBase64': b64,
-          'displayName': myProfile.displayName,
-        }, SetOptions(merge: true)).timeout(const Duration(seconds: 3));
+            .set(payload, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 4));
       } catch (_) {}
-    }
+    }));
   }
+
+  /// Tương thích tên hàm cũ
+  Future<void> broadcastMyNewAvatarToAllFriends() => broadcastMyProfileToAllFriends();
 
   /// Chấp nhận lời mời kết bạn (Kết nối 2 chiều trên vòng tròn quỹ đạo của cả 2)
   Future<bool> acceptFriendRequest(FriendRequest req) async {
@@ -548,6 +625,7 @@ class FriendService {
         }
         friendsCountNotifier.value = _friends.length;
         await _saveToCache();
+        _syncFriendProfileListeners();
       }
     } catch (e) {
       debugPrint('Firestore friend sync: $e');
@@ -557,6 +635,7 @@ class FriendService {
   /// Xóa bạn bè (xóa 2 chiều trên Cloud Firestore)
   Future<void> removeFriend(String friendUid) async {
     _friends.removeWhere((f) => f.uid == friendUid);
+    _friendProfileSubs.remove(friendUid)?.cancel();
     friendsCountNotifier.value = _friends.length;
     await _saveToCache();
     SyncService.removeFriendPhoto(friendUid);
@@ -583,11 +662,17 @@ class FriendService {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = jsonEncode(_friends.map((f) => f.toMap()).toList());
     await prefs.setString(_prefFriendsKey, jsonStr);
+    await prefs.setInt('friend_count', _friends.length);
+    await prefs.setBool('is_demo_mode', isDemoModeNotifier.value);
   }
 
   void dispose() {
     _incomingRequestsSub?.cancel();
     _outgoingRequestsSub?.cancel();
     _friendsRealtimeSub?.cancel();
+    for (final sub in _friendProfileSubs.values) {
+      sub.cancel();
+    }
+    _friendProfileSubs.clear();
   }
 }

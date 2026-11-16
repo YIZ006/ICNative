@@ -189,6 +189,8 @@ class AuthService {
 
     currentUserNotifier.value = _currentUser;
     _syncToFirestore();
+    unawaited(FriendService.instance.broadcastMyProfileToAllFriends());
+    _syncProfileToSoulmateStatus();
   }
 
   /// Update Avatar (Luu anh dai dien moi vao bo nho may va cap nhat state)
@@ -220,10 +222,28 @@ class AuthService {
 
       currentUserNotifier.value = _currentUser;
       _syncToFirestore();
-      unawaited(FriendService.instance.broadcastMyNewAvatarToAllFriends());
+      unawaited(FriendService.instance.broadcastMyProfileToAllFriends());
+      _syncProfileToSoulmateStatus();
     } catch (e) {
       debugPrint('Error updating avatar: $e');
     }
+  }
+
+  void _syncProfileToSoulmateStatus() {
+    if (_currentUser == null || !isCloudConfigured) return;
+    final payload = <String, dynamic>{
+      'uid': _currentUser!.uid,
+      'displayName': _currentUser!.displayName,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (_currentUser!.avatarBase64 != null && _currentUser!.avatarBase64!.isNotEmpty) {
+      payload['avatarBase64'] = _currentUser!.avatarBase64;
+    }
+    FirebaseFirestore.instance
+        .collection('soulmate_status')
+        .doc(_currentUser!.uid)
+        .set(payload, SetOptions(merge: true))
+        .catchError((_) {});
   }
 
   /// Sync user profile to Firestore
